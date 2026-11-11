@@ -1,0 +1,56 @@
+@import 'tailwindcss';
+
+/* Brand tokens (spec Part 4.3). Use these names everywhere instead of raw hex values. */
+@theme {
+  --color-primary: #5b0a1c;
+  --color-primary-hover: #7f1d3a;
+  --color-primary-dark: #430515;
+  --color-primary-surface: #f6e8ec;
+  --color-rose-gold: #e6b8a7;
+  --color-blush: #f9e4e8;
+  --color-ivory: #fff9f7;
+  --color-slate-text: #4b5563;
+  --color-heading: #270f17;
+  --color-border: #e9dde0;
+  --color-success: #15803d;
+  --color-success-bg: #dcfce7;
+  --color-warning: #b45309;
+  --color-warning-bg: #fef3c7;
+  --color-error: #b91c1c;
+  --color-error-bg: #fee2e2;
+  --color-info: #1d4ed8;
+  --color-info-bg: #dbeafe;
+
+  --font-display: var(--font-dm-serif), Georgia, 'Times New Roman', serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  --shadow-card: 0 1px 2px rgb(39 15 23 / 0.04), 0 4px 16px rgb(39 15 23 / 0.06);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    background: var(--color-ivory);
+    color: var(--color-slate-text);
+    font-family: var(--font-sans);
+  }
+  h1,
+  h2,
+  h3 {
+    color: var(--color-heading);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-primary-hover);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "name": "signature-tender",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @st/web dev",
+    "build": "pnpm --filter @st/web build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "test:e2e": "pnpm --filter @st/web test:e2e",
+    "db:generate": "pnpm --filter @st/db generate",
+    "db:migrate": "pnpm --filter @st/db migrate",
+    "db:seed": "pnpm --filter @st/db seed",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.3"
+  }
+}
