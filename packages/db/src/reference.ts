@@ -1,0 +1,192 @@
+/**
+ * Reference data: the permission catalogue, system roles, launch pricing and feature flags.
+ * Seeded idempotently in every environment. Prices are launch configuration targets (spec Part 3)
+ * and can be changed later in the database without a code change.
+ */
+
+export const PERMISSIONS = {
+  'workspace.manage': 'Edit workspace details and settings',
+  'billing.manage': 'Manage billing, credits and subscriptions',
+  'team.view': 'View team members',
+  'team.manage': 'Invite, remove and change roles of members',
+  'roles.manage': 'Create and edit custom roles',
+  'documents.view_all': 'View all workspace documents',
+  'documents.view_own': 'View documents you created',
+  'documents.create': 'Create and edit drafts',
+  'documents.send': 'Send documents for signature',
+  'documents.delete': 'Delete or void documents',
+  'templates.view': 'View templates',
+  'templates.manage': 'Create and edit templates',
+  'contacts.view': 'View contacts',
+  'contacts.manage': 'Create and edit contacts',
+  'integrations.manage': 'Connect and configure integrations',
+  'api.manage': 'Manage API keys and webhooks',
+  'audit.view': 'View workspace audit history',
+} as const;
+
+export type PermissionKey = keyof typeof PERMISSIONS;
+const ALL = Object.keys(PERMISSIONS) as PermissionKey[];
+
+export const SYSTEM_ROLES: Record<
+  'owner' | 'admin' | 'manager' | 'editor' | 'viewer' | 'signer',
+  { name: string; description: string; permissions: PermissionKey[] }
+> = {
+  owner: {
+    name: 'Owner',
+    description: 'Full access, including billing and ownership',
+    permissions: ALL,
+  },
+  admin: {
+    name: 'Admin',
+    description: 'Full access to workspace settings, team and documents',
+    permissions: ALL,
+  },
+  manager: {
+    name: 'Manager',
+    description: 'Create, edit and send documents; manage templates and contacts',
+    permissions: [
+      'team.view',
+      'documents.view_all',
+      'documents.view_own',
+      'documents.create',
+      'documents.send',
+      'templates.view',
+      'templates.manage',
+      'contacts.view',
+      'contacts.manage',
+      'audit.view',
+    ],
+  },
+  editor: {
+    name: 'Editor',
+    description: 'Create and edit drafts; cannot send',
+    permissions: [
+      'documents.view_own',
+      'documents.create',
+      'templates.view',
+      'contacts.view',
+      'contacts.manage',
+    ],
+  },
+  viewer: {
+    name: 'Viewer',
+    description: 'Read-only access to workspace documents',
+    permissions: [
+      'team.view',
+      'documents.view_all',
+      'documents.view_own',
+      'templates.view',
+      'contacts.view',
+    ],
+  },
+  signer: {
+    name: 'Signer',
+    description: 'Can sign documents sent to them; no workspace management',
+    permissions: [],
+  },
+};
+
+export type SystemRoleKey = keyof typeof SYSTEM_ROLES;
+
+export const LAUNCH_PLANS = [
+  {
+    code: 'payg',
+    name: 'Pay As You Go',
+    monthlyPriceCents: 0,
+    includedRequests: null,
+    overagePriceCents: 299,
+    isCustom: false,
+    sortOrder: 0,
+    description: 'No subscription. Pay once per signing request.',
+  },
+  {
+    code: 'starter',
+    name: 'Starter',
+    monthlyPriceCents: 999,
+    includedRequests: 10,
+    overagePriceCents: 149,
+    isCustom: false,
+    sortOrder: 1,
+    description: 'For occasional senders.',
+  },
+  {
+    code: 'business',
+    name: 'Business',
+    monthlyPriceCents: 2499,
+    includedRequests: 35,
+    overagePriceCents: 99,
+    isCustom: false,
+    sortOrder: 2,
+    description: 'For growing businesses.',
+  },
+  {
+    code: 'team',
+    name: 'Team',
+    monthlyPriceCents: 4999,
+    includedRequests: 100,
+    overagePriceCents: 69,
+    isCustom: false,
+    sortOrder: 3,
+    description: 'For teams that send every day.',
+  },
+  {
+    code: 'enterprise',
+    name: 'Enterprise',
+    monthlyPriceCents: null,
+    includedRequests: null,
+    overagePriceCents: null,
+    isCustom: true,
+    sortOrder: 4,
+    description: 'Custom volume, terms and support.',
+  },
+] as const;
+
+export const LAUNCH_PRICES = [
+  {
+    code: 'single_request',
+    name: 'Single signing request',
+    credits: 1,
+    amountCents: 299,
+    sortOrder: 0,
+  },
+  { code: 'bundle_5', name: '5 prepaid credits', credits: 5, amountCents: 1299, sortOrder: 1 },
+  { code: 'bundle_10', name: '10 prepaid credits', credits: 10, amountCents: 2299, sortOrder: 2 },
+  { code: 'bundle_25', name: '25 prepaid credits', credits: 25, amountCents: 4999, sortOrder: 3 },
+  {
+    code: 'bundle_100',
+    name: '100 prepaid credits',
+    credits: 100,
+    amountCents: 14999,
+    sortOrder: 4,
+  },
+] as const;
+
+export const FEATURE_FLAGS = [
+  {
+    key: 'production_signing',
+    description:
+      'Allow real signing requests to be sent. Off until security and legal release gates pass.',
+    enabled: false,
+  },
+  {
+    key: 'guest_sending',
+    description: 'Allow one-time senders without a full account (Phase 2).',
+    enabled: false,
+  },
+  { key: 'payments', description: 'Stripe checkout and credits (Phase 4).', enabled: false },
+  { key: 'passkeys', description: 'Passkey sign-in and registration.', enabled: true },
+] as const;
+
+export const APP_CONFIG = [
+  {
+    key: 'limits.max_signers_per_request',
+    value: 5,
+    description: 'Maximum signers included in one signing request',
+  },
+  { key: 'limits.max_upload_mb', value: 25, description: 'Maximum PDF upload size in megabytes' },
+  {
+    key: 'support.email',
+    value: 'support@signaturetender.com',
+    description: 'Support contact shown in the app',
+  },
+] as const;

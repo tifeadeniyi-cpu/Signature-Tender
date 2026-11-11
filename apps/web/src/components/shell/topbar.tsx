@@ -1,0 +1,98 @@
+import Link from 'next/link';
+import { CircleHelp, LogOut, UserRound, ShieldCheck, Plus } from 'lucide-react';
+import type { AppContext } from '@/lib/session';
+import { MobileNav } from './sidebar';
+import { switchWorkspace, signOut } from './actions';
+
+function initials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]!.toUpperCase())
+    .join('');
+}
+
+export function Topbar({ ctx, supportEmail }: { ctx: AppContext; supportEmail: string }) {
+  const { user, membership, workspaces } = ctx;
+  return (
+    <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-ivory/95 px-4 backdrop-blur sm:px-6">
+      <MobileNav />
+      <div className="flex-1" />
+      <a
+        href={`mailto:${supportEmail}`}
+        className="flex size-10 items-center justify-center rounded-lg text-primary hover:bg-primary-surface"
+        aria-label="Help: email support"
+        title="Help"
+      >
+        <CircleHelp className="size-5" aria-hidden />
+      </a>
+      <details className="relative">
+        <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-primary-surface [&::-webkit-details-marker]:hidden">
+          <span
+            className="flex size-9 items-center justify-center rounded-full bg-primary text-sm font-semibold text-white"
+            aria-hidden
+          >
+            {initials(user.name) || '?'}
+          </span>
+          <span className="hidden text-left sm:block">
+            <span className="block text-sm font-semibold text-heading">{user.name}</span>
+            <span className="block max-w-40 truncate text-xs">{membership.workspace.name}</span>
+          </span>
+          <span className="sr-only">Open account menu</span>
+        </summary>
+        <div className="absolute right-0 mt-2 w-72 rounded-xl border border-border bg-white p-2 shadow-card">
+          <p className="px-3 pt-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Workspaces
+          </p>
+          <ul className="mt-1">
+            {workspaces.map((w) => (
+              <li key={w.id}>
+                <form action={switchWorkspace}>
+                  <input type="hidden" name="workspaceId" value={w.id} />
+                  <button
+                    type="submit"
+                    className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:bg-blush"
+                    aria-current={w.id === membership.workspace.id ? 'true' : undefined}
+                  >
+                    <span className="truncate text-heading">{w.name}</span>
+                    <span className="text-xs">
+                      {w.id === membership.workspace.id ? 'Current' : w.roleName}
+                    </span>
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+          <Link
+            href="/onboarding?new=1"
+            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-primary hover:bg-blush"
+          >
+            <Plus className="size-4" aria-hidden /> New workspace
+          </Link>
+          <hr className="my-2 border-border" />
+          <Link
+            href="/app/settings/profile"
+            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-heading hover:bg-blush"
+          >
+            <UserRound className="size-4" aria-hidden /> Profile
+          </Link>
+          <Link
+            href="/app/settings/security"
+            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-heading hover:bg-blush"
+          >
+            <ShieldCheck className="size-4" aria-hidden /> Security
+          </Link>
+          <form action={signOut}>
+            <button
+              type="submit"
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-heading hover:bg-blush"
+            >
+              <LogOut className="size-4" aria-hidden /> Sign out
+            </button>
+          </form>
+        </div>
+      </details>
+    </header>
+  );
+}
