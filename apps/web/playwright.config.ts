@@ -37,6 +37,7 @@ export default defineConfig({
       BETTER_AUTH_URL: `http://localhost:${PORT}`,
       APP_ENV: 'test',
       DEV_MAIL_DIR: MAIL_DIR,
+      STORAGE_LOCAL_DIR: path.resolve(__dirname, '.storage-e2e'),
     },
   },
 });
