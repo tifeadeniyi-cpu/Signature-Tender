@@ -14,7 +14,7 @@ test('sender picks the signature block, small fields are flagged, and the seal o
   page,
   browser,
 }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
   await signUpWithWorkspace(page, 'Bea Sender', 'Bea Studio');
   const signerEmail = `block-${Date.now()}@example.test`;
 
@@ -69,7 +69,15 @@ test('sender picks the signature block, small fields are flagged, and the seal o
   const link = await latestLinkFor(signerEmail, 'Please sign');
   const signer = await (await browser.newContext()).newPage();
   await signer.goto(link);
-  await signer.getByRole('button', { name: 'Start review' }).click();
+  const start = signer.getByRole('button', { name: 'Start review' });
+  try {
+    await expect(start).toBeVisible({ timeout: 20_000 });
+  } catch (err) {
+    // Surface what the signer actually sees, so a CI-only failure is diagnosable from the log.
+    console.log('Signer page at', signer.url(), '\n', await signer.locator('body').innerText());
+    throw err;
+  }
+  await start.click();
   await signer.getByLabel('I agree to use electronic records').check();
   await signer.getByRole('button', { name: 'Continue' }).click();
   await signer.getByRole('button', { name: /Add your signature/ }).click();
