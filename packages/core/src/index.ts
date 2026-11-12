@@ -10,3 +10,5 @@ export * from './signing';
 export * from './signing-crypto';
 export * from './finalize-pdf';
 export * from './billing';
+export * from './library';
+export * from './retrieval';

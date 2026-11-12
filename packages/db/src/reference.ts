@@ -176,6 +176,12 @@ export const FEATURE_FLAGS = [
   { key: 'payments', description: 'Stripe checkout and credits (Phase 4).', enabled: false },
   { key: 'passkeys', description: 'Passkey sign-in and registration.', enabled: true },
   {
+    key: 'retention_deletion',
+    description:
+      'Allow removing stored files for records past their retention period. Off until the retention policy has legal sign-off.',
+    enabled: false,
+  },
+  {
     key: 'test_signing',
     description:
       'Allow free test signing requests, clearly marked as tests, in development and test environments only.',
@@ -211,6 +217,22 @@ export const APP_CONFIG = [
     value: 'restore_if_unopened',
     description:
       'What happens to the credit when a sent request is cancelled: restore_if_unopened gives it back if no recipient has opened the request yet; never keeps it used',
+  },
+  {
+    key: 'retention.default_days',
+    value: 2555,
+    description:
+      'Launch default for keeping completed records (about 7 years) when a workspace sets no policy. Pending legal review',
+  },
+  {
+    key: 'retention.min_days',
+    value: 365,
+    description: 'Shortest retention period a workspace may choose',
+  },
+  {
+    key: 'retention.deleted_draft_days',
+    value: 30,
+    description: 'How long deleted drafts can be restored before they are eligible for removal',
   },
   {
     key: 'support.email',

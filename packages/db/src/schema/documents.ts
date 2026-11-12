@@ -72,6 +72,13 @@ export const documents = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    /** Hidden from the main list but kept intact. Completed records are archived, never edited. */
+    archivedAt: timestamp('archived_at', { withTimezone: true }),
+    /** A legal hold blocks deletion and purging regardless of the retention period. */
+    legalHold: boolean('legal_hold').notNull().default(false),
+    legalHoldReason: text('legal_hold_reason'),
+    /** Set when retention ran out and the stored files were removed. Metadata and evidence remain. */
+    purgedAt: timestamp('purged_at', { withTimezone: true }),
   },
   (t) => [
     index('documents_ws_updated_idx').on(t.workspaceId, t.updatedAt),

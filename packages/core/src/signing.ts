@@ -1689,3 +1689,6 @@ export async function finalizeRequest(
     throw err;
   }
 }
+
+/** Shared with the retrieval service, which writes to the same evidence chain. */
+export { appendEvent as appendEvidenceEvent };

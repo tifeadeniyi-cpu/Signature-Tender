@@ -5,3 +5,4 @@ export * from './config';
 export * from './documents';
 export * from './signing';
 export * from './billing';
+export * from './retention';
