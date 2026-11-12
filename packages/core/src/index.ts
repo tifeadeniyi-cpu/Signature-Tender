@@ -16,3 +16,4 @@ export * from './team';
 export * from './contacts';
 export * from './templates';
 export * from './branding';
+export * from './health';

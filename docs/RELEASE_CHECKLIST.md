@@ -2,21 +2,21 @@
 
 No real customer documents until every row is approved with evidence.
 
-| Gate                                                                                 | Owner      | Evidence                      | Status      |
-| ------------------------------------------------------------------------------------ | ---------- | ----------------------------- | ----------- |
-| Threat model completed and reviewed                                                  | TBD        | docs/security/threat-model.md | In progress |
-| Architecture review                                                                  | TBD        |                               | Not started |
-| Automated vulnerability scans clean (critical/high)                                  | TBD        |                               | Not started |
-| Independent penetration test, fixes retested                                         | TBD        |                               | Not started |
-| Storage isolation and permissions validated                                          | TBD        |                               | Not started |
-| Key and secret handling validated                                                    | TBD        |                               | Not started |
-| Final-document integrity validated                                                   | TBD        |                               | Not started |
-| Audit evidence and certificate reviewed by counsel                                   | TBD        |                               | Not started |
-| Incident response and backups reviewed; restore drill                                | TBD        |                               | Not started |
-| Attorney review (ESIGN/UETA, consent, terms, privacy, retention, excluded documents) | TBD        |                               | Not started |
-| Privacy and retention disclosures published                                          | TBD        |                               | Not started |
-| Stripe and email production configuration confirmed                                  | TBD        |                               | Not started |
-| Accessibility audit (WCAG 2.2 AA)                                                    | TBD        |                               | Not started |
-| Load and performance tests                                                           | TBD        |                               | Not started |
-| Monitoring and alerting live                                                         | TBD        |                               | Not started |
-| `production_signing` flag enabled by product owner                                   | Queen tife |                               | Not started |
+| Gate                                                                                 | Owner      | Evidence                                                                                     | Status                       |
+| ------------------------------------------------------------------------------------ | ---------- | -------------------------------------------------------------------------------------------- | ---------------------------- |
+| Threat model completed and reviewed                                                  | TBD        | docs/security/threat-model.md                                                                | In progress                  |
+| Architecture review                                                                  | TBD        |                                                                                              | Not started                  |
+| Automated vulnerability scans clean (critical/high)                                  | TBD        | docs/security/release-evidence.md                                                            | Evidence ready, needs review |
+| Independent penetration test, fixes retested                                         | TBD        |                                                                                              | Not started                  |
+| Storage isolation and permissions validated                                          | TBD        | docs/security/release-evidence.md                                                            | Evidence ready, needs review |
+| Key and secret handling validated                                                    | TBD        | docs/security/release-evidence.md                                                            | Evidence ready, needs review |
+| Final-document integrity validated                                                   | TBD        | docs/security/release-evidence.md                                                            | Evidence ready, needs review |
+| Audit evidence and certificate reviewed by counsel                                   | TBD        |                                                                                              | Not started                  |
+| Incident response and backups reviewed; restore drill                                | TBD        | docs/security/release-evidence.md (database drill done; file restore and incident plan open) | In progress                  |
+| Attorney review (ESIGN/UETA, consent, terms, privacy, retention, excluded documents) | TBD        |                                                                                              | Not started                  |
+| Privacy and retention disclosures published                                          | TBD        |                                                                                              | Not started                  |
+| Stripe and email production configuration confirmed                                  | TBD        | Resend domain verified (signaturetender.com); live Stripe keys pending                       | In progress                  |
+| Accessibility audit (WCAG 2.2 AA)                                                    | TBD        | e2e/a11y.spec.ts (automated pass; manual audit open)                                         | In progress                  |
+| Load and performance tests                                                           | TBD        | docs/security/release-evidence.md (local baseline; staging run open)                         | In progress                  |
+| Monitoring and alerting live                                                         | TBD        | /api/health, server.error logs; alerts need owner setup                                      | In progress                  |
+| `production_signing` flag enabled by product owner                                   | Queen tife |                                                                                              | Not started                  |
