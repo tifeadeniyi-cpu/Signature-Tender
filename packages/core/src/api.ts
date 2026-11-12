@@ -206,6 +206,11 @@ export async function hitRateLimit(
   return Boolean(r?.ok);
 }
 
+/** Counts a failed call (4xx or 5xx) in the key's daily usage. */
+export async function recordApiError(db: Database, keyId: string) {
+  await db.transaction((tx) => tx.execute(sql`select st_api_usage_error(${keyId}::uuid)`));
+}
+
 export type IdempotencyStart =
   | { state: 'new' }
   | { state: 'replay'; status: number; body: unknown }

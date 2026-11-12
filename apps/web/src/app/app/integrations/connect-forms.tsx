@@ -13,10 +13,12 @@ export function ConnectForm({
   provider,
   name,
   connected,
+  kind,
 }: {
   provider: string;
   name: string;
   connected: boolean;
+  kind: 'api' | 'slack';
 }) {
   const [state, act, pending] = useActionState(connectAction, null);
   // Show the secrets only while the connection they belong to is still active.
@@ -27,13 +29,24 @@ export function ConnectForm({
       <input type="hidden" name="provider" value={provider} />
       {connected ? null : (
         <>
-          <TextField
-            label={`${name} webhook URL`}
-            name="webhookUrl"
-            type="url"
-            placeholder="https://…"
-            hint={`Optional. Where ${name} receives status updates. You can add it later under Developers.`}
-          />
+          {kind === 'slack' ? (
+            <TextField
+              label="Slack incoming webhook URL"
+              name="webhookUrl"
+              type="url"
+              required
+              placeholder="https://hooks.slack.com/services/…"
+              hint="In Slack, add the Incoming Webhooks app to a channel and copy its webhook URL."
+            />
+          ) : (
+            <TextField
+              label={`${name} webhook URL`}
+              name="webhookUrl"
+              type="url"
+              placeholder="https://…"
+              hint={`Optional. Where ${name} receives status updates. You can add it later under Developers.`}
+            />
+          )}
           <div>
             <Button type="submit" size="sm" loading={pending}>
               Connect {name}

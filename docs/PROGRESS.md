@@ -211,6 +211,30 @@ Stripe runs in **test mode only**: live keys are refused and live events ignored
 - The destination address is checked before each delivery, but the HTTP client resolves DNS again, so a fast DNS rebinding could still reach a private address. An egress proxy would close this.
 - Production needs `CRON_SECRET` and a dedicated `WEBHOOK_SECRETS_KEY` in Vercel.
 
-## Phases 8 to 9: Not started
+## Phase 8: Connectors, analytics and reporting: Done (pending review)
+
+| Item                       | Status      | Notes                                                                                                                                                                                                                               |
+| -------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dashboard                  | Done        | Live counts that link to the library, recent documents with tabs, quick actions, available credits and requests sent this month. Bulk Send is labelled "Not available yet"                                                          |
+| Reports                    | Done        | `/app/reports`: date range, tests on or off, sent, completed, completion rate, median and average time to complete, by month, by type, by sender, status breakdown                                                                  |
+| Report access              | Done        | Runs under RLS: members who see only their own documents get their own numbers. Credits need billing access; API and webhook numbers need developer access                                                                          |
+| CSV export                 | Done        | Same numbers as the page; cells escaped against spreadsheet formulas                                                                                                                                                                |
+| API usage                  | Done        | Calls and errors per key per day, shown in reports                                                                                                                                                                                  |
+| Slack connector            | Done        | Incoming webhook URL only (`hooks.slack.com`). Posts document title, event and a link; never contents or recipient emails. A hello message confirms it on connect                                                                   |
+| Staff admin `/admin`       | Done        | Separate from workspaces. Overview metrics and revenue, workspace search, operations queues (finishing failures, webhook failures, payment issues, stuck Stripe events), read-only flags. Every view audited. 404 for everyone else |
+| Storage and CRM connectors | Not started | Google, Microsoft, Dropbox, Box, Salesforce, Jira and customer Stripe accounts need OAuth apps registered by the owner                                                                                                              |
+| Support and bounce metrics | Not started | No support desk or bounce tracking exists yet; the admin overview says so                                                                                                                                                           |
+
+### Tests
+
+- `packages/core`: report counts and RLS scoping, CSV formula escaping, range limits, API usage counting, Slack URL validation, message content, connect, dispatch and disconnect, staff-only admin functions, app role cannot grant itself staff, staff views audited. 116 tests in total.
+- `apps/web`: Playwright: dashboard and reports load, CSV downloads; `/admin` is 404 for a customer and opens once granted; Slack rejects non-Slack URLs. Accessibility scan covers `/app/reports`.
+
+### Known gaps
+
+- Staff are granted by hand in the database (see `docs/operations/admin.md`). There is no staff sign-in factor beyond the normal account; require a passkey or 2FA for staff before production.
+- Report queries scan the workspace's requests; fine at launch volumes, add summary tables if workspaces reach hundreds of thousands of requests.
+
+## Phase 9: Not started
 
 See the plan doc for scope and order.

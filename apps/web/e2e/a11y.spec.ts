@@ -45,6 +45,7 @@ const APP = [
   '/app/settings/branding',
   '/app/settings/retention',
   '/app/settings/developers',
+  '/app/reports',
 ];
 
 test('public and app pages have no WCAG 2.2 AA violations found by axe', async ({ page }) => {

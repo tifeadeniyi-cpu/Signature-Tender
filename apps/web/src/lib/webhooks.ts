@@ -26,7 +26,11 @@ export function webhookContext(): WebhookContext {
 export async function runWebhookDispatch() {
   if (!(await isFeatureEnabled(db(), 'public_api', env().APP_ENV))) return null;
   const maxAttempts = await getConfigValue(db(), 'webhooks.max_attempts', 8);
-  return dispatchWebhooks(db(), { ...webhookContext(), maxAttempts });
+  return dispatchWebhooks(db(), {
+    ...webhookContext(),
+    maxAttempts,
+    appUrl: env().BETTER_AUTH_URL,
+  });
 }
 
 /** After the response is sent, deliver any webhooks the request just caused. Never throws. */

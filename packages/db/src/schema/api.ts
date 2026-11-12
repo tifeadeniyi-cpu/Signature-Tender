@@ -97,6 +97,8 @@ export const webhookEndpoints = pgTable(
     /** After rotation the old secret also signs for 24 hours, so receivers can switch over. */
     previousSecretEncrypted: text('previous_secret_encrypted'),
     previousSecretExpiresAt: timestamp('previous_secret_expires_at', { withTimezone: true }),
+    /** `signature_tender`: signed JSON. `slack`: a Slack incoming webhook; plain text, no signature. */
+    format: text('format').notNull().default('signature_tender'),
     enabled: boolean('enabled').notNull().default(true),
     disabledReason: text('disabled_reason'),
     createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
@@ -186,5 +188,25 @@ export const integrationConnections = pgTable(
   (t) => [
     uniqueIndex('integration_connections_uq').on(t.workspaceId, t.provider),
     check('integration_connections_status', sql`${t.status} in ('active','disabled')`),
+  ],
+);
+
+/** Calls per API key per day, for usage reporting. Written only by `st_api_rate_hit` and `st_api_usage_error`. */
+export const apiUsageDaily = pgTable(
+  'api_usage_daily',
+  {
+    apiKeyId: uuid('api_key_id')
+      .notNull()
+      .references(() => apiKeys.id, { onDelete: 'cascade' }),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    day: text('day').notNull(),
+    calls: integer('calls').notNull().default(0),
+    errors: integer('errors').notNull().default(0),
+  },
+  (t) => [
+    primaryKey({ columns: [t.apiKeyId, t.day] }),
+    index('api_usage_daily_ws_idx').on(t.workspaceId, t.day),
   ],
 );

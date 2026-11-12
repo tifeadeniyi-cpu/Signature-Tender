@@ -23,11 +23,15 @@ export default async function IntegrationsPage() {
   const conns = await listConnections(db(), { userId: user.id }, membership.workspace.id);
   const active = conns.filter((c) => c.status === 'active');
   const health = (c: (typeof conns)[number]) =>
-    c.apiKeyRevokedAt || c.failedDeliveries > 0 || c.webhookEnabled === false
-      ? 'attention'
-      : !c.apiKeyLastUsedAt
-        ? 'setup'
-        : 'ok';
+    INTEGRATIONS.find((i) => i.key === c.provider)?.kind === 'slack'
+      ? c.failedDeliveries > 0 || c.webhookEnabled === false
+        ? 'attention'
+        : 'ok'
+      : c.apiKeyRevokedAt || c.failedDeliveries > 0 || c.webhookEnabled === false
+        ? 'attention'
+        : !c.apiKeyLastUsedAt
+          ? 'setup'
+          : 'ok';
   const available = INTEGRATIONS.filter((i) => i.available);
   const planned = INTEGRATIONS.filter((i) => !i.available);
   const categories = [...new Set(planned.map((i) => i.category))];
@@ -74,7 +78,9 @@ export default async function IntegrationsPage() {
               <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <h3 className="font-display text-lg">{i.name}</h3>
-                  <p className="text-xs text-slate-500">{i.category} · API connection</p>
+                  <p className="text-xs text-slate-500">
+                    {i.category} · {i.kind === 'slack' ? 'Notifications' : 'API connection'}
+                  </p>
                 </div>
                 {c ? (
                   h === 'attention' ? (
@@ -90,17 +96,34 @@ export default async function IntegrationsPage() {
               </div>
               <p className="mb-4 text-sm">{i.description}</p>
               {canManage ? (
-                <ConnectForm provider={i.key} name={i.name} connected={Boolean(c)} />
+                <ConnectForm
+                  provider={i.key}
+                  name={i.name}
+                  connected={Boolean(c)}
+                  kind={i.kind ?? 'api'}
+                />
               ) : null}
               {c ? (
                 <div className="mt-4 flex flex-wrap items-start justify-between gap-3">
                   <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-                    <dt className="font-semibold">API key</dt>
-                    <dd className="font-mono">{c.apiKeyPrefix ? `${c.apiKeyPrefix}…` : 'None'}</dd>
-                    <dt className="font-semibold">Last used</dt>
-                    <dd>{fmt(c.apiKeyLastUsedAt)}</dd>
+                    {i.kind === 'slack' ? null : (
+                      <>
+                        <dt className="font-semibold">API key</dt>
+                        <dd className="font-mono">
+                          {c.apiKeyPrefix ? `${c.apiKeyPrefix}…` : 'None'}
+                        </dd>
+                        <dt className="font-semibold">Last used</dt>
+                        <dd>{fmt(c.apiKeyLastUsedAt)}</dd>
+                      </>
+                    )}
                     <dt className="font-semibold">Webhook</dt>
-                    <dd className="break-all">{c.webhookUrl ?? 'None'}</dd>
+                    <dd className="break-all">
+                      {c.webhookUrl
+                        ? i.kind === 'slack'
+                          ? 'Slack channel webhook (hidden)'
+                          : c.webhookUrl
+                        : 'None'}
+                    </dd>
                     <dt className="font-semibold">Failed deliveries</dt>
                     <dd>
                       {c.failedDeliveries}

@@ -1,9 +1,10 @@
 import 'server-only';
 import { cookies, headers } from 'next/headers';
-import { redirect } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { cache } from 'react';
 import {
   getMembership,
+  isPlatformAdmin,
   listMyWorkspaces,
   touchMembership,
   AppError,
@@ -59,3 +60,14 @@ export async function requestMeta() {
     userAgent: h.get('user-agent'),
   };
 }
+
+/**
+ * Signature Tender staff only (spec Part 27). Everyone else gets a plain 404 so the internal
+ * area does not reveal itself. Used by the admin layout and each admin page, because Next renders
+ * them in parallel.
+ */
+export const requireStaff = cache(async () => {
+  const user = await requireUser();
+  if (!(await isPlatformAdmin(db(), { userId: user.id }))) notFound();
+  return user;
+});

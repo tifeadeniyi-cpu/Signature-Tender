@@ -8,3 +8,4 @@ export * from './billing';
 export * from './retention';
 export * from './teams';
 export * from './api';
+export * from './platform';

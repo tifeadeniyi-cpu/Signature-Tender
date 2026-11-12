@@ -90,7 +90,21 @@ Living document. Each later phase adds its own section.
 | Spoofing               | Embedded signing link phished or framed                  | 15-minute link replacing the emailed one; frame-ancestors blocks framing so the address bar and security indicators stay visible                                        | `api.test.ts`, `csp.spec.ts`       |
 | Elevation of privilege | Cron endpoint triggered by anyone                        | Requires `CRON_SECRET` bearer (constant-time compare); refuses when unset. It only moves outbox rows                                                                    | Code review                        |
 
+## Phase 8: reporting, Slack and staff admin
+
+| Category               | Threat                                            | Control in place                                                                                                                              | Test                                 |
+| ---------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| Information disclosure | Reports reveal documents a member cannot see      | Report queries run under RLS as the member; credits and API sections need billing or developer permission                                     | `reports.test.ts`                    |
+| Tampering              | CSV export runs formulas in a spreadsheet         | Every cell escaped (leading `= + - @` and control characters)                                                                                 | `reports.test.ts`                    |
+| Elevation of privilege | Customer reaches staff data                       | `platform_admins` has no app-role access; staff functions are definer functions that check the list and raise otherwise; `/admin` answers 404 | `reports.test.ts`, `reports.spec.ts` |
+| Information disclosure | Staff browse private customer documents           | Staff functions return counts, ids, names and hosts only; no files, titles of signed records or recipient emails                              | Code review                          |
+| Repudiation            | Staff access unrecorded                           | Every staff view writes an `admin.viewed` audit row                                                                                           | `reports.spec.ts`                    |
+| Elevation of privilege | SSRF through the Slack connector                  | Only `https://hooks.slack.com/services/...`, plus the existing public-address check before each delivery                                      | `reports.test.ts`                    |
+| Information disclosure | Document details posted to a shared Slack channel | Messages carry title, event and a link that requires sign-in; never contents or emails. Slack URLs are masked in the app                      | `reports.test.ts`                    |
+
 ## Open items
+
+- Staff accounts use the normal sign-in. Require passkey or 2FA for anyone in `platform_admins` before production.
 
 - Webhook delivery checks DNS before sending, but the HTTP client resolves again (rebinding window). Route webhook traffic through an egress proxy that enforces public destinations before production.
 - Webhook secret encryption falls back to `BETTER_AUTH_SECRET` when `WEBHOOK_SECRETS_KEY` is unset; set a separate key in production.

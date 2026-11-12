@@ -407,13 +407,19 @@ describe('templates', () => {
   });
 
   it('using a template makes a draft with the people filled in and records the version', async () => {
-    const { documentId } = await createDocumentFromTemplate(db, storage, { userId: manager }, tplId, {
-      title: 'Gig at Blue Room',
-      recipients: [
-        { placeholderId: ARTIST, name: 'Sol Artist', email: 'sol@x.test' },
-        { placeholderId: VENUE, name: 'Blue Room', email: 'booking@blueroom.test' },
-      ],
-    });
+    const { documentId } = await createDocumentFromTemplate(
+      db,
+      storage,
+      { userId: manager },
+      tplId,
+      {
+        title: 'Gig at Blue Room',
+        recipients: [
+          { placeholderId: ARTIST, name: 'Sol Artist', email: 'sol@x.test' },
+          { placeholderId: VENUE, name: 'Blue Room', email: 'booking@blueroom.test' },
+        ],
+      },
+    );
     const d = await getDocument(db, { userId: manager }, documentId);
     expect(d.recipients.map((r) => r.email)).toEqual(['sol@x.test', 'booking@blueroom.test']);
     expect(d.fields).toHaveLength(2);
