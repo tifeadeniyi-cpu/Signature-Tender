@@ -1,4 +1,5 @@
 'use server';
+import { kickWebhooks } from '@/lib/webhooks';
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import {
@@ -62,6 +63,7 @@ async function context(token: string): Promise<RequestContext> {
 }
 
 export async function startAction(token: string): Promise<SignResult> {
+  kickWebhooks();
   try {
     const res = await startSigning(db(), token, await requestMeta());
     if ('session' in res) await writeSession(token, res.session);
@@ -78,6 +80,7 @@ export async function verifyCodeAction(
   _prev: SignResult,
   fd: FormData,
 ): Promise<SignResult> {
+  kickWebhooks();
   try {
     const { session } = await verifySigningCode(
       db(),
@@ -98,6 +101,7 @@ export async function consentAction(
   _prev: SignResult,
   fd: FormData,
 ): Promise<SignResult> {
+  kickWebhooks();
   try {
     await giveConsent(
       db(),
@@ -135,6 +139,7 @@ export async function completeAction(
   token: string,
   input: Parameters<typeof completeSigning>[4],
 ): Promise<SignResult> {
+  kickWebhooks();
   const meta = await requestMeta();
   let ctx: RequestContext;
   let result: Awaited<ReturnType<typeof completeSigning>>;
@@ -165,6 +170,7 @@ export async function declineAction(
   _prev: SignResult,
   fd: FormData,
 ): Promise<SignResult> {
+  kickWebhooks();
   try {
     const ctx = await context(token);
     const r = await declineSigning(

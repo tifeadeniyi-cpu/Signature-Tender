@@ -9,6 +9,7 @@ const STATUS: Record<AppError['code'], number> = {
   invalid: 422,
   conflict: 409,
   unauthenticated: 401,
+  rate_limited: 429,
 };
 
 /** Maps known errors to JSON responses; unknown errors are logged and returned as a generic 500. */

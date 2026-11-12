@@ -85,9 +85,17 @@ export const documents = pgTable(
     templateVersionId: uuid('template_version_id').references(() => templateVersions.id, {
       onDelete: 'set null',
     }),
+    /**
+     * Partner business record this document belongs to (for example a Beam Artist booking).
+     * Signature Tender stays the canonical signing record; partners keep only this reference.
+     */
+    externalSource: text('external_source'),
+    externalId: text('external_id'),
+    externalMetadata: jsonb('external_metadata').$type<Record<string, string>>(),
   },
   (t) => [
     index('documents_ws_updated_idx').on(t.workspaceId, t.updatedAt),
+    index('documents_external_idx').on(t.workspaceId, t.externalSource, t.externalId),
     index('documents_creator_idx').on(t.createdBy),
     check('documents_title_len', sql`char_length(${t.title}) between 1 and 200`),
   ],

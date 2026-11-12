@@ -205,6 +205,13 @@ export const FEATURE_FLAGS = [
     enabled: true,
     environments: ['development', 'test'],
   },
+  {
+    key: 'public_api',
+    description:
+      'Accept requests to the public REST API (/api/v1) and deliver webhooks. Off in production until the owner turns it on.',
+    enabled: true,
+    environments: ['development', 'test', 'staging'],
+  },
 ] as const;
 
 export const APP_CONFIG = [
@@ -250,6 +257,27 @@ export const APP_CONFIG = [
     key: 'retention.deleted_draft_days',
     value: 30,
     description: 'How long deleted drafts can be restored before they are eligible for removal',
+  },
+  {
+    key: 'api.rate_limit_per_minute',
+    value: 120,
+    description: 'Requests one API key may make per minute',
+  },
+  {
+    key: 'api.max_json_kb',
+    value: 256,
+    description: 'Largest JSON request body the API accepts, in kilobytes',
+  },
+  {
+    key: 'api.embedded_session_minutes',
+    value: 15,
+    description: 'How long an embedded signing link stays valid',
+  },
+  {
+    key: 'webhooks.max_attempts',
+    value: 8,
+    description:
+      'Delivery attempts before a webhook is marked failed for good (about 32 minutes of retries at 8)',
   },
   {
     key: 'support.email',
