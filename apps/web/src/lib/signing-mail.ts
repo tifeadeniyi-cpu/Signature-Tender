@@ -1,8 +1,16 @@
 import 'server-only';
 import { getBrand, type Invitation } from '@st/core';
-import { brandedEmail, sendEmail } from './email';
+import { sendEmail } from './email';
 import { db } from './db';
 import { env } from './env';
+import { emailConfig } from './email/config';
+import {
+  renderCodeEmail,
+  renderCompletedCopy,
+  renderDeclinedNotice,
+  renderSigningRequest,
+} from './email/templates/transactional';
+import type { RenderedEmail } from './email/templates/document-completed';
 
 export interface RequestContext {
   title: string;
@@ -10,85 +18,97 @@ export interface RequestContext {
   workspaceName: string;
   message: string | null;
   isTest: boolean;
-  /** When set, recipient-facing emails carry the workspace's name and colour. */
+  /** When set, recipient-facing emails use the workspace's brand name. */
   workspaceId?: string;
+  /** A reminder rather than the first invitation. */
+  reminder?: boolean;
 }
 
-async function brandFor(c: RequestContext) {
+async function brandName(c: RequestContext) {
   if (!c.workspaceId) return null;
   const b = await getBrand(db(), c.workspaceId).catch(() => null);
-  return b ? { name: b.brandName, color: b.color } : null;
+  return b?.brandName || null;
 }
 
-const prefix = (c: RequestContext) => (c.isTest ? '[TEST] ' : '');
 export const signUrl = (token: string) => `${env().BETTER_AUTH_URL}/sign/${token}`;
+const retrieveUrl = () => `${env().BETTER_AUTH_URL}/retrieve`;
+
+const send = (to: string, r: RenderedEmail, tag: string) =>
+  sendEmail({
+    to,
+    subject: r.subject,
+    text: r.text,
+    html: r.html,
+    attachments: r.attachments,
+    tags: [{ name: 'template', value: tag }],
+  });
 
 /** Emails each recipient their personal link. Each link is the only copy of its token. */
 export async function sendInvitations(invitations: Invitation[], c: RequestContext) {
-  const brand = await brandFor(c);
+  if (!invitations.length) return;
+  const [config, brand] = await Promise.all([emailConfig(), brandName(c)]);
   for (const inv of invitations) {
-    const from = c.workspaceName ? `${c.senderName} (${c.workspaceName})` : c.senderName;
-    const isCopy = inv.kind === 'completed_copy';
-    const { text, html } = brandedEmail({
-      heading: isCopy ? `"${c.title}" is complete` : `${from} sent you a document to sign`,
-      body: isCopy
-        ? `Everyone has finished signing "${c.title}". Use your personal link to view the status and, if the sender allows it, download the signed copy.`
-        : `Please review and sign "${c.title}".${c.message ? `\n\nMessage from ${c.senderName}: ${c.message}` : ''}`,
-      actionLabel: isCopy ? 'View completed document' : 'Review and sign',
-      actionUrl: signUrl(inv.token),
-      brand,
-      footer: `${c.isTest ? 'This is a TEST request from a non-production environment. ' : ''}This link is personal to ${inv.email}. Do not forward it. Lost this email later? Get a copy or a new link at ${env().BETTER_AUTH_URL}/retrieve.`,
-    });
-    await sendEmail({
-      to: inv.email,
-      subject: `${prefix(c)}${isCopy ? `Completed: ${c.title}` : `Please sign: ${c.title}`}`,
-      text,
-      html,
-    });
+    const common = {
+      config,
+      recipientName: inv.name,
+      recipientEmail: inv.email,
+      title: c.title,
+      url: signUrl(inv.token),
+      retrieveUrl: retrieveUrl(),
+      isTest: c.isTest,
+    };
+    const r =
+      inv.kind === 'completed_copy'
+        ? renderCompletedCopy(common)
+        : renderSigningRequest({
+            ...common,
+            senderName: c.senderName,
+            workspaceName: brand ?? c.workspaceName,
+            message: c.message,
+            reminder: c.reminder,
+          });
+    await send(
+      inv.email,
+      r,
+      inv.kind === 'completed_copy' ? 'completed_copy' : c.reminder ? 'reminder' : 'invitation',
+    );
   }
 }
 
 export async function sendSigningCode(to: string, name: string, code: string, c: RequestContext) {
-  const { text, html } = brandedEmail({
-    heading: 'Your signing code',
-    body: `Hi ${name}, your code to open "${c.title}" is ${code}. It expires in 10 minutes and works once. If you did not request it, you can ignore this email.`,
-    actionLabel: 'Return to the document',
-    actionUrl: env().BETTER_AUTH_URL,
-    brand: await brandFor(c),
+  const r = renderCodeEmail({
+    config: await emailConfig(),
+    purpose: 'signing',
+    code,
+    name,
+    title: c.title,
+    isTest: c.isTest,
   });
-  await sendEmail({ to, subject: `${prefix(c)}Your signing code: ${code}`, text, html });
+  await send(to, r, 'signing_code');
 }
 
 export async function sendSenderNotice(
   to: string,
-  kind: 'declined' | 'completed',
+  _kind: 'declined',
   c: RequestContext & { documentId: string; recipientName?: string; reason?: string },
 ) {
-  const url = `${env().BETTER_AUTH_URL}/app/documents/${c.documentId}`;
-  const { text, html } = brandedEmail({
-    heading:
-      kind === 'completed' ? `"${c.title}" is complete` : `${c.recipientName} declined to sign`,
-    body:
-      kind === 'completed'
-        ? 'Everyone has finished. The signed copy and completion certificate are ready in your workspace.'
-        : `${c.recipientName} declined to sign "${c.title}".${c.reason ? ` Reason given: ${c.reason}` : ''}`,
-    actionLabel: 'Open document',
-    actionUrl: url,
+  const r = renderDeclinedNotice({
+    config: await emailConfig(),
+    title: c.title,
+    recipientName: c.recipientName ?? '',
+    reason: c.reason ?? null,
+    url: `${env().BETTER_AUTH_URL}/app/documents/${c.documentId}`,
+    isTest: c.isTest,
   });
-  await sendEmail({
-    to,
-    subject: `${prefix(c)}${kind === 'completed' ? 'Completed' : 'Declined'}: ${c.title}`,
-    text,
-    html,
-  });
+  await send(to, r, 'declined');
 }
 
 export async function sendRetrievalCode(to: string, code: string) {
-  const { text, html } = brandedEmail({
-    heading: 'Your code to get your documents',
-    body: `Your code is ${code}. It expires in 10 minutes and works once. If you did not ask for it, you can ignore this email; nobody can see your documents without it.`,
-    actionLabel: 'Return to Signature Tender',
-    actionUrl: `${env().BETTER_AUTH_URL}/retrieve`,
+  const r = renderCodeEmail({
+    config: await emailConfig(),
+    purpose: 'retrieval',
+    code,
+    returnUrl: retrieveUrl(),
   });
-  await sendEmail({ to, subject: `Your document access code: ${code}`, text, html });
+  await send(to, r, 'retrieval_code');
 }

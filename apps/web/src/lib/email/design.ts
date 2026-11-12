@@ -186,8 +186,10 @@ export function spacer(px: number): string {
   return `<tr><td style="height:${px}px;line-height:${px}px;font-size:0;">&nbsp;</td></tr>`;
 }
 
-export function heroIllustration(c: EmailCanvas, alt: string): string {
-  return `<tr><td align="center" style="padding:4px 36px 0 36px;">${c.img('hero', 140, 120, alt, 'margin:0 auto;')}</td></tr>`;
+export type HeroName = Extract<EmailAssetName, 'hero' | `hero-${string}`>;
+
+export function heroIllustration(c: EmailCanvas, alt: string, name: HeroName = 'hero'): string {
+  return `<tr><td align="center" style="padding:4px 36px 0 36px;">${c.img(name, 140, 120, alt, 'margin:0 auto;')}</td></tr>`;
 }
 
 export function headline(text: string): string {
@@ -245,8 +247,22 @@ export function secondaryButtons(
 </td></tr>`;
 }
 
-export function statusPill(c: EmailCanvas, label: string): string {
-  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;"><tr><td bgcolor="${BRAND.greenBg}" style="background-color:${BRAND.greenBg};border-radius:999px;padding:6px 14px 6px 10px;font-family:${BRAND.sans};font-size:14px;line-height:18px;font-weight:700;color:${BRAND.green};white-space:nowrap;"><img src="${esc(c.src('check'))}" width="16" height="16" alt="" style="border:0;vertical-align:middle;width:16px;height:16px;margin-right:6px;"><span style="vertical-align:middle;">${esc(label)}</span></td></tr></table>`;
+export type PillTone = 'green' | 'amber' | 'red' | 'navy';
+const PILL: Record<PillTone, [string, string]> = {
+  green: [BRAND.greenBg, BRAND.green],
+  amber: ['#FEF3C7', '#92400E'],
+  red: ['#FDE8E7', '#B42318'],
+  navy: [BRAND.cream, BRAND.navy],
+};
+
+/** Status pill. Text always carries the meaning; the check icon is only on green. */
+export function statusPill(c: EmailCanvas, label: string, tone: PillTone = 'green'): string {
+  const [bg, fg] = PILL[tone];
+  const icon =
+    tone === 'green'
+      ? `<img src="${esc(c.src('check'))}" width="16" height="16" alt="" style="border:0;vertical-align:middle;width:16px;height:16px;margin-right:6px;">`
+      : '';
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;"><tr><td bgcolor="${bg}" style="background-color:${bg};border-radius:999px;padding:6px 14px 6px ${tone === 'green' ? 10 : 14}px;font-family:${BRAND.sans};font-size:14px;line-height:18px;font-weight:700;color:${fg};white-space:nowrap;">${icon}<span style="vertical-align:middle;">${esc(label)}</span></td></tr></table>`;
 }
 
 export interface CardRow {
@@ -261,7 +277,7 @@ export interface CardRow {
 /** Rounded summary card: document icon, title, labelled rows and an optional status pill. */
 export function documentCard(
   c: EmailCanvas,
-  opts: { title: string; rows: CardRow[]; status?: string; iconAlt: string },
+  opts: { title: string; rows: CardRow[]; status?: string; statusTone?: PillTone; iconAlt: string },
 ): string {
   const rows = opts.rows
     .map(
@@ -279,7 +295,7 @@ export function documentCard(
 <td class="st-stack st-card-body" valign="top" style="border-left:1px solid #E6D3AE;padding-left:20px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
 <td class="st-stack" valign="top" style="font-family:${BRAND.serif};font-size:22px;line-height:28px;color:${BRAND.navy};padding:0 12px 8px 0;word-break:break-word;">${esc(opts.title)}</td>
-${opts.status ? `<td class="st-stack" valign="top" align="right" style="padding:0 0 8px 0;">${statusPill(c, opts.status)}</td>` : ''}
+${opts.status ? `<td class="st-stack" valign="top" align="right" style="padding:0 0 8px 0;">${statusPill(c, opts.status, opts.statusTone)}</td>` : ''}
 </tr></table>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${rows}</table>
 </td>
@@ -350,4 +366,27 @@ export function supportBlock(
 /** Small print under the body (why you got this email, link safety). `html` must be safe. */
 export function finePrint(html: string): string {
   return `<tr><td class="st-pad" align="center" style="padding:18px 44px 26px 44px;font-family:${BRAND.sans};font-size:12px;line-height:18px;color:${BRAND.slate};text-align:center;">${html}</td></tr>`;
+}
+
+/** A one-time code, large and spaced so it is easy to read and type. */
+export function codeBox(code: string, caption: string): string {
+  return `<tr><td class="st-pad" align="center" style="padding:24px 44px 0 44px;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" bgcolor="#FBF6EC" style="margin:0 auto;background-color:#FBF6EC;border:1px solid #EFE3CC;border-radius:16px;border-collapse:separate;">
+<tr><td align="center" style="padding:18px 34px 6px 34px;font-family:'Courier New',Courier,monospace;font-size:36px;line-height:42px;font-weight:700;letter-spacing:10px;color:${BRAND.navy};">${esc(code)}</td></tr>
+<tr><td align="center" style="padding:0 34px 16px 34px;font-family:${BRAND.sans};font-size:13px;line-height:18px;color:${BRAND.slate};">${esc(caption)}</td></tr>
+</table></td></tr>`;
+}
+
+/** A quoted personal message from the sender. Plain text; escaped here; line breaks kept. */
+export function messageQuote(label: string, message: string): string {
+  return `<tr><td class="st-pad" style="padding:22px 44px 0 44px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;"><tr>
+<td width="4" bgcolor="${BRAND.gold}" style="width:4px;background-color:${BRAND.gold};border-radius:4px;font-size:0;line-height:0;">&nbsp;</td>
+<td style="padding:4px 0 4px 16px;font-family:${BRAND.sans};font-size:15px;line-height:23px;color:${BRAND.ink};"><div style="font-size:13px;font-weight:700;color:${BRAND.navy};padding-bottom:4px;">${esc(label)}</div>${esc(message).replace(/\r?\n/g, '<br>')}</td>
+</tr></table></td></tr>`;
+}
+
+/** "Button not working?" fallback with the full link as text. */
+export function linkFallback(href: string): string {
+  return `<tr><td class="st-pad" align="center" style="padding:16px 44px 0 44px;font-family:${BRAND.sans};font-size:12px;line-height:18px;color:${BRAND.slate};text-align:center;">If the button does not work, copy this link into your browser:<br><a href="${esc(href)}" style="color:${BRAND.royal};text-decoration:underline;word-break:break-all;">${esc(href)}</a></td></tr>`;
 }

@@ -3,10 +3,10 @@ import { useActionState } from 'react';
 import { Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/feedback';
-import type { SampleVariant } from '@/lib/email/samples';
+import type { PreviewKey } from '@/lib/email/previews';
 import { sendTestEmailAction } from './actions';
 
-export function SendTestButton({ variant }: { variant: SampleVariant }) {
+export function SendTestButton({ variant }: { variant: PreviewKey }) {
   const [state, run, pending] = useActionState(sendTestEmailAction.bind(null, variant), null);
   return (
     <form action={run} className="flex flex-col gap-2">
