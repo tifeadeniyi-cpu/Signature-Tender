@@ -61,7 +61,7 @@ test('send a test request, sign with an email code, and download the completed c
   await signer.goto(link);
   await expect(signer.getByText('Test request from a non-production environment')).toBeVisible();
   await expect(signer.getByRole('heading', { name: 'Performance' })).toBeVisible();
-  await signer.getByRole('button', { name: 'Email me a code' }).click();
+  await signer.getByRole('button', { name: /^Review/ }).click();
   await expect(signer.getByRole('heading', { name: 'Check your email' })).toBeVisible();
   await signer.getByLabel('Code').fill('000000');
   await signer.getByRole('button', { name: 'Verify and continue' }).click();
@@ -144,7 +144,7 @@ test('a recipient can decline, and an unknown link shows a clear message', async
   const link = await latestLinkFor(email, 'Please sign');
   const r = await (await browser.newContext()).newPage();
   await r.goto(link);
-  await r.getByRole('button', { name: 'Start review' }).click();
+  await r.getByRole('button', { name: /^Review/ }).click();
   await expect(r.getByRole('heading', { name: 'Sign electronically' })).toBeVisible();
   await r.getByRole('button', { name: 'Decline to sign' }).click();
   await r.getByLabel(/Reason/).fill('Terms changed');

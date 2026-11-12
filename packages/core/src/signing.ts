@@ -795,7 +795,11 @@ export interface SignerView {
   workspaceId: string;
   title: string;
   senderName: string;
+  senderEmail: string;
   workspaceName: string;
+  sentAt: Date | null;
+  /** Pages in the document as sent. */
+  pageCount: number | null;
   recipient: { id: string; name: string; email: string; role: RecipientRole; authMethod: string };
   isTest: boolean;
   expiresAt: Date | null;
@@ -820,14 +824,22 @@ function stageFor(request: RequestRow, r: RecipientRow, session: string | undefi
   return 'sign';
 }
 
-function toView(request: RequestRow, r: RecipientRow, stage: SignerStage): SignerView {
+function toView(
+  request: RequestRow,
+  r: RecipientRow,
+  stage: SignerStage,
+  pageCount: number | null = null,
+): SignerView {
   const settings = documentSettingsSchema.parse(request.settings);
   return {
     stage,
     workspaceId: request.workspaceId,
     title: request.title,
     senderName: request.senderName,
+    senderEmail: request.senderEmail,
     workspaceName: request.workspaceName,
+    sentAt: request.sentAt,
+    pageCount,
     recipient: { id: r.id, name: r.name, email: r.email, role: r.role, authMethod: r.authMethod },
     isTest: request.isTest,
     expiresAt: request.expiresAt,
@@ -871,7 +883,11 @@ export async function getSignerView(
           .set({ status: 'in_progress', updatedAt: new Date() })
           .where(eq(schema.signingRequests.id, request.id));
     }
-    return toView(request, recipient, stageFor(request, recipient, session));
+    const [file] = await tx
+      .select({ pageCount: schema.documentFiles.pageCount })
+      .from(schema.documentFiles)
+      .where(eq(schema.documentFiles.id, request.sourceFileId));
+    return toView(request, recipient, stageFor(request, recipient, session), file?.pageCount);
   });
 }
 
