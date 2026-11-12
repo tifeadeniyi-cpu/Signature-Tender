@@ -26,7 +26,7 @@ export async function sendInvitations(invitations: Invitation[], c: RequestConte
         : `Please review and sign "${c.title}".${c.message ? `\n\nMessage from ${c.senderName}: ${c.message}` : ''}`,
       actionLabel: isCopy ? 'View completed document' : 'Review and sign',
       actionUrl: signUrl(inv.token),
-      footer: `${c.isTest ? 'This is a TEST request from a non-production environment. ' : ''}This link is personal to ${inv.email}. Do not forward it.`,
+      footer: `${c.isTest ? 'This is a TEST request from a non-production environment. ' : ''}This link is personal to ${inv.email}. Do not forward it. Lost this email later? Get a copy or a new link at ${env().BETTER_AUTH_URL}/retrieve.`,
     });
     await sendEmail({
       to: inv.email,
@@ -69,4 +69,14 @@ export async function sendSenderNotice(
     text,
     html,
   });
+}
+
+export async function sendRetrievalCode(to: string, code: string) {
+  const { text, html } = brandedEmail({
+    heading: 'Your code to get your documents',
+    body: `Your code is ${code}. It expires in 10 minutes and works once. If you did not ask for it, you can ignore this email; nobody can see your documents without it.`,
+    actionLabel: 'Return to Signature Tender',
+    actionUrl: `${env().BETTER_AUTH_URL}/retrieve`,
+  });
+  await sendEmail({ to, subject: `Your document access code: ${code}`, text, html });
 }

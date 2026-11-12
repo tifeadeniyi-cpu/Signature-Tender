@@ -44,6 +44,18 @@ Living document. Each later phase adds its own section.
 | Denial of service      | Double spend, webhook retries, races             | Per-workspace advisory lock on credit movements; one hold per request; unique idempotency keys; each Stripe event processed once                                                       | `billing.test.ts` (race, replay)         |
 | Elevation of privilege | Live money before release                        | Live Stripe keys are refused and live-mode events ignored; real sending needs both `production_signing` and `payments` flags                                                           | `billing.test.ts`, `stripe.ts`           |
 
+## Phase 5: library, retrieval and retention
+
+| Category               | Threat                                       | Control in place                                                                                                                                                                 | Test                                  |
+| ---------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| Spoofing               | Someone retrieves another person's documents | 6-digit code emailed to the address, stored only as a hash, 10-minute expiry, 5 attempts; session token is random, hashed in the database, httpOnly cookie for 30 minutes        | `library.test.ts` (attempts, scoping) |
+| Information disclosure | Probing which emails have documents          | Identical response whether or not documents exist; no code is sent when there are none. Response time can still differ by the email send; move sending to a queue to even it out | `library.test.ts`, `library.spec.ts`  |
+| Information disclosure | Retrieval session reaching other requests    | RLS policies key on the session hash and match recipient email; only sent/in-progress/completed requests; files only when completed, not purged, and downloads allowed           | `library.test.ts`                     |
+| Denial of service      | Code flooding                                | 5 codes per email and 30 per IP per hour, enforced in a database function                                                                                                        | `library.test.ts` (rate limit)        |
+| Tampering              | Changed copy passed off as the signed one    | Every stored version has a SHA-256; downloads are checked; Check a copy compares fingerprints locally                                                                            | `library.spec.ts`                     |
+| Repudiation            | Who viewed, downloaded, archived or deleted  | Audit rows for file views and downloads, archive, legal hold, retention changes and file deletion; guest downloads and link reissues go in the evidence log                      | `library.test.ts`                     |
+| Elevation of privilege | Deleting records early                       | Retention deletion needs `workspace.manage`, an ended retention period, no legal hold, and the `retention_deletion` flag                                                         | `library.test.ts` (purge gating)      |
+
 ## Open items
 
 - `user` table readable by `st_app` (needed by auth). Mitigation planned: restricted view for member listings (Phase 6).
@@ -51,5 +63,5 @@ Living document. Each later phase adds its own section.
 - Signer-side rate limiting is per recipient in the database; add IP-level limits at the edge (Vercel firewall) before production.
 - Finalization runs inline after the last signature; move it to a background worker with retries in Phase 5/9.
 - The billing system context is a session setting (`app.system_actor`) that any code using the app role could set. Only `@st/core` billing webhook functions use it; a dedicated database role for the webhook would make this a hard boundary before production.
-- Invitation emails are sent after the database commit. If the process stops in between, the request shows as sent but nobody was emailed and the tokens cannot be re-sent yet; an outbox worker (Phase 5) closes this gap.
+- Invitation emails are sent after the database commit. If the process stops in between, the request shows as sent but nobody was emailed. Recipients can now get a new link at `/retrieve`, but an outbox worker would close the gap without their help.
 - Secrets management: use Vercel/Neon encrypted environment variables; rotate `BETTER_AUTH_SECRET` per environment.

@@ -63,3 +63,19 @@ export async function withBillingSystem<T>(db: Database, fn: (tx: Tx) => Promise
     return fn(tx);
   });
 }
+
+/**
+ * Runs `fn` with a verified-email retrieval session bound (spec 17.3). Policies resolve the
+ * session hash to one email and expose only that recipient's own requests and allowed files.
+ */
+export async function withRetrieval<T>(
+  db: Database,
+  sessionHash: string,
+  fn: (tx: Tx) => Promise<T>,
+): Promise<T> {
+  if (!/^[0-9a-f]{64}$/.test(sessionHash)) throw new Error('withRetrieval requires a session hash');
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select set_config('app.retrieval_session_hash', ${sessionHash}, true)`);
+    return fn(tx);
+  });
+}

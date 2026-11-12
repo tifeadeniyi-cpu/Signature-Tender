@@ -1,15 +1,20 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { Download, FileCheck2, Pencil } from 'lucide-react';
+import { Download, FileCheck2, Pencil, Archive as ArchiveIcon } from 'lucide-react';
 import {
   getDocument,
   getRequestsForDocument,
   hasPermission,
   RECIPIENT_ROLES,
+  DOCUMENT_TYPES,
   AppError,
   getRequestBilling,
   formatMoney,
+  getDocumentRecord,
 } from '@st/core';
+import { cn } from '@/lib/cn';
+import { ArchiveButton } from '@/components/documents/library-buttons';
+import { CheckCopy, LegalHoldForm, PreviewOnDemand } from './record-panels';
 import { db } from '@/lib/db';
 import { requireWorkspace } from '@/lib/session';
 import { PageHeader } from '@/components/ui/page-header';
@@ -52,7 +57,43 @@ const EVENT_LABELS: Record<string, string> = {
   'request.cancelled': 'Request cancelled',
   'request.expired': 'Request expired',
   'request.finalization_failed': 'Creating the signed copy failed',
+  'recipient.retrieved': 'Downloaded a copy from Get your documents',
+  'recipient.link_reissued': 'Asked for a new signing link',
+  'document.uploaded': 'Uploaded',
+  'document.details_updated': 'Details changed',
+  'document.recipients_updated': 'Recipients changed',
+  'document.fields_updated': 'Fields changed',
+  'document.settings_updated': 'Settings changed',
+  'document.ready_to_send': 'Marked ready to send',
+  'document.draft_deleted': 'Draft deleted',
+  'document.draft_restored': 'Draft restored',
+  'document.archived': 'Archived',
+  'document.unarchived': 'Unarchived',
+  'document.file_viewed': 'Viewed a file',
+  'document.file_downloaded': 'Downloaded a file',
+  'document.files_deleted': 'Files deleted after the retention period',
+  'document.legal_hold_placed': 'Legal hold placed',
+  'document.legal_hold_lifted': 'Legal hold lifted',
 };
+
+const TABS = [
+  ['overview', 'Overview'],
+  ['signers', 'Signers'],
+  ['activity', 'Activity'],
+  ['versions', 'Versions'],
+] as const;
+type Tab = (typeof TABS)[number][0];
+const KIND_LABEL: Record<string, string> = {
+  original: 'Original upload',
+  signed: 'Signed copy',
+  certificate: 'Completion certificate',
+};
+const SOURCE_LABEL = {
+  type: 'this document type',
+  workspace: 'the workspace default',
+  platform: 'the platform default',
+};
+const dayFmt = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeZone: 'UTC' });
 
 const RECIPIENT_STATUS: Record<
   string,
@@ -70,10 +111,11 @@ export default async function DocumentPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ checkout?: string }>;
+  searchParams: Promise<{ checkout?: string; tab?: string }>;
 }) {
   const { id } = await params;
-  const { checkout } = await searchParams;
+  const { checkout, tab: rawTab } = await searchParams;
+  const tab: Tab = TABS.some(([t]) => t === rawTab) ? (rawTab as Tab) : 'overview';
   const { user, membership } = await requireWorkspace();
   const actor = { userId: user.id };
   let doc;
@@ -86,15 +128,72 @@ export default async function DocumentPage({
   const requests = await getRequestsForDocument(db(), actor, id);
   if (requests.length === 0) redirect(`/app/documents/${id}/prepare/review`);
   const [current, ...older] = requests;
-  const { request: r, recipients, events } = current!;
+  const { request: r, recipients } = current!;
+  const record = await getDocumentRecord(db(), actor, id);
+  const archived = Boolean(record.document.archivedAt);
+  const purged = Boolean(record.retention.purgedAt);
+  const fileLabel = (f: { kind: string; version: number }) =>
+    `${KIND_LABEL[f.kind] ?? f.kind}${f.kind === 'original' && f.version > 1 ? ` (version ${f.version})` : ''}`;
+  const visibleFiles = record.files.filter((f) => {
+    if (f.kind === 'original') return true;
+    const req = record.requests.find(
+      (q) => q.signedFileId === f.id || q.certificateFileId === f.id,
+    );
+    return req?.status === 'completed';
+  });
+  const previewFile =
+    visibleFiles.find((f) => f.id === r.signedFileId && r.status === 'completed') ??
+    visibleFiles.find((f) => f.id === r.sourceFileId) ??
+    visibleFiles.find((f) => f.kind === 'original');
   const canSend = doc.canEdit && hasPermission(membership.permissions, 'documents.send');
   const open = !['completed', 'declined', 'expired', 'cancelled'].includes(r.status);
-  const nameOf = new Map(recipients.map((x) => [x.id, x.name]));
   const needsPayment = r.status === 'awaiting_payment' || r.status === 'payment_processing';
   const billing = needsPayment ? await getRequestBilling(db(), actor, r.id) : null;
   const [paymentsOn, liveOn] = needsPayment
     ? await Promise.all([paymentsAvailable(), liveSendingEnabled()])
     : [false, false];
+
+  const recipientsCard = (
+    <Card>
+      <CardHeader
+        title="Recipients"
+        description={
+          r.signingOrderEnabled
+            ? 'Signing in order, one after another.'
+            : 'Everyone can sign in any order.'
+        }
+      />
+      <ul className="flex flex-col gap-2">
+        {recipients.map((x) => {
+          const st = RECIPIENT_STATUS[x.status] ?? RECIPIENT_STATUS.waiting!;
+          return (
+            <li
+              key={x.id}
+              className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border px-3 py-2"
+              style={{ borderLeft: `4px solid ${colorFor(x.colorIndex).border}` }}
+            >
+              <span className="font-semibold text-heading">
+                {r.signingOrderEnabled ? `${x.signingOrder}. ` : ''}
+                {x.name}
+              </span>
+              <span className="text-sm">{x.email}</span>
+              <span className="text-xs">
+                {RECIPIENT_ROLES.find((y) => y.value === x.role)?.label}
+              </span>
+              <span className="ml-auto flex items-center gap-2 text-xs">
+                {x.signedAt ? when(x.signedAt) : x.viewedAt ? `Opened ${when(x.viewedAt)}` : null}
+                {x.role === 'cc' || x.role === 'viewer' ? (
+                  <Badge tone="neutral">Gets a copy</Badge>
+                ) : (
+                  <Badge tone={st.tone}>{st.label}</Badge>
+                )}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
+  );
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -147,94 +246,208 @@ export default async function DocumentPage({
 
       <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
         <div className="flex flex-col gap-6">
-          <Card>
-            <CardHeader
-              title="Recipients"
-              description={
-                r.signingOrderEnabled
-                  ? 'Signing in order, one after another.'
-                  : 'Everyone can sign in any order.'
-              }
-            />
-            <ul className="flex flex-col gap-2">
-              {recipients.map((x) => {
-                const st = RECIPIENT_STATUS[x.status] ?? RECIPIENT_STATUS.waiting!;
-                return (
-                  <li
-                    key={x.id}
-                    className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border px-3 py-2"
-                    style={{ borderLeft: `4px solid ${colorFor(x.colorIndex).border}` }}
+          <nav aria-label="Document sections">
+            <ul className="flex gap-1 overflow-x-auto border-b border-border">
+              {TABS.map(([t, label]) => (
+                <li key={t} className="shrink-0">
+                  <Link
+                    href={`/app/documents/${id}${t === 'overview' ? '' : `?tab=${t}`}`}
+                    aria-current={tab === t ? 'page' : undefined}
+                    className={cn(
+                      '-mb-px block border-b-2 px-3 py-2 text-sm',
+                      tab === t
+                        ? 'border-primary font-semibold text-primary-dark'
+                        : 'border-transparent text-heading hover:border-border',
+                    )}
                   >
-                    <span className="font-semibold text-heading">
-                      {r.signingOrderEnabled ? `${x.signingOrder}. ` : ''}
-                      {x.name}
-                    </span>
-                    <span className="text-sm">{x.email}</span>
-                    <span className="text-xs">
-                      {RECIPIENT_ROLES.find((y) => y.value === x.role)?.label}
-                    </span>
-                    <span className="ml-auto flex items-center gap-2 text-xs">
-                      {x.signedAt
-                        ? when(x.signedAt)
-                        : x.viewedAt
-                          ? `Opened ${when(x.viewedAt)}`
-                          : null}
-                      {x.role === 'cc' || x.role === 'viewer' ? (
-                        <Badge tone="neutral">Gets a copy</Badge>
-                      ) : (
-                        <Badge tone={st.tone}>{st.label}</Badge>
-                      )}
-                    </span>
-                  </li>
-                );
-              })}
+                    {label}
+                  </Link>
+                </li>
+              ))}
             </ul>
-          </Card>
-          <Card>
-            <CardHeader
-              title="History"
-              description="Every step is recorded in a tamper-evident log."
-            />
-            <ol className="flex flex-col gap-3 border-l-2 border-primary-surface pl-4">
-              {events
-                .slice()
-                .reverse()
-                .map((e) => (
-                  <li key={e.seq} className="text-sm">
-                    <p className="font-medium text-heading">
-                      {EVENT_LABELS[e.type] ?? e.type}
-                      {e.recipientId ? (
-                        <span className="font-normal"> · {nameOf.get(e.recipientId)}</span>
-                      ) : e.actorUserId ? (
-                        <span className="font-normal"> · {r.senderName}</span>
-                      ) : null}
-                    </p>
-                    <p className="text-xs">
-                      {when(e.createdAt)}
-                      {e.ipAddress ? ` · IP ${e.ipAddress}` : ''}
-                    </p>
-                  </li>
-                ))}
-            </ol>
-          </Card>
-          {older.length ? (
+          </nav>
+          {tab === 'overview' ? (
+            <>
+              {recipientsCard}
+              <Card>
+                <CardHeader
+                  title="Preview"
+                  description={previewFile ? fileLabel(previewFile) : undefined}
+                />
+                {purged ? (
+                  <Alert tone="info">
+                    The files for this record were deleted after its retention period. The details
+                    and activity below are kept.
+                  </Alert>
+                ) : previewFile ? (
+                  <PreviewOnDemand
+                    src={`/api/documents/${id}/versions/${previewFile.id}?view=1`}
+                    label={previewFile.kind === 'signed' ? 'signed copy' : 'document'}
+                  />
+                ) : null}
+              </Card>
+              <Card>
+                <CardHeader title="Overview" />
+                <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-[auto_1fr]">
+                  <dt>Type</dt>
+                  <dd className="text-heading">
+                    {DOCUMENT_TYPES.find((d) => d.value === record.document.documentType)?.label ??
+                      'Document'}
+                  </dd>
+                  <dt>Owner</dt>
+                  <dd className="text-heading">{record.ownerName ?? 'Unknown'}</dd>
+                  <dt>Created</dt>
+                  <dd className="text-heading">{when(record.document.createdAt)}</dd>
+                  <dt>Pages</dt>
+                  <dd className="text-heading">{record.document.pageCount ?? '—'}</dd>
+                  <dt>Signers</dt>
+                  <dd className="text-heading">
+                    {recipients.filter((x) => x.role !== 'cc' && x.role !== 'viewer').length} of{' '}
+                    {recipients.length} recipients sign
+                  </dd>
+                  {r.completedAt ? (
+                    <>
+                      <dt>Completed</dt>
+                      <dd className="text-heading">{when(r.completedAt)}</dd>
+                    </>
+                  ) : null}
+                  {archived ? (
+                    <>
+                      <dt>Archived</dt>
+                      <dd className="text-heading">{when(record.document.archivedAt)}</dd>
+                    </>
+                  ) : null}
+                </dl>
+              </Card>
+            </>
+          ) : null}
+          {tab === 'signers' ? (
+            <>
+              {recipientsCard}
+              {older.length ? (
+                <Card>
+                  <CardHeader title="Earlier requests" />
+                  <ul className="text-sm">
+                    {older.map((o) => (
+                      <li
+                        key={o.request.id}
+                        className="flex justify-between border-b border-border py-2 last:border-0"
+                      >
+                        <span>Sent {when(o.request.sentAt)}</span>
+                        <StatusBadge
+                          status={doc.document.status}
+                          requestStatus={o.request.status}
+                          isTest={o.request.isTest}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              ) : null}
+            </>
+          ) : null}
+          {tab === 'activity' ? (
             <Card>
-              <CardHeader title="Earlier requests" />
-              <ul className="text-sm">
-                {older.map((o) => (
-                  <li
-                    key={o.request.id}
-                    className="flex justify-between border-b border-border py-2 last:border-0"
-                  >
-                    <span>Sent {when(o.request.sentAt)}</span>
-                    <StatusBadge
-                      status={doc.document.status}
-                      requestStatus={o.request.status}
-                      isTest={o.request.isTest}
-                    />
-                  </li>
-                ))}
-              </ul>
+              <CardHeader
+                title="Activity"
+                description="Signing steps come from the tamper-evident evidence log. Changes, views and downloads come from the audit log."
+              />
+              <ol
+                className="flex flex-col gap-3 border-l-2 border-primary-surface pl-4"
+                aria-label="Activity"
+              >
+                {record.activity
+                  .slice()
+                  .reverse()
+                  .map((e, i) => (
+                    <li key={`${e.source}-${i}`} className="text-sm">
+                      <p className="font-medium text-heading">
+                        {EVENT_LABELS[e.type] ?? e.type}
+                        {e.type.startsWith('document.file_') && typeof e.data.kind === 'string' ? (
+                          <span className="font-normal">
+                            : {(KIND_LABEL[e.data.kind] ?? e.data.kind).toLowerCase()}
+                          </span>
+                        ) : null}
+                        {e.recipientName ? (
+                          <span className="font-normal"> · {e.recipientName}</span>
+                        ) : e.actorName ? (
+                          <span className="font-normal"> · {e.actorName}</span>
+                        ) : null}
+                      </p>
+                      <p className="text-xs">
+                        {when(e.at)}
+                        {e.ipAddress ? ` · IP ${e.ipAddress}` : ''}
+                        {e.source === 'audit' ? ' · audit log' : ''}
+                      </p>
+                    </li>
+                  ))}
+              </ol>
+            </Card>
+          ) : null}
+          {tab === 'versions' ? (
+            <Card>
+              <CardHeader
+                title="Versions"
+                description="Every stored file for this document. Each download is checked against its fingerprint and recorded."
+              />
+              {purged ? (
+                <Alert tone="info" className="mb-3">
+                  The files were deleted after the retention period. Their fingerprints are kept so
+                  copies can still be checked.
+                </Alert>
+              ) : null}
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[560px] text-left text-sm">
+                  <thead className="border-b border-border text-xs uppercase tracking-wide text-heading">
+                    <tr>
+                      <th scope="col" className="py-2 pr-3">
+                        File
+                      </th>
+                      <th scope="col" className="py-2 pr-3">
+                        Created
+                      </th>
+                      <th scope="col" className="py-2 pr-3">
+                        Fingerprint (SHA-256)
+                      </th>
+                      <th scope="col" className="py-2">
+                        <span className="sr-only">Download</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {visibleFiles.map((f) => (
+                      <tr key={f.id}>
+                        <td className="py-2 pr-3 font-medium text-heading">{fileLabel(f)}</td>
+                        <td className="py-2 pr-3 whitespace-nowrap">
+                          {dayFmt.format(f.createdAt)}
+                        </td>
+                        <td className="py-2 pr-3 font-mono text-xs" title={f.sha256}>
+                          {f.sha256.slice(0, 16)}…
+                        </td>
+                        <td className="py-2 text-right">
+                          {purged ? null : (
+                            <a
+                              href={`/api/documents/${id}/versions/${f.id}`}
+                              className={buttonClass('ghost', 'sm')}
+                              aria-label={`Download ${fileLabel(f)}`}
+                            >
+                              <Download className="size-4" aria-hidden /> Download
+                            </a>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-5 border-t border-border pt-4">
+                <CheckCopy
+                  known={visibleFiles.map((f) => ({
+                    label: fileLabel(f).toLowerCase(),
+                    sha256: f.sha256,
+                  }))}
+                />
+              </div>
             </Card>
           ) : null}
         </div>
@@ -283,6 +496,37 @@ export default async function DocumentPage({
               status={r.status}
             />
           </Card>
+          <Card>
+            <h2 className="font-display text-xl">Retention</h2>
+            <p className="mt-2 text-sm">
+              {record.retention.purgedAt
+                ? `Files deleted ${when(record.retention.purgedAt)} after the retention period.`
+                : record.retention.keepUntil
+                  ? `Kept until ${dayFmt.format(record.retention.keepUntil)} (${record.retention.days} days, from ${SOURCE_LABEL[record.retention.source]}).`
+                  : `Kept for ${record.retention.days} days after it is completed or closed (${SOURCE_LABEL[record.retention.source]}).`}
+            </p>
+            {record.retention.legalHold && !record.canManage ? (
+              <p className="mt-2 text-sm font-medium text-heading">On legal hold.</p>
+            ) : null}
+            {record.canManage ? (
+              <LegalHoldForm
+                documentId={id}
+                hold={record.retention.legalHold}
+                reason={record.retention.legalHoldReason}
+              />
+            ) : null}
+          </Card>
+          {!open ? (
+            <div className="flex items-center gap-2 text-sm">
+              {archived ? <ArchiveIcon className="size-4 text-primary" aria-hidden /> : null}
+              <ArchiveButton
+                documentId={id}
+                archived={archived}
+                title={doc.document.title}
+                size="md"
+              />
+            </div>
+          ) : null}
           {!open && r.status !== 'completed' && canSend ? (
             <Link href={`/app/documents/${id}/prepare/review`} className={buttonClass('secondary')}>
               <Pencil className="size-4" aria-hidden /> Edit and send again

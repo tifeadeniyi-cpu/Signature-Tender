@@ -101,7 +101,7 @@ Real sending stays off. The `test_signing` flag allows free requests marked TEST
 - Finalization runs in the request that completes the last signature. A background worker with retries is planned.
 - The e-sign disclosure, certificate wording and excluded-document guidance need attorney review (release checklist).
 
-## Phase 4: Payments and credits: Done (pending review)
+## Phase 4: Payments and credits: Done (PR #4, pending merge)
 
 Stripe runs in **test mode only**: live keys are refused and live events ignored. The `payments` flag stays off until Stripe test keys are set and reviewed, and real sending also still needs `production_signing`, which stays off until the release gates pass.
 
@@ -130,6 +130,36 @@ Stripe runs in **test mode only**: live keys are refused and live events ignored
 - Refunds of subscription invoices are recorded by Stripe but not mapped back to a payment row yet.
 - If a credit reserved from a monthly allowance is restored after that period ends, it returns to the allowance and expires at the next cycle.
 
-## Phases 5 to 9: Not started
+## Phase 5: Documents, retrieval and retention: Done (pending review)
+
+| Feature                                  | Status      | Notes                                                                                                                                                                                                                                                                                                                                         |
+| ---------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Documents list                           | Done        | Summary cards; tabs (All, In progress, Completed, Pending, Expired, Drafts, Declined, Cancelled, Archived); search by title, signer name or email, or reference; filters for type, owner and sent/completed dates; sortable columns; 25 per page                                                                                              |
+| Row actions                              | Done        | View, download signed copy, archive and unarchive (open requests must be finished or cancelled first)                                                                                                                                                                                                                                         |
+| View Document                            | Done        | Tabs for Overview (preview on demand), Signers, Activity and Versions; completed downloads; retention and legal hold panel                                                                                                                                                                                                                    |
+| Version history                          | Done        | Original, signed copy and certificate with fingerprints; each download is checked against its hash and logged                                                                                                                                                                                                                                 |
+| Check a copy                             | Done        | Drop a PDF to compare its SHA-256 with the stored versions; the file never leaves the browser                                                                                                                                                                                                                                                 |
+| Activity                                 | Done        | Evidence log and audit log merged: views, downloads, archive, legal hold, link reissue, guest downloads                                                                                                                                                                                                                                       |
+| Guest retrieval (`/retrieve`)            | Done        | Recipients enter their email, get a 6-digit code (10 minutes, 5 tries), and see only requests sent to that address for 30 minutes. Download completed copies the sender allowed, or get a new signing link (the old one stops working). Same answer whether or not an address has documents. Limits: 5 codes per email and 30 per IP per hour |
+| Recently deleted                         | Done        | Deleted drafts can be restored for 30 days (`retention.deleted_draft_days`)                                                                                                                                                                                                                                                                   |
+| Retention settings                       | Done        | Workspace default and per-type periods (Settings > Retention), minimum from `retention.min_days`. Platform default 2555 days is a placeholder pending legal review                                                                                                                                                                            |
+| Legal hold                               | Done        | Owners and admins, reason required; blocks deletion                                                                                                                                                                                                                                                                                           |
+| Retention deletion                       | Partial     | Service exists and is tested, but it is behind the `retention_deletion` flag (off) and there is no scheduled sweep yet                                                                                                                                                                                                                        |
+| Recovery process                         | Documented  | `docs/operations/recovery.md`: proposed RPO/RTO and restore steps. Not rehearsed                                                                                                                                                                                                                                                              |
+| Card view, column chooser, saved filters | Not started | List view only for now                                                                                                                                                                                                                                                                                                                        |
+| Guest-sender retrieval                   | Not started | Waits for guest sending                                                                                                                                                                                                                                                                                                                       |
+
+### Tests
+
+- `packages/core`: 13 new tests: tab buckets and counts, search and permissions, archive rules, deleted draft restore window, versions and activity, retention policy limits, legal hold, purge gating, retrieval without enumeration, attempt and rate limits, address scoping, downloads, link reissue.
+- `apps/web`: Playwright: a recipient loses the email, verifies at `/retrieve`, gets a new link (the old one stops working), signs, downloads the copy and certificate; the sender sees it in Activity and checks a copy in Versions. Library search, filters, archive and unarchive, retention minimum.
+
+### Known gaps
+
+- Opening the preview or downloading creates an audit row each time, which can make Activity long. Grouping repeated views is a later improvement.
+- The retrieval code email goes to whoever controls the inbox, which is the same trust the signing link already relies on.
+- The Neon owner role must be able to bypass RLS for the retrieval helper functions (same assumption as Phase 3).
+
+## Phases 6 to 9: Not started
 
 See the plan doc for scope and order.

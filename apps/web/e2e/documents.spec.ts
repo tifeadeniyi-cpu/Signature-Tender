@@ -100,7 +100,7 @@ test('upload, add signers, place fields, set options and mark ready', async ({ p
   expect((await res.body()).subarray(0, 5).toString()).toBe('%PDF-');
 
   await page.goto('/app/documents');
-  await expect(page.getByRole('link', { name: /Studio Agreement/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: /^Studio Agreement/ })).toBeVisible();
 });
 
 test('another workspace cannot read the file or open the document', async ({ browser }) => {
