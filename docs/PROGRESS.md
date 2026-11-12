@@ -211,6 +211,35 @@ Stripe runs in **test mode only**: live keys are refused and live events ignored
 - The destination address is checked before each delivery, but the HTTP client resolves DNS again, so a fast DNS rebinding could still reach a private address. An egress proxy would close this.
 - Production needs `CRON_SECRET` and a dedicated `WEBHOOK_SECRETS_KEY` in Vercel.
 
+## Transactional email: Document Successfully Completed: Done (pending review)
+
+Built on Phase 5's verified-email retrieval. Details in [email-notifications.md](email-notifications.md).
+
+| Feature                                  | Status      | Notes                                                                                                                                       |
+| ---------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Completion email (approved design)       | Done        | Burgundy header with the approved reversed logo, curved waves, completion illustration, buttons, document card, assurances, support, footer |
+| Reusable email design system             | Done        | `apps/web/src/lib/email/design.ts`; table-based, 640 px, phone layout, inline images, escaping and URL checks                               |
+| Trigger                                  | Done        | Queued in the finalization transaction only after files are stored, hashed and the evidence chain is closed; enforced by an insert policy   |
+| Durable queue, retries, idempotency      | Done        | `notifications` outbox; SKIP LOCKED claims; backoff up to 6 attempts; Resend idempotency keys; scheduled sweep                              |
+| Secure links                             | Done        | Hashed HMAC tokens; one-time code to the original address on every new browser; expiry with renewal; sender revocation                      |
+| Recipient document and evidence pages    | Done        | `/retrieve/documents/<id>`: every page, signer progress, downloads; Evidence tab with fingerprints, events and certificate                  |
+| Delivery log and Activity                | Done        | Queued, sent, delivered, bounced, failed; provider message id; Resend webhook                                                               |
+| Preview and test sends                   | Done        | `/app/dev/emails`                                                                                                                           |
+| Other templates on the new design system | Not started | Invitation, reminder, declined, expired, cancelled, verification, reset and receipt still use the Phase 1 layout                            |
+
+### Tests
+
+- `packages/core`: 14 new notification tests, against real Postgres with row-level security.
+- `apps/web`: 12 template unit tests; Playwright: full completion flow and the preview page.
+
+### Known gaps
+
+- Recipients have no time zone setting yet: dates use `EMAIL_TIMEZONE`, with the zone shown.
+- The daily cron is the slowest retry path; on Vercel Pro shorten the schedule.
+- Real-client rendering (Gmail, Outlook, Apple Mail) is checked by sending previews, not automated.
+- The completed-copy signing links issued at finalization are no longer emailed (the completion email replaces that message); they still work for anyone who already has one.
+
+
 ## Phase 8: Connectors, analytics and reporting: Done (pending review)
 
 | Item                       | Status      | Notes                                                                                                                                                                                                                               |
@@ -234,6 +263,7 @@ Stripe runs in **test mode only**: live keys are refused and live events ignored
 
 - Staff are granted by hand in the database (see `docs/operations/admin.md`). There is no staff sign-in factor beyond the normal account; require a passkey or 2FA for staff before production.
 - Report queries scan the workspace's requests; fine at launch volumes, add summary tables if workspaces reach hundreds of thousands of requests.
+
 
 ## Phase 9: Not started
 

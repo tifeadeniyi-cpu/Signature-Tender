@@ -2,3 +2,4 @@ pnpm-lock.yaml
 packages/db/migrations
 .next
 apps/web/public
+apps/web/src/lib/email/assets.generated.ts
