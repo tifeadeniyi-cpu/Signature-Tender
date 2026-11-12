@@ -16,7 +16,17 @@ export type ProductEvent =
   | 'pricing_cta_clicked'
   | 'api_docs_clicked'
   | 'faq_expanded'
-  | 'upload_workflow_started';
+  | 'upload_workflow_started'
+  // Completed document page and post-signing registration
+  | 'completed_document_page_viewed'
+  | 'document_download_clicked'
+  | 'evidence_certificate_viewed'
+  | 'create_free_account_clicked'
+  | 'registration_started'
+  | 'registration_completed'
+  | 'document_claimed'
+  | 'registration_dismissed'
+  | 'existing_user_signed_in';
 
 type Props = Record<string, string | number | boolean>;
 

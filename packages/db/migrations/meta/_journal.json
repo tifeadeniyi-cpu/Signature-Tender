@@ -134,6 +134,20 @@
       "when": 1794497215523,
       "tag": "0018_finalize_retry",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1794520220435,
+      "tag": "0019_document_claims",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1794520225905,
+      "tag": "0020_document_claims_rls",
+      "breakpoints": true
     }
   ]
 }

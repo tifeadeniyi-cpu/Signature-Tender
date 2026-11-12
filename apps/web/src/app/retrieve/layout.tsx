@@ -1,25 +1,21 @@
-import Image from 'next/image';
 import type { Metadata } from 'next';
+import { getSession } from '@/lib/session';
+import { supportEmail } from '@/lib/completed';
+import { PublicHeader } from '@/components/completed/public-header';
 
 export const metadata: Metadata = {
   title: 'Get your documents',
   robots: { index: false, follow: false },
+  referrer: 'no-referrer',
 };
 
 /** Verified-email retrieval for recipients without an account. */
-export default function RetrieveLayout({ children }: { children: React.ReactNode }) {
+export default async function RetrieveLayout({ children }: { children: React.ReactNode }) {
+  const session = await getSession();
+  const user = session?.user.emailVerified ? { name: session.user.name } : null;
   return (
     <div className="flex min-h-dvh flex-col bg-ivory">
-      <header className="flex h-14 items-center border-b border-border bg-white px-4">
-        <Image
-          src="/brand/logo-horizontal.png"
-          alt="Signature Tender"
-          width={316}
-          height={168}
-          className="h-10 w-auto"
-          priority
-        />
-      </header>
+      <PublicHeader user={user} supportEmail={await supportEmail()} />
       <main id="main" className="flex-1">
         {children}
       </main>

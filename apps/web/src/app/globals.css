@@ -54,3 +54,21 @@
     }
   }
 }
+
+/* Print copy of a completed document (CompletedPdfViewer). Only that copy prints. */
+#st-print-root {
+  display: none;
+}
+@media print {
+  body.st-printing > *:not(#st-print-root) {
+    display: none !important;
+  }
+  body.st-printing #st-print-root {
+    display: block;
+  }
+  #st-print-root img {
+    display: block;
+    width: 100%;
+    break-after: page;
+  }
+}

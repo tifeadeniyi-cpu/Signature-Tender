@@ -80,6 +80,23 @@ export async function withNotificationSystem<T>(
 }
 
 /**
+ * Runs `fn` as a signed-in user reading documents they claimed after signing. Claim policies are
+ * active only in this context, so claimed requests never appear in ordinary workspace queries.
+ */
+export async function withClaimant<T>(
+  db: Database,
+  actor: ActorContext,
+  fn: (tx: Tx) => Promise<T>,
+): Promise<T> {
+  if (!actor.userId) throw new Error('withClaimant requires a userId');
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select set_config('app.user_id', ${actor.userId}, true)`);
+    await tx.execute(sql`select set_config('app.claimant', 'on', true)`);
+    return fn(tx);
+  });
+}
+
+/**
  * Runs `fn` with a verified-email retrieval session bound (spec 17.3). Policies resolve the
  * session hash to one email and expose only that recipient's own requests and allowed files.
  */
