@@ -10,8 +10,8 @@ const SIGNERS = [
     id: 'a',
     name: 'Avery Lane',
     role: 'Signer 1',
-    box: 'border-[#D69E2E] bg-[#FEFCBF]/85 text-[#975A16]',
-    dot: 'bg-[#D69E2E]',
+    box: 'border-gold bg-soft-gold/85 text-primary',
+    dot: 'bg-gold',
   },
   {
     id: 'b',

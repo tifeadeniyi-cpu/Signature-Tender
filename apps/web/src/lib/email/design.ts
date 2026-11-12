@@ -13,17 +13,17 @@ import { esc, safeEmail, safeUrl } from './escape';
  */
 
 export const BRAND = {
-  burgundy: '#5B0A1C',
-  wine: '#7F1D3A',
-  roseGold: '#E6B8A7',
-  blush: '#F9E4E8',
-  ivory: '#FFF9F7',
-  slate: '#4B5563',
-  ink: '#1F2937',
+  navy: '#0D1B33',
+  royal: '#172D4D',
+  gold: '#D8AF68',
+  cream: '#F6F0E7',
+  ivory: '#FFF9F2',
+  slate: '#475569',
+  ink: '#1E293B',
   white: '#FFFFFF',
   green: '#166534',
   greenBg: '#E3F5EA',
-  footerDark: '#420714',
+  footerDark: '#081226',
   serif: "'DM Serif Display', Georgia, 'Times New Roman', serif",
   sans: "Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
 } as const;
@@ -81,7 +81,7 @@ export function emailDocument(opts: { title: string; preheader: string; rows: st
     body,table,td,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}
     table,td{mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse}
     img{-ms-interpolation-mode:bicubic}
-    a{color:${BRAND.wine}}
+    a{color:${BRAND.royal}}
     a[x-apple-data-detectors]{color:inherit!important;text-decoration:none!important}
     u + #body a{color:inherit;text-decoration:none}
     @media only screen and (max-width:620px){
@@ -117,7 +117,7 @@ export function emailDocument(opts: { title: string; preheader: string; rows: st
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${BRAND.ivory}" style="background-color:${BRAND.ivory};">
 <tr><td align="center" style="padding:24px 8px;">
 <!--[if mso]><table role="presentation" width="640" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
-<table role="presentation" class="st-container" width="640" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:640px;background-color:${BRAND.white};border:1px solid #F1E2E2;border-radius:14px;overflow:hidden;border-collapse:separate;">
+<table role="presentation" class="st-container" width="640" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:640px;background-color:${BRAND.white};border:1px solid #ECE4D6;border-radius:14px;overflow:hidden;border-collapse:separate;">
 ${opts.rows.join('\n')}
 </table>
 <!--[if mso]></td></tr></table><![endif]-->
@@ -131,10 +131,10 @@ ${opts.rows.join('\n')}
 // Header and footer
 
 export function brandHeader(c: EmailCanvas, title: string): string {
-  return `<tr><td bgcolor="${BRAND.burgundy}" class="st-pad" style="background-color:${BRAND.burgundy};padding:28px 36px 8px 36px;">
+  return `<tr><td bgcolor="${BRAND.navy}" class="st-pad" style="background-color:${BRAND.navy};padding:28px 36px 8px 36px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
 <td class="st-stack" valign="middle" width="190" style="width:190px;">${c.img('logo-reversed', 164, 84, 'Signature Tender', 'border-radius:10px;')}</td>
-<td class="st-stack st-hdr-title" valign="middle" align="right" style="border-left:1px solid #9A4A5C;padding:4px 0 4px 24px;font-family:${BRAND.serif};font-size:26px;line-height:32px;color:${BRAND.white};text-align:right;">${esc(title)}<div style="height:3px;width:56px;margin:10px 0 0 auto;background-color:${BRAND.roseGold};font-size:0;line-height:0;">&nbsp;</div></td>
+<td class="st-stack st-hdr-title" valign="middle" align="right" style="border-left:1px solid #3A4E6E;padding:4px 0 4px 24px;font-family:${BRAND.serif};font-size:26px;line-height:32px;color:${BRAND.white};text-align:right;">${esc(title)}<div style="height:3px;width:56px;margin:10px 0 0 auto;background-color:${BRAND.gold};font-size:0;line-height:0;">&nbsp;</div></td>
 </tr></table>
 </td></tr>
 <tr><td style="padding:0;line-height:0;font-size:0;" bgcolor="${BRAND.white}">${c.img('wave-top', 640, 56, '', 'width:100%;max-width:640px;height:auto;')}</td></tr>`;
@@ -155,27 +155,27 @@ export function brandFooter(c: EmailCanvas, cfg: EmailLinksConfig, year: number)
       ([label, u]) =>
         `<a href="${esc(u)}" style="color:${BRAND.white};text-decoration:underline;font-family:${BRAND.sans};font-size:13px;">${label}</a>`,
     )
-    .join(`<span style="color:#B98C96;padding:0 10px;">|</span>`);
+    .join(`<span style="color:#8A9AB3;padding:0 10px;">|</span>`);
   const socials = cfg.socials
     .map((s) => ({ label: s.label, url: safeUrl(s.url, opt) }))
     .filter((s) => s.url)
     .map(
       (s) =>
-        `<a href="${esc(s.url)}" style="color:${BRAND.roseGold};text-decoration:none;font-family:${BRAND.sans};font-size:13px;font-weight:600;padding-left:12px;">${esc(s.label)}</a>`,
+        `<a href="${esc(s.url)}" style="color:${BRAND.gold};text-decoration:none;font-family:${BRAND.sans};font-size:13px;font-weight:600;padding-left:12px;">${esc(s.label)}</a>`,
     )
     .join('');
   return `<tr><td style="padding:0;line-height:0;font-size:0;" bgcolor="${BRAND.white}">${c.img('wave-bottom', 640, 56, '', 'width:100%;max-width:640px;height:auto;')}</td></tr>
-<tr><td bgcolor="${BRAND.burgundy}" class="st-pad" style="background-color:${BRAND.burgundy};padding:8px 36px 22px 36px;">
+<tr><td bgcolor="${BRAND.navy}" class="st-pad" style="background-color:${BRAND.navy};padding:8px 36px 22px 36px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
 <td class="st-stack" valign="middle" width="140" style="width:140px;">${c.img('logo-reversed', 117, 60, 'Signature Tender', 'border-radius:8px;')}</td>
-<td class="st-stack st-hdr-title" valign="middle" style="border-left:1px solid #9A4A5C;padding:0 0 0 22px;font-family:${BRAND.serif};font-style:italic;font-size:20px;line-height:26px;color:${BRAND.roseGold};">Send. Sign. Pay Once.</td>
+<td class="st-stack st-hdr-title" valign="middle" style="border-left:1px solid #3A4E6E;padding:0 0 0 22px;font-family:${BRAND.serif};font-style:italic;font-size:20px;line-height:26px;color:${BRAND.gold};">Send. Sign. Pay Once.</td>
 ${socials ? `<td class="st-stack st-center" valign="middle" align="right" style="padding-top:8px;">${socials}</td>` : ''}
 </tr></table>
 </td></tr>
-<tr><td bgcolor="${BRAND.footerDark}" class="st-pad" align="center" style="background-color:${BRAND.footerDark};padding:20px 36px 24px 36px;font-family:${BRAND.sans};font-size:13px;line-height:20px;color:#F3DDE2;text-align:center;">
+<tr><td bgcolor="${BRAND.footerDark}" class="st-pad" align="center" style="background-color:${BRAND.footerDark};padding:20px 36px 24px 36px;font-family:${BRAND.sans};font-size:13px;line-height:20px;color:#EFE3CC;text-align:center;">
 This message was sent by ${esc(cfg.companyName)}, a secure electronic signature platform.
 ${links ? `<div style="padding-top:10px;">${links}</div>` : ''}
-<div style="padding-top:10px;color:#C9A3AC;font-size:12px;">&copy; ${year} ${esc(cfg.companyName)}. All rights reserved.</div>
+<div style="padding-top:10px;color:#A9B6CA;font-size:12px;">&copy; ${year} ${esc(cfg.companyName)}. All rights reserved.</div>
 </td></tr>`;
 }
 
@@ -191,7 +191,7 @@ export function heroIllustration(c: EmailCanvas, alt: string): string {
 }
 
 export function headline(text: string): string {
-  return `<tr><td align="center" class="st-pad" style="padding:14px 36px 4px 36px;"><h1 class="st-h1" style="margin:0;font-family:${BRAND.serif};font-weight:400;font-size:32px;line-height:38px;color:${BRAND.burgundy};text-align:center;">${esc(text)}</h1></td></tr>`;
+  return `<tr><td align="center" class="st-pad" style="padding:14px 36px 4px 36px;"><h1 class="st-h1" style="margin:0;font-family:${BRAND.serif};font-weight:400;font-size:32px;line-height:38px;color:${BRAND.navy};text-align:center;">${esc(text)}</h1></td></tr>`;
 }
 
 /** Paragraph. `html` must already be safe (built with esc/strong). */
@@ -204,7 +204,7 @@ export function paragraph(
 }
 
 export const strong = (text: string) =>
-  `<strong style="color:${BRAND.burgundy};font-weight:700;">${esc(text)}</strong>`;
+  `<strong style="color:${BRAND.navy};font-weight:700;">${esc(text)}</strong>`;
 
 export function primaryButton(
   c: EmailCanvas,
@@ -217,7 +217,7 @@ export function primaryButton(
     : '';
   return `<tr><td align="center" class="st-pad" style="padding:26px 44px 0 44px;">
 <table role="presentation" class="st-btn" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;border-collapse:separate;"><tr>
-<td align="center" bgcolor="${BRAND.wine}" style="border-radius:10px;background-color:${BRAND.wine};background-image:linear-gradient(180deg,#A0234D 0%,${BRAND.burgundy} 100%);">
+<td align="center" bgcolor="${BRAND.royal}" style="border-radius:10px;background-color:${BRAND.royal};background-image:linear-gradient(180deg,#24406A 0%,${BRAND.navy} 100%);">
 <a href="${esc(href)}" target="_blank" style="display:inline-block;padding:16px 40px;font-family:${BRAND.serif};font-size:20px;line-height:24px;color:${BRAND.white};text-decoration:none;border-radius:10px;mso-padding-alt:0;">${iconHtml}<span style="vertical-align:middle;">${esc(label)}</span></a>
 </td></tr></table>
 </td></tr>`;
@@ -235,8 +235,8 @@ export function secondaryButtons(
         : '';
       return `<td class="st-stack st-btn-cell" width="${Math.floor(100 / buttons.length)}%" align="center" valign="top" style="padding:0 ${i < buttons.length - 1 ? '6' : '0'}px 0 ${i > 0 ? '6' : '0'}px;">
 <table role="presentation" class="st-btn" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;"><tr>
-<td align="center" bgcolor="${BRAND.white}" style="border:1.5px solid ${BRAND.wine};border-radius:10px;background-color:${BRAND.white};">
-<a href="${esc(b.href)}" target="_blank" style="display:block;padding:12px 16px;font-family:${BRAND.sans};font-size:15px;line-height:20px;font-weight:600;color:${BRAND.wine};text-decoration:none;">${icon}<span style="vertical-align:middle;">${esc(b.label)}</span></a>
+<td align="center" bgcolor="${BRAND.white}" style="border:1.5px solid ${BRAND.royal};border-radius:10px;background-color:${BRAND.white};">
+<a href="${esc(b.href)}" target="_blank" style="display:block;padding:12px 16px;font-family:${BRAND.sans};font-size:15px;line-height:20px;font-weight:600;color:${BRAND.royal};text-decoration:none;">${icon}<span style="vertical-align:middle;">${esc(b.label)}</span></a>
 </td></tr></table></td>`;
     })
     .join('');
@@ -272,13 +272,13 @@ export function documentCard(
     )
     .join('');
   return `<tr><td class="st-pad" style="padding:28px 36px 0 36px;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#FCF2F3" style="background-color:#FCF2F3;border:1px solid #F3DCE0;border-radius:16px;border-collapse:separate;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#FBF6EC" style="background-color:#FBF6EC;border:1px solid #EFE3CC;border-radius:16px;border-collapse:separate;">
 <tr><td style="padding:22px 22px 20px 22px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
 <td class="st-stack st-card-icon" valign="top" width="84" style="width:84px;padding:4px 18px 0 0;">${c.img('pdf', 64, 64, opts.iconAlt)}</td>
-<td class="st-stack st-card-body" valign="top" style="border-left:1px solid #EBC9D0;padding-left:20px;">
+<td class="st-stack st-card-body" valign="top" style="border-left:1px solid #E6D3AE;padding-left:20px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-<td class="st-stack" valign="top" style="font-family:${BRAND.serif};font-size:22px;line-height:28px;color:${BRAND.burgundy};padding:0 12px 8px 0;word-break:break-word;">${esc(opts.title)}</td>
+<td class="st-stack" valign="top" style="font-family:${BRAND.serif};font-size:22px;line-height:28px;color:${BRAND.navy};padding:0 12px 8px 0;word-break:break-word;">${esc(opts.title)}</td>
 ${opts.status ? `<td class="st-stack" valign="top" align="right" style="padding:0 0 8px 0;">${statusPill(c, opts.status)}</td>` : ''}
 </tr></table>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${rows}</table>
@@ -298,7 +298,7 @@ export function infoGrid(
   ) => `<td class="st-stack" valign="top" width="50%" style="width:50%;padding:10px 10px;">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
 <td valign="top" width="38" style="width:38px;padding:2px 10px 0 0;">${c.img(it.icon, 28, 28, '')}</td>
-<td valign="top" style="font-family:${BRAND.sans};font-size:13px;line-height:19px;color:${BRAND.slate};"><div style="font-size:15px;line-height:21px;font-weight:700;color:${BRAND.burgundy};padding-bottom:2px;">${esc(it.title)}</div>${esc(it.text)}</td>
+<td valign="top" style="font-family:${BRAND.sans};font-size:13px;line-height:19px;color:${BRAND.slate};"><div style="font-size:15px;line-height:21px;font-weight:700;color:${BRAND.navy};padding-bottom:2px;">${esc(it.title)}</div>${esc(it.text)}</td>
 </tr></table></td>`;
   const rows: string[] = [];
   for (let i = 0; i < items.length; i += 2)
@@ -306,7 +306,7 @@ export function infoGrid(
       `<tr>${cell(items[i]!)}${items[i + 1] ? cell(items[i + 1]!) : '<td class="st-hide" width="50%"></td>'}</tr>`,
     );
   return `<tr><td class="st-pad" style="padding:18px 36px 0 36px;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#FDF6F7" style="background-color:#FDF6F7;border-radius:14px;border-collapse:separate;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#FDFAF4" style="background-color:#FDFAF4;border-radius:14px;border-collapse:separate;">
 <tr><td style="padding:8px 8px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${rows.join('')}</table></td></tr>
 </table></td></tr>`;
 }
@@ -314,7 +314,7 @@ export function infoGrid(
 /** Plain notice box (for example: downloads turned off by the sender). `html` must be safe. */
 export function noticeBox(html: string): string {
   return `<tr><td class="st-pad" style="padding:22px 44px 0 44px;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${BRAND.blush}" style="background-color:${BRAND.blush};border-radius:12px;border-collapse:separate;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${BRAND.cream}" style="background-color:${BRAND.cream};border-radius:12px;border-collapse:separate;">
 <tr><td style="padding:14px 18px;font-family:${BRAND.sans};font-size:15px;line-height:22px;color:${BRAND.ink};text-align:center;">${html}</td></tr></table>
 </td></tr>`;
 }
@@ -329,21 +329,21 @@ export function supportBlock(
   const contact = documentContact && safeEmail(documentContact.email);
   if (documentContact && contact)
     parts.push(
-      `<div style="font-weight:700;color:${BRAND.burgundy};">Questions about this document?</div>Contact ${esc(documentContact.name)} at <a href="mailto:${esc(contact)}" style="color:${BRAND.wine};text-decoration:underline;">${esc(contact)}</a>`,
+      `<div style="font-weight:700;color:${BRAND.navy};">Questions about this document?</div>Contact ${esc(documentContact.name)} at <a href="mailto:${esc(contact)}" style="color:${BRAND.royal};text-decoration:underline;">${esc(contact)}</a>`,
     );
   const supportEmail = safeEmail(cfg.supportEmail);
   const supportUrl = safeUrl(cfg.supportUrl, opt);
   if (supportEmail || supportUrl) {
     const link = supportUrl
-      ? `<a href="${esc(supportUrl)}" style="color:${BRAND.wine};text-decoration:underline;">${esc(cfg.companyName)} Support</a>`
-      : `${esc(cfg.companyName)} Support at <a href="mailto:${esc(supportEmail!)}" style="color:${BRAND.wine};text-decoration:underline;">${esc(supportEmail!)}</a>`;
+      ? `<a href="${esc(supportUrl)}" style="color:${BRAND.royal};text-decoration:underline;">${esc(cfg.companyName)} Support</a>`
+      : `${esc(cfg.companyName)} Support at <a href="mailto:${esc(supportEmail!)}" style="color:${BRAND.royal};text-decoration:underline;">${esc(supportEmail!)}</a>`;
     parts.push(
-      `<div style="font-weight:700;color:${BRAND.burgundy};${parts.length ? 'padding-top:12px;' : ''}">Need help?</div>Contact ${link}.`,
+      `<div style="font-weight:700;color:${BRAND.navy};${parts.length ? 'padding-top:12px;' : ''}">Need help?</div>Contact ${link}.`,
     );
   }
   if (!parts.length) return '';
   return `<tr><td class="st-pad" align="center" style="padding:26px 44px 0 44px;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="border-top:1px solid #EFDDE0;padding-top:20px;font-family:${BRAND.sans};font-size:15px;line-height:22px;color:${BRAND.ink};text-align:center;">${parts.join('')}</td></tr></table>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="border-top:1px solid #ECE4D6;padding-top:20px;font-family:${BRAND.sans};font-size:15px;line-height:22px;color:${BRAND.ink};text-align:center;">${parts.join('')}</td></tr></table>
 </td></tr>`;
 }
 
