@@ -150,7 +150,7 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
 
       <nav aria-label="Document status" className="mb-4 overflow-x-auto">
         <ul className="flex gap-1 border-b border-border">
-          {LIBRARY_TABS.map((t) => (
+          {LIBRARY_TABS.filter((t) => t !== 'drafts').map((t) => (
             <li key={t} className="shrink-0">
               <Link
                 href={href({ tab: t, page: 1 })}
