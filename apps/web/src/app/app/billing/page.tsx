@@ -9,9 +9,9 @@ import {
   reconcileCredits,
 } from '@st/core';
 import { db } from '@/lib/db';
-import { env } from '@/lib/env';
 import { requireWorkspace } from '@/lib/session';
 import { paymentsAvailable } from '@/lib/billing';
+import { stripeLiveMode } from '@/lib/stripe';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardHeader } from '@/components/ui/card';
 import { Alert, Badge } from '@/components/ui/feedback';
@@ -118,7 +118,7 @@ export default async function BillingPage({
           {notice}
         </Alert>
       ) : null}
-      {paymentsOn && env().APP_ENV !== 'production' ? (
+      {paymentsOn && !stripeLiveMode() ? (
         <Alert tone="warning" className="mb-4">
           Stripe test mode. No real money moves. Use test card 4242 4242 4242 4242 with any future
           date and any CVC.
