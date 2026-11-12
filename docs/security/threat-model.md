@@ -75,7 +75,6 @@ Living document. Each later phase adds its own section.
 ## Open items
 
 - `user` table readable by `st_app` (needed by auth). Mitigation planned: restricted view for member listings (Phase 6).
-- CSP allows `'unsafe-inline'` scripts for Next.js; move to nonce-based CSP before production.
 - Signer-side rate limiting is per recipient in the database; add IP-level limits at the edge (Vercel firewall) before production.
 - Finalization runs inline after the last signature; move it to a background worker with retries in Phase 5/9.
 - The billing system context is a session setting (`app.system_actor`) that any code using the app role could set. Only `@st/core` billing webhook functions use it; a dedicated database role for the webhook would make this a hard boundary before production.

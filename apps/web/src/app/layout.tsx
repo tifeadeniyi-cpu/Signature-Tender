@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { DM_Serif_Display, Inter } from 'next/font/google';
+import { headers } from 'next/headers';
 import './globals.css';
 
 const display = DM_Serif_Display({
@@ -19,7 +20,9 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = { themeColor: '#5B0A1C' };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Reading request headers makes every page render per request, which the CSP nonce needs.
+  await headers();
   return (
     <html lang="en" className={`${display.variable} ${inter.variable}`}>
       <body className="min-h-dvh antialiased">

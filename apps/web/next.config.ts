@@ -2,21 +2,9 @@ import type { NextConfig } from 'next';
 
 const isDev = process.env.NODE_ENV !== 'production';
 
-// Content Security Policy. 'unsafe-inline' for styles is required by Next.js style injection;
-// scripts get 'unsafe-eval' only in development for React refresh.
-const csp = [
-  "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
-  "font-src 'self'",
-  "connect-src 'self'",
-  "worker-src 'self' blob:",
-  "frame-ancestors 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "object-src 'none'",
-].join('; ');
+// Pages get a per-request nonce CSP from src/proxy.ts. API responses (JSON and files) get a
+// policy that allows nothing to run.
+const apiCsp = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
 
 const config: NextConfig = {
   transpilePackages: ['@st/db', '@st/core'],
@@ -27,7 +15,6 @@ const config: NextConfig = {
       {
         source: '/:path*',
         headers: [
-          { key: 'Content-Security-Policy', value: csp },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           { key: 'X-Frame-Options', value: 'DENY' },
@@ -41,6 +28,10 @@ const config: NextConfig = {
                 },
               ]),
         ],
+      },
+      {
+        source: '/api/:path*',
+        headers: [{ key: 'Content-Security-Policy', value: apiCsp }],
       },
       {
         // Recipient links carry a secret token: never leak it via Referer, cache or index the pages.
