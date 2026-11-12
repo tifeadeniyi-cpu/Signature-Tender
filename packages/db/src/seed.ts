@@ -61,7 +61,7 @@ export async function seedReferenceData(url: string): Promise<void> {
       for (const f of FEATURE_FLAGS) {
         await tx
           .insert(s.featureFlags)
-          .values({ ...f })
+          .values({ ...f, environments: 'environments' in f ? [...f.environments] : [] })
           .onConflictDoNothing({ target: s.featureFlags.key });
       }
       for (const c of APP_CONFIG) {

@@ -175,6 +175,13 @@ export const FEATURE_FLAGS = [
   },
   { key: 'payments', description: 'Stripe checkout and credits (Phase 4).', enabled: false },
   { key: 'passkeys', description: 'Passkey sign-in and registration.', enabled: true },
+  {
+    key: 'test_signing',
+    description:
+      'Allow free test signing requests, clearly marked as tests, in development and test environments only.',
+    enabled: true,
+    environments: ['development', 'test'],
+  },
 ] as const;
 
 export const APP_CONFIG = [
@@ -185,6 +192,20 @@ export const APP_CONFIG = [
   },
   { key: 'limits.max_upload_mb', value: 25, description: 'Maximum PDF upload size in megabytes' },
   { key: 'limits.max_pages', value: 200, description: 'Maximum pages in an uploaded PDF' },
+  {
+    key: 'legal.esign_disclosure',
+    value: {
+      version: 'draft-2026-11-12',
+      text: 'DRAFT: pending attorney review.\n\nYou are being asked to review and sign this document electronically. By selecting "I agree", you consent to use electronic records and signatures for this document instead of paper.\n\nWhat you need: a device with a current web browser and an email address you can access.\n\nYour copy: when everyone has signed, you will receive an email with a link to download the completed document, if the sender allows downloads. Ask the sender if you need another copy.\n\nPaper option: you may decline to sign electronically by choosing "Decline to sign" and contacting the sender to arrange another way to sign.\n\nWithdrawing consent: you can withdraw before you finish signing by declining. Withdrawing does not affect anything you already signed electronically.',
+    },
+    description:
+      'Electronic records and signature disclosure shown before signing. Must be replaced with counsel-approved text before production.',
+  },
+  {
+    key: 'signing.link_valid_days',
+    value: 30,
+    description: 'How long a recipient link stays valid when the request has no expiration date',
+  },
   {
     key: 'support.email',
     value: 'support@signaturetender.com',

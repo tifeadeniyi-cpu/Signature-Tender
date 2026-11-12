@@ -35,3 +35,19 @@ export async function withActor<T>(
     return fn(tx);
   });
 }
+
+/**
+ * Runs `fn` with a recipient's link token bound for row-level security. Only the SHA-256 of the token
+ * is sent to the database; policies resolve it to exactly one recipient of one request.
+ */
+export async function withSigner<T>(
+  db: Database,
+  tokenHash: string,
+  fn: (tx: Tx) => Promise<T>,
+): Promise<T> {
+  if (!/^[0-9a-f]{64}$/.test(tokenHash)) throw new Error('withSigner requires a token hash');
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select set_config('app.signer_token_hash', ${tokenHash}, true)`);
+    return fn(tx);
+  });
+}

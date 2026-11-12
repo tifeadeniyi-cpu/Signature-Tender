@@ -29,3 +29,21 @@ export async function latestLinkFor(
   }
   throw new Error(`No "${subjectIncludes}" email for ${email}`);
 }
+
+/** Waits for the newest dev-mail message to an address whose subject matches, and returns it. */
+export async function latestMail(email: string, subjectIncludes: string, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const files = (await fs.readdir(DIR).catch(() => [])).sort().reverse();
+    for (const f of files) {
+      const msg = JSON.parse(await fs.readFile(path.join(DIR, f), 'utf8')) as {
+        to: string;
+        subject: string;
+        text: string;
+      };
+      if (msg.to === email && msg.subject.includes(subjectIncludes)) return msg;
+    }
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  throw new Error(`No "${subjectIncludes}" email for ${email}`);
+}

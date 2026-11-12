@@ -258,6 +258,12 @@ export async function listDocuments(db: Database, actor: ActorContext, workspace
         pageCount: schema.documents.pageCount,
         updatedAt: schema.documents.updatedAt,
         recipientCount: sql<number>`(select count(*)::int from document_recipients r where r.document_id = ${schema.documents.id})`,
+        requestStatus: sql<
+          string | null
+        >`(select sr.status::text from signing_requests sr where sr.document_id = ${schema.documents.id} order by sr.created_at desc limit 1)`,
+        requestIsTest: sql<
+          boolean | null
+        >`(select sr.is_test from signing_requests sr where sr.document_id = ${schema.documents.id} order by sr.created_at desc limit 1)`,
       })
       .from(schema.documents)
       .where(and(eq(schema.documents.workspaceId, workspaceId), isNull(schema.documents.deletedAt)))
@@ -317,6 +323,15 @@ export async function getDocument(db: Database, actor: ActorContext, documentId:
   });
 }
 
+/** Documents with an open or completed signing request are frozen; edits would change what was sent. */
+async function assertNotSent(tx: Tx, documentId: string) {
+  const rows = (await tx.execute(
+    sql`select 1 from signing_requests where document_id = ${documentId}::uuid and status not in ('declined','expired','cancelled') limit 1`,
+  )) as unknown as unknown[];
+  if (rows.length)
+    throw new AppError('conflict', 'This document has been sent, so it can no longer be changed.');
+}
+
 /** Locks the document row for editing; moves it into `preparing` (or back from ready_to_send). */
 async function beginEdit(tx: Tx, documentId: string) {
   await loadDocument(tx, documentId); // not_found if invisible to this user
@@ -330,6 +345,7 @@ async function beginEdit(tx: Tx, documentId: string) {
   if (!doc) throw new AppError('not_found', 'Document not found');
   if (!canTransition(doc.status, 'preparing'))
     throw new AppError('conflict', 'This document cannot be edited in its current state');
+  await assertNotSent(tx, documentId);
   await tx
     .update(schema.documents)
     .set({ status: 'preparing', updatedAt: new Date() })
@@ -479,17 +495,15 @@ export async function saveFields(
     }
     await tx.delete(schema.documentFields).where(eq(schema.documentFields.documentId, documentId));
     if (fields.length) {
-      await tx
-        .insert(schema.documentFields)
-        .values(
-          fields.map((f) => ({
-            ...f,
-            label: f.label ?? null,
-            options: f.options ?? null,
-            workspaceId,
-            documentId,
-          })),
-        );
+      await tx.insert(schema.documentFields).values(
+        fields.map((f) => ({
+          ...f,
+          label: f.label ?? null,
+          options: f.options ?? null,
+          workspaceId,
+          documentId,
+        })),
+      );
     }
     await recordAudit(tx, {
       workspaceId,
@@ -621,6 +635,7 @@ export async function deleteDraft(
 ) {
   await withActor(db, actor, async (tx) => {
     const doc = await loadDocument(tx, documentId);
+    await assertNotSent(tx, documentId);
     const res = await tx
       .update(schema.documents)
       .set({ deletedAt: new Date(), updatedAt: new Date() })

@@ -1,6 +1,12 @@
 import Link from 'next/link';
 import { CircleCheck, CircleAlert, Pencil } from 'lucide-react';
-import { checkReadiness, isFeatureEnabled, DOCUMENT_TYPES, RECIPIENT_ROLES } from '@st/core';
+import {
+  checkReadiness,
+  isFeatureEnabled,
+  hasPermission,
+  DOCUMENT_TYPES,
+  RECIPIENT_ROLES,
+} from '@st/core';
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
 import { loadPreparation } from '@/lib/documents';
@@ -20,13 +26,12 @@ export default async function ReviewStep({ params }: { params: Promise<{ id: str
   const s = doc.settings;
   const issues = checkReadiness({ file, recipients, fields, settings: s });
   const appEnv = env().APP_ENV;
-  const [signingOn, paymentsOn] = await Promise.all([
-    isFeatureEnabled(db(), 'production_signing', appEnv),
-    isFeatureEnabled(db(), 'payments', appEnv),
-  ]);
-  const sendBlockedReason =
-    !signingOn || !paymentsOn
-      ? 'Sending for signature opens once signing and checkout are switched on for this environment. Your prepared document is saved and will be ready.'
+  const testSending = await isFeatureEnabled(db(), 'test_signing', appEnv);
+  const canSend = data.canEdit && hasPermission(data.membership.permissions, 'documents.send');
+  const sendBlockedReason = !canSend
+    ? 'Your role does not allow sending documents.'
+    : !testSending
+      ? 'Sending real signing requests opens after security and legal review, and once checkout is switched on.'
       : null;
 
   const edit = (step: string) => (
@@ -151,6 +156,9 @@ export default async function ReviewStep({ params }: { params: Promise<{ id: str
             )}
             <p className="mt-4 border-t border-border pt-4 text-sm">
               Cost to send: <strong className="text-heading">1 signing request credit</strong>
+              {testSending ? (
+                <span className="block text-xs">Test requests in this environment are free.</span>
+              ) : null}
             </p>
             <ReviewActions
               documentId={id}
@@ -159,6 +167,14 @@ export default async function ReviewStep({ params }: { params: Promise<{ id: str
               status={doc.status}
               sendBlockedReason={sendBlockedReason}
             />
+            {data.previousRequest ? (
+              <p className="mt-3 text-xs">
+                An earlier request was {data.previousRequest.request.status}.{' '}
+                <Link href={`/app/documents/${id}`} className="underline">
+                  View its history
+                </Link>
+              </p>
+            ) : null}
           </Card>
         </aside>
       </div>
