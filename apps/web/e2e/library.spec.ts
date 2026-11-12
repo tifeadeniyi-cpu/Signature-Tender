@@ -31,6 +31,7 @@ async function sendTestRequest(page: Page, filename: string, signerName: string,
   await expect(page).toHaveURL(/review$/);
   await page.getByRole('button', { name: 'Mark ready to send' }).click();
   await expect(page.getByText('Marked ready to send.')).toBeVisible();
+  await page.getByRole('checkbox', { name: /This document is not one of these/ }).check();
   await page.getByRole('button', { name: 'Send test request' }).click();
   await expect(page.getByRole('heading', { name: 'Recipients' })).toBeVisible();
   await expect(page).toHaveURL(/\/app\/documents\/[0-9a-f-]{36}$/);

@@ -99,6 +99,22 @@ export interface SendOptions {
   testSigningEnabled: boolean;
   /** True only when both the production_signing and payments flags are on. */
   liveSendingEnabled?: boolean;
+  /**
+   * The sender confirmed the specialized-documents notice (`legal.specialized_documents`).
+   * Required for live requests; recorded with the notice version and how it was given.
+   */
+  specializedAck?: { source: 'sender' | 'api' };
+}
+
+export interface SpecializedNotice {
+  version: string;
+  intro: string;
+  categories: string[];
+  confirm: string;
+}
+
+export async function getSpecializedNotice(db: Database): Promise<SpecializedNotice | null> {
+  return getConfigValue<SpecializedNotice | null>(db, 'legal.specialized_documents', null);
 }
 
 export interface SendResult {
@@ -230,6 +246,12 @@ export async function sendForSignature(
     null,
   );
   if (!disclosure?.text) throw new Error('legal.esign_disclosure is not configured');
+  const notice = await getSpecializedNotice(db);
+  if (live && notice && !opts.specializedAck)
+    throw new AppError(
+      'invalid',
+      'Confirm that this document is not one that needs extra formalities, such as a will or a notarized deed.',
+    );
   const maxSigners = await getConfigValue(db, 'limits.max_signers_per_request', 5);
 
   return withActor(db, actor, async (tx) => {
@@ -377,6 +399,15 @@ export async function sendForSignature(
         })),
       );
     }
+    if (notice && opts.specializedAck)
+      await appendEvent(tx, {
+        requestId,
+        workspaceId: doc.workspace_id,
+        actorUserId: actor.userId,
+        type: 'request.specialized_notice_confirmed',
+        data: { version: notice.version, source: opts.specializedAck.source },
+        ...meta,
+      });
     let invitations: Invitation[] = [];
     let status: SendResult['status'] = 'sent';
     if (!live) {
@@ -1702,3 +1733,56 @@ export async function finalizeRequest(
 
 /** Shared with the retrieval service, which writes to the same evidence chain. */
 export { appendEvent as appendEvidenceEvent };
+
+export interface FinalizationRetry {
+  requestId: string;
+  ok: boolean;
+  error?: string;
+  result?: Awaited<ReturnType<typeof finalizeRequest>> & {
+    senderName: string;
+    workspaceName: string;
+  };
+}
+
+/**
+ * Scheduled retry for requests that failed to finish (for example a storage outage). Each retry
+ * runs under RLS as the member who sent the request, at most `maxAttempts` failures per request,
+ * at least 10 minutes apart. A request whose sender can no longer act is left for a person.
+ */
+export async function retryFailedFinalizations(
+  db: Database,
+  storage: ObjectStorage,
+  opts: { limit?: number; maxAttempts?: number } = {},
+): Promise<FinalizationRetry[]> {
+  const queue = (await db.execute(
+    sql`select * from st_finalization_retry_queue(${opts.limit ?? 10}, ${opts.maxAttempts ?? 3})`,
+  )) as unknown as {
+    request_id: string;
+    sent_by: string;
+    sender_name: string;
+    workspace_name: string;
+  }[];
+  const out: FinalizationRetry[] = [];
+  for (const q of queue) {
+    try {
+      const res = await finalizeRequest(
+        db,
+        storage,
+        { actor: { userId: q.sent_by } },
+        q.request_id,
+      );
+      out.push({
+        requestId: q.request_id,
+        ok: true,
+        result: { ...res, senderName: q.sender_name, workspaceName: q.workspace_name },
+      });
+    } catch (err) {
+      out.push({
+        requestId: q.request_id,
+        ok: false,
+        error: String(err instanceof Error ? err.message : err).slice(0, 200),
+      });
+    }
+  }
+  return out;
+}

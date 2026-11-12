@@ -37,6 +37,11 @@ test('staff admin is a 404 for customers and opens for staff', async ({ page }) 
   try {
     await sql`insert into platform_admins (user_id, note)
               select id, 'e2e' from "user" where email = ${email}`;
+    // A password alone is not enough for staff.
+    await page.goto('/admin');
+    await expect(page).toHaveURL(/\/app\/settings\/security\?staff=1/);
+    await expect(page.getByText(/Staff administration needs two-factor sign-in/)).toBeVisible();
+    await sql`update "user" set two_factor_enabled = true where email = ${email}`;
     await page.goto('/admin');
     await expect(page.getByRole('heading', { name: 'Platform overview' })).toBeVisible();
     await page.getByRole('link', { name: 'Workspaces', exact: true }).click();

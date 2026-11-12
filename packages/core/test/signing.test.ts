@@ -19,6 +19,7 @@ import {
   adoptSignature,
   completeSigning,
   finalizeRequest,
+  retryFailedFinalizations,
   declineSigning,
   cancelRequest,
   getRequestsForDocument,
@@ -503,5 +504,58 @@ describe('decline, cancel and expiry', () => {
     await expect(startSigning(db, invitations[0]!.token)).rejects.toMatchObject({
       code: 'conflict',
     });
+  });
+});
+
+describe('scheduled retry after a failed finish', () => {
+  it('retries as the sender after a storage failure, then completes', async () => {
+    const docId = await preparedDoc([
+      { name: 'Dee Solo', email: 'dee@example.test', role: 'signer', signingOrder: 1 },
+    ]);
+    const res = await sendForSignature(db, storage, { userId: owner }, docId, TEST);
+    const token = res.invitations[0]!.token;
+    const session = ((await startSigning(db, token)) as { session: string }).session;
+    const v = await getSignerView(db, token, session);
+    await giveConsent(db, token, session, { disclosureVersion: v.disclosure.version, agree: true });
+    const wsp = await getSigningWorkspace(db, token, session);
+    const sig = await adoptSignature(db, token, session, {
+      kind: 'signature',
+      method: 'drawn',
+      pngBase64: makePng().toString('base64'),
+    });
+    const done = await completeSigning(db, storage, token, session, {
+      intent: true,
+      values: [
+        { fieldId: wsp.fields.find((f) => f.type === 'signature')!.id, signatureId: sig.id },
+        { fieldId: wsp.fields.find((f) => f.type === 'text')!.id, value: 'Owner' },
+      ],
+    });
+    expect(done.readyToFinalize).toBe(true);
+
+    // Storage is down when the last signer finishes.
+    class Down extends MemoryStorage {
+      override async put(): Promise<void> {
+        throw new Error('storage unavailable');
+      }
+    }
+    const down = Object.assign(new Down(), { get: storage.get.bind(storage) });
+    await expect(finalizeRequest(db, down, { token }, res.requestId)).rejects.toBeTruthy();
+    const status = async () =>
+      (await getRequestsForDocument(db, { userId: owner }, docId))[0]!.request.status;
+    expect(await status()).toBe('finalization_failed');
+
+    // Not retried within 10 minutes of the failure.
+    expect((await retryFailedFinalizations(db, storage)).map((r) => r.requestId)).not.toContain(
+      res.requestId,
+    );
+    await owner_.db.execute(
+      sql`update signing_requests set updated_at = now() - interval '11 minutes' where id = ${res.requestId}`,
+    );
+    const runs = await retryFailedFinalizations(db, storage);
+    const mine = runs.find((r) => r.requestId === res.requestId)!;
+    expect(mine.ok).toBe(true);
+    expect(mine.result!.invitations.map((i) => i.email)).toEqual(['dee@example.test']);
+    expect(mine.result!.senderName).toBeTruthy();
+    expect(await status()).toBe('completed');
   });
 });

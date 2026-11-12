@@ -15,6 +15,10 @@ let key: Buffer | undefined;
 /** Encryption key and destination rules for webhook endpoints. */
 export function webhookContext(): WebhookContext {
   const e = env();
+  // In production the webhook key must be its own secret, so rotating the session secret can
+  // never make stored webhook secrets unreadable, and one leaked value does not expose both.
+  if (e.APP_ENV === 'production' && !e.WEBHOOK_SECRETS_KEY)
+    throw new Error('WEBHOOK_SECRETS_KEY must be set in production before webhooks can be used.');
   key ??= deriveSecretsKey(e.WEBHOOK_SECRETS_KEY ?? e.BETTER_AUTH_SECRET);
   return {
     encKey: key,

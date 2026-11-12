@@ -28,8 +28,8 @@ const schema = z.object({
   STRIPE_API_HOST: z.string().optional(),
   STRIPE_API_PORT: z.coerce.number().optional(),
   STRIPE_API_PROTOCOL: z.enum(['http', 'https']).optional(),
-  // Encrypts webhook signing secrets at rest. Falls back to BETTER_AUTH_SECRET when unset; set a
-  // separate value in production so rotating the session secret does not break webhooks.
+  // Encrypts webhook signing secrets at rest. Falls back to BETTER_AUTH_SECRET outside production;
+  // required when APP_ENV is production (webhooks refuse to run without it).
   WEBHOOK_SECRETS_KEY: z.string().min(32).optional(),
   // Vercel Cron sends it as a bearer token to /api/cron/*. Without it, cron routes refuse to run.
   CRON_SECRET: z.string().min(16).optional(),

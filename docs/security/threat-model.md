@@ -111,7 +111,7 @@ Living document. Each later phase adds its own section.
 
 - `user` table readable by `st_app` (needed by auth). Mitigation planned: restricted view for member listings (Phase 6).
 - Signer-side rate limiting is per recipient in the database; add IP-level limits at the edge (Vercel firewall) before production.
-- Finalization runs inline after the last signature; move it to a background worker with retries in Phase 5/9.
+- Finalization runs inline after the last signature. Failures are retried by the daily job (Phase 9); a more frequent schedule needs a Pro plan.
 - The billing system context is a session setting (`app.system_actor`) that any code using the app role could set. Only `@st/core` billing webhook functions use it; a dedicated database role for the webhook would make this a hard boundary before production.
 - Invitation emails are sent after the database commit. If the process stops in between, the request shows as sent but nobody was emailed. Recipients can now get a new link at `/retrieve`, but an outbox worker would close the gap without their help.
 - Secrets management: use Vercel/Neon encrypted environment variables; rotate `BETTER_AUTH_SECRET` per environment.

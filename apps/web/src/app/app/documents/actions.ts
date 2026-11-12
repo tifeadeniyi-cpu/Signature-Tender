@@ -139,6 +139,7 @@ export async function deleteDraftAction(documentId: string): Promise<ActionState
 
 export async function sendTestAction(
   documentId: string,
+  acknowledged = false,
 ): Promise<{ ok: boolean; message?: string }> {
   kickWebhooks();
   const user = await requireUser();
@@ -150,7 +151,11 @@ export async function sendTestAction(
       storage(),
       actor,
       documentId,
-      { mode: 'test', testSigningEnabled },
+      {
+        mode: 'test',
+        testSigningEnabled,
+        specializedAck: acknowledged ? { source: 'sender' } : undefined,
+      },
       await requestMeta(),
     );
     const d = await getDocument(db(), actor, documentId);
@@ -175,6 +180,7 @@ export async function sendTestAction(
 /** Sends for real. Spends a credit if there is one; otherwise the request waits for payment. */
 export async function sendLiveAction(
   documentId: string,
+  acknowledged = false,
 ): Promise<{ ok: boolean; message?: string }> {
   kickWebhooks();
   const user = await requireUser();
@@ -185,7 +191,12 @@ export async function sendLiveAction(
       storage(),
       actor,
       documentId,
-      { mode: 'live', testSigningEnabled: false, liveSendingEnabled: await liveSendingEnabled() },
+      {
+        mode: 'live',
+        testSigningEnabled: false,
+        liveSendingEnabled: await liveSendingEnabled(),
+        specializedAck: acknowledged ? { source: 'sender' } : undefined,
+      },
       await requestMeta(),
     );
     if (res.status === 'sent') {

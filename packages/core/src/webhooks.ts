@@ -8,6 +8,9 @@ import {
 } from 'node:crypto';
 import { BlockList, isIP } from 'node:net';
 import { lookup } from 'node:dns/promises';
+import { lookup as lookupCb, type LookupAddress } from 'node:dns';
+import http from 'node:http';
+import https from 'node:https';
 import { z } from 'zod';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { schema, withActor, type Database, type ActorContext, type Tx } from '@st/db';
@@ -148,6 +151,70 @@ export async function validateWebhookUrl(raw: string, policy: UrlPolicy = {}): P
   if (!addrs.length || addrs.some(isPrivateAddress))
     throw new AppError('invalid', 'Webhook URLs must point to a public internet address.');
   return u;
+}
+
+/**
+ * Sends one webhook POST and returns the HTTP status. The address is checked again at connect
+ * time, inside the socket's own DNS lookup, so a host that resolves to a public address during
+ * validation and to a private one a moment later (DNS rebinding) is refused. Redirects are never
+ * followed and the response body is discarded.
+ */
+export function pinnedPost(
+  url: string,
+  headers: Record<string, string>,
+  body: string,
+  opts: { timeoutMs: number; allowLocalhost?: boolean },
+): Promise<number> {
+  const u = new URL(url);
+  const host = u.hostname.replace(/^\[|\]$/g, '');
+  const local = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+  const allowPrivate = Boolean(opts.allowLocalhost && local);
+  if (u.protocol !== 'https:' && !allowPrivate)
+    return Promise.reject(new Error('Webhook URLs must use https://'));
+  if (isIP(host) && isPrivateAddress(host) && !allowPrivate)
+    return Promise.reject(new Error('Destination is not a public internet address'));
+  const checkedLookup = (
+    hostname: string,
+    options: object,
+    cb: (
+      err: NodeJS.ErrnoException | null,
+      address: string | LookupAddress[],
+      family?: number,
+    ) => void,
+  ) => {
+    lookupCb(hostname, { ...options, all: true, verbatim: true }, (err, addrs) => {
+      if (err) return cb(err, []);
+      const list = addrs as LookupAddress[];
+      if (!list.length || (!allowPrivate && list.some((a) => isPrivateAddress(a.address))))
+        return cb(
+          Object.assign(new Error('Destination is not a public internet address'), {
+            code: 'EPRIVATE',
+          }),
+          [],
+        );
+      if ((options as { all?: boolean }).all) return cb(null, list);
+      cb(null, list[0]!.address, list[0]!.family);
+    });
+  };
+  const mod = u.protocol === 'https:' ? https : http;
+  return new Promise((resolve, reject) => {
+    const req = mod.request(
+      u,
+      {
+        method: 'POST',
+        headers: { ...headers, 'content-length': Buffer.byteLength(body) },
+        lookup: checkedLookup as never,
+        timeout: opts.timeoutMs,
+      },
+      (res) => {
+        res.resume();
+        resolve(res.statusCode ?? 0);
+      },
+    );
+    req.on('timeout', () => req.destroy(new Error('Timed out')));
+    req.on('error', reject);
+    req.end(body);
+  });
 }
 
 /** Slack incoming webhook URLs only (https://hooks.slack.com/services/...). */
@@ -582,7 +649,6 @@ export async function dispatchWebhooks(
 ): Promise<DispatchResult> {
   const limit = opts.limit ?? 50;
   const maxAttempts = opts.maxAttempts ?? 8;
-  const doFetch = opts.fetch ?? fetch;
   const [f] = (await db.transaction((tx) =>
     tx.execute(sql`select st_webhook_fanout(${limit * 4}) as n`),
   )) as unknown as { n: number }[];
@@ -612,15 +678,23 @@ export async function dispatchWebhooks(
 
   type Due = (typeof due)[number];
   const post = async (d: Due, headers: Record<string, string>, body: string) => {
-    const res = await doFetch(d.url, {
+    const all = {
+      'content-type': 'application/json',
+      'user-agent': 'SignatureTender-Webhooks/1',
+      ...headers,
+    };
+    const timeoutMs = opts.timeoutMs ?? 10_000;
+    if (!opts.fetch)
+      return pinnedPost(d.url, all, body, {
+        timeoutMs,
+        allowLocalhost: opts.urlPolicy?.allowLocalhost,
+      });
+    // Injected fetch (tests).
+    const res = await opts.fetch(d.url, {
       method: 'POST',
       redirect: 'manual',
-      signal: AbortSignal.timeout(opts.timeoutMs ?? 10_000),
-      headers: {
-        'content-type': 'application/json',
-        'user-agent': 'SignatureTender-Webhooks/1',
-        ...headers,
-      },
+      signal: AbortSignal.timeout(timeoutMs),
+      headers: all,
       body,
     });
     await res.body?.cancel().catch(() => {});

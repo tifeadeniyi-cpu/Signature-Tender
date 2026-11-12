@@ -72,6 +72,11 @@ export const sendSchema = z.object({
   mode: z.enum(['test', 'live']).default('test'),
   /** false: no emails; the partner opens embedded signing sessions instead. */
   notify: z.boolean().default(true),
+  /**
+   * Confirms the document is not one that needs extra formalities (wills, notarized deeds and
+   * similar; see legal.specialized_documents). Required for live sends; recorded as evidence.
+   */
+  acknowledge_specialized_documents: z.boolean().default(false),
 });
 
 export async function sendViaApi(
@@ -91,7 +96,12 @@ export async function sendViaApi(
           mode: 'test',
           testSigningEnabled: await isFeatureEnabled(d, 'test_signing', env().APP_ENV),
         }
-      : { mode: 'live', testSigningEnabled: false, liveSendingEnabled: await liveSendingEnabled() },
+      : {
+          mode: 'live',
+          testSigningEnabled: false,
+          liveSendingEnabled: await liveSendingEnabled(),
+          specializedAck: input.acknowledge_specialized_documents ? { source: 'api' } : undefined,
+        },
     meta,
   );
   if (res.status === 'sent' && input.notify && res.invitations.length) {

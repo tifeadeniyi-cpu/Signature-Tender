@@ -62,6 +62,7 @@ test('pay for one request, then buy a credit pack, all confirmed by webhook', as
   await expect(
     page.getByText(/You have no credits\. After you press send you can pay \$2\.99/),
   ).toBeVisible();
+  await page.getByRole('checkbox', { name: /This document is not one of these/ }).check();
   await page.getByRole('button', { name: 'Send for signature' }).click();
   await expect(page.getByRole('heading', { name: 'Payment needed to send' })).toBeVisible();
   await expect(page.getByText('Not sent yet.')).toBeVisible();

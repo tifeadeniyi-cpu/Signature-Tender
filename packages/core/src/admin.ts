@@ -16,6 +16,18 @@ export async function isPlatformAdmin(db: Database, actor: ActorContext): Promis
   return Boolean(r?.ok);
 }
 
+/**
+ * Staff must sign in with more than a password: two-factor sign-in or a passkey on the account.
+ * Auth tables are not workspace data and have no RLS.
+ */
+export async function hasStrongSignIn(db: Database, userId: string): Promise<boolean> {
+  const [r] = (await db.execute(
+    sql`select coalesce((select two_factor_enabled from "user" where id = ${userId}), false)
+          or exists (select 1 from passkey where user_id = ${userId}) as ok`,
+  )) as unknown as { ok: boolean }[];
+  return Boolean(r?.ok);
+}
+
 async function call<T>(db: Database, actor: ActorContext, q: ReturnType<typeof sql>): Promise<T> {
   try {
     return (await withActor(db, actor, (tx) => tx.execute(q))) as unknown as T;

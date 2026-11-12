@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import postgres from 'postgres';
 import { signUpWithWorkspace } from './auth';
 
 const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
@@ -56,4 +57,26 @@ test('public and app pages have no WCAG 2.2 AA violations found by axe', async (
   for (const p of APP) found.push(...(await scan(page, p)));
   if (found.length) console.log(JSON.stringify(found, null, 2));
   expect(found).toEqual([]);
+});
+
+test('staff pages have no WCAG 2.2 AA violations found by axe', async ({ page }) => {
+  test.setTimeout(120_000);
+  const email = await signUpWithWorkspace(page, 'Axe Staff', 'Axe Staff Studio');
+  const sql = postgres(
+    process.env.TEST_DATABASE_URL_OWNER ??
+      'postgres://st_owner:st_owner@localhost:5432/signature_tender_test',
+    { max: 1, onnotice: () => {} },
+  );
+  try {
+    await sql`insert into platform_admins (user_id, note) select id, 'axe' from "user" where email = ${email}`;
+    const found = [...(await scan(page, '/app/settings/security?staff=1'))];
+    await sql`update "user" set two_factor_enabled = true where email = ${email}`;
+    for (const p of ['/admin', '/admin/workspaces', '/admin/workspaces?q=Axe', '/admin/operations'])
+      found.push(...(await scan(page, p)));
+    if (found.length) console.log(JSON.stringify(found, null, 2));
+    expect(found).toEqual([]);
+  } finally {
+    await sql`delete from platform_admins where user_id in (select id from "user" where email = ${email})`;
+    await sql.end();
+  }
 });

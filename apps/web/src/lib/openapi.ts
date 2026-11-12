@@ -292,6 +292,12 @@ export function openApiDocument(baseUrl: string) {
                 default: true,
                 description: 'false: no emails; use embedded sessions',
               },
+              acknowledge_specialized_documents: {
+                type: 'boolean',
+                default: false,
+                description:
+                  'Required (true) for live sends: confirms the document is not one that needs extra formalities, such as a will, a notarized deed or a court filing. Recorded in the evidence log.',
+              },
             },
           }),
           ok: [

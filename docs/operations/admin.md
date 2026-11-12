@@ -31,7 +31,12 @@ where user_id = (select id from "user" where email = '<their email>');
 
 Run these against the right branch in Neon (SQL editor, as the owner). Keep the list short.
 
-## Before production
+## Sign-in requirement
 
-- Require a passkey or two-factor sign-in for staff accounts.
-- Review the `admin.viewed` audit rows regularly.
+Staff must have two-factor sign-in or a passkey on their account. Without one, opening `/admin` sends
+them to Sign-in and security with an explanation.
+
+## Regularly
+
+- Review the `admin.viewed` audit rows.
+- Keep the staff list short and remove people who no longer need it.

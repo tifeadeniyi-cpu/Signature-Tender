@@ -33,7 +33,12 @@ import { makeUser, addMember, makePdf } from './helpers';
 
 const { db, close } = createDb(APP_URL, { max: 6 });
 const storage = new MemoryStorage();
-const LIVE = { mode: 'live' as const, testSigningEnabled: true, liveSendingEnabled: true };
+const LIVE = {
+  mode: 'live' as const,
+  testSigningEnabled: true,
+  liveSendingEnabled: true,
+  specializedAck: { source: 'sender' as const },
+};
 let owner: string, manager: string, editor: string, ws: string;
 let sessionSeq = 0;
 const RUN = Date.now().toString(36);
@@ -144,8 +149,18 @@ describe('live sending and credits', () => {
 
   it('holds a live request for payment when there are no credits, and emails nobody', async () => {
     const id = await readyDoc();
+    // A real send needs the specialized-documents confirmation.
+    await expect(
+      sendForSignature(db, storage, { userId: owner }, id, { ...LIVE, specializedAck: undefined }),
+    ).rejects.toMatchObject({ code: 'invalid' });
     const res = await sendForSignature(db, storage, { userId: owner }, id, LIVE);
     expect(res.status).toBe('awaiting_payment');
+    const evDb = createDb(OWNER_URL, { max: 1 });
+    const ev = (await evDb.db.execute(
+      sql`select data from signing_events where request_id = ${res.requestId} and type = 'request.specialized_notice_confirmed'`,
+    )) as unknown as { data: { version: string; source: string } }[];
+    await evDb.close();
+    expect(ev[0]?.data).toMatchObject({ source: 'sender', version: expect.any(String) });
     expect(res.invitations).toEqual([]);
     const o = createDb(OWNER_URL, { max: 1 });
     const recips = await o.db
