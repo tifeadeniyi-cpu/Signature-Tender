@@ -189,7 +189,7 @@ describe('Document Successfully Completed email', () => {
     expect(r.html).toMatch(/alt="Signature Tender"/);
     // Gmail clips messages over about 102 KB of HTML.
     expect(Buffer.byteLength(r.html)).toBeLessThan(90_000);
-    expect(EMAIL_ASSETS['logo-reversed'].width).toBe(327);
+    expect(EMAIL_ASSETS['logo-reversed'].width).toBe(905);
   });
 });
 

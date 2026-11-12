@@ -133,7 +133,7 @@ ${opts.rows.join('\n')}
 export function brandHeader(c: EmailCanvas, title: string): string {
   return `<tr><td bgcolor="${BRAND.navy}" class="st-pad" style="background-color:${BRAND.navy};padding:28px 36px 8px 36px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-<td class="st-stack" valign="middle" width="190" style="width:190px;">${c.img('logo-reversed', 164, 84, 'Signature Tender', 'border-radius:10px;')}</td>
+<td class="st-stack" valign="middle" width="190" style="width:190px;">${c.img('logo-reversed', 176, 63, 'Signature Tender')}</td>
 <td class="st-stack st-hdr-title" valign="middle" align="right" style="border-left:1px solid #3A4E6E;padding:4px 0 4px 24px;font-family:${BRAND.serif};font-size:26px;line-height:32px;color:${BRAND.white};text-align:right;">${esc(title)}<div style="height:3px;width:56px;margin:10px 0 0 auto;background-color:${BRAND.gold};font-size:0;line-height:0;">&nbsp;</div></td>
 </tr></table>
 </td></tr>
@@ -167,7 +167,7 @@ export function brandFooter(c: EmailCanvas, cfg: EmailLinksConfig, year: number)
   return `<tr><td style="padding:0;line-height:0;font-size:0;" bgcolor="${BRAND.white}">${c.img('wave-bottom', 640, 56, '', 'width:100%;max-width:640px;height:auto;')}</td></tr>
 <tr><td bgcolor="${BRAND.navy}" class="st-pad" style="background-color:${BRAND.navy};padding:8px 36px 22px 36px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-<td class="st-stack" valign="middle" width="140" style="width:140px;">${c.img('logo-reversed', 117, 60, 'Signature Tender', 'border-radius:8px;')}</td>
+<td class="st-stack" valign="middle" width="140" style="width:140px;">${c.img('logo-reversed', 130, 47, 'Signature Tender')}</td>
 <td class="st-stack st-hdr-title" valign="middle" style="border-left:1px solid #3A4E6E;padding:0 0 0 22px;font-family:${BRAND.serif};font-style:italic;font-size:20px;line-height:26px;color:${BRAND.gold};">Send. Sign. Pay Once.</td>
 ${socials ? `<td class="st-stack st-center" valign="middle" align="right" style="padding-top:8px;">${socials}</td>` : ''}
 </tr></table>
