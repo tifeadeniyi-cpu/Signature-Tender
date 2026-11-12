@@ -7,7 +7,9 @@ import { passkey } from '@better-auth/passkey';
 import { schema } from '@st/db';
 import { db } from './db';
 import { env } from './env';
-import { sendEmail, brandedEmail } from './email';
+import { sendEmail } from './email';
+import { emailConfig } from './email/config';
+import { renderPasswordReset, renderVerifyEmail } from './email/templates/transactional';
 
 function build() {
   const e = env();
@@ -37,15 +39,14 @@ function build() {
       maxPasswordLength: 128,
       revokeSessionsOnPasswordReset: true,
       sendResetPassword: async ({ user, url: link }) => {
+        const r = renderPasswordReset({ config: await emailConfig(), url: link });
         await sendEmail({
           to: user.email,
-          subject: 'Reset your Signature Tender password',
-          ...brandedEmail({
-            heading: 'Reset your password',
-            body: 'We received a request to reset your password. This link expires in 1 hour. If you did not ask for this, you can ignore this email.',
-            actionLabel: 'Choose a new password',
-            actionUrl: link,
-          }),
+          subject: r.subject,
+          text: r.text,
+          html: r.html,
+          attachments: r.attachments,
+          tags: [{ name: 'template', value: 'password_reset' }],
         });
       },
     },
@@ -54,15 +55,14 @@ function build() {
       autoSignInAfterVerification: true,
       expiresIn: 60 * 60 * 24,
       sendVerificationEmail: async ({ user, url: link }) => {
+        const r = renderVerifyEmail({ config: await emailConfig(), name: user.name, url: link });
         await sendEmail({
           to: user.email,
-          subject: 'Verify your email for Signature Tender',
-          ...brandedEmail({
-            heading: 'Confirm your email address',
-            body: `Hi ${user.name}, confirm this email address to finish creating your Signature Tender account. The link expires in 24 hours.`,
-            actionLabel: 'Verify email',
-            actionUrl: link,
-          }),
+          subject: r.subject,
+          text: r.text,
+          html: r.html,
+          attachments: r.attachments,
+          tags: [{ name: 'template', value: 'verify_email' }],
         });
       },
     },
