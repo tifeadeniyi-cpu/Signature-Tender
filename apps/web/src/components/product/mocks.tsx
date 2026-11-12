@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { DemoLabel, StatusPill, type Status } from './primitives';
+import { BRAND_ASSETS } from '@/lib/brand-assets';
 
 /** Same sections as the app sidebar. */
 const SIDEBAR = [
@@ -64,7 +65,7 @@ export function AppFrame({
         aria-hidden
       >
         <span className="size-2.5 rounded-full bg-[#F28B82]" />
-        <span className="size-2.5 rounded-full bg-[#FBD38D]" />
+        <span className="size-2.5 rounded-full bg-soft-gold" />
         <span className="size-2.5 rounded-full bg-[#9AE6B4]" />
         <span className="ml-3 truncate rounded-md bg-white px-2 py-0.5 text-[10px] text-slate-text">
           signaturetender.com/app
@@ -73,13 +74,7 @@ export function AppFrame({
       <div className="flex">
         {compact ? null : (
           <div className="hidden w-36 shrink-0 flex-col gap-0.5 bg-primary p-2 text-white sm:flex">
-            <Image
-              src="/brand/logo-reversed.png"
-              alt=""
-              width={327}
-              height={168}
-              className="mb-2 h-auto w-24 rounded-md"
-            />
+            <Image {...BRAND_ASSETS.reversed} alt="" className="mb-2 h-auto w-28" />
             {SIDEBAR.map(([Icon, label]) => (
               <span
                 key={label}
@@ -182,7 +177,7 @@ export function HeroComposition({ signatureFont }: { signatureFont: string }) {
           </div>
           <div className="mt-3 grid grid-cols-[1fr_96px] gap-3">
             <PaperPage title="Service Agreement" className="min-h-48">
-              <span className="absolute bottom-6 left-6 flex h-9 w-36 items-center justify-center rounded border-2 border-dashed border-[#D69E2E] bg-[#FEFCBF]/80 text-[11px] font-semibold text-[#975A16]">
+              <span className="absolute bottom-6 left-6 flex h-9 w-36 items-center justify-center rounded border-2 border-dashed border-gold bg-soft-gold/80 text-[11px] font-semibold text-primary">
                 <PenLine className="mr-1 size-3" /> Signature
               </span>
               <span className="absolute bottom-6 right-6 flex h-9 w-20 items-center justify-center rounded border-2 border-dashed border-sky-400 bg-sky-50/80 text-[10px] font-semibold text-sky-700">

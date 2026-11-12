@@ -385,4 +385,4 @@ The signed-in sidebar is redesigned: navy background with gold accents, a navy v
 - Signature Studio is not in the menu: the app has no Signature Studio page yet (it exists only as a demo on the Product page).
 - Drafts is left out of the Documents submenu because the Drafts tab was deliberately hidden.
 - No notification badges: there is no inbox or notification centre to count from yet.
-- The navy logo is a recolour of the approved artwork; swap in an official dark-background logo when one exists.
+- The rebrand's info blue (#2563eb) failed contrast on its pale background; restored to #1d4ed8 so the accessibility checks pass again.

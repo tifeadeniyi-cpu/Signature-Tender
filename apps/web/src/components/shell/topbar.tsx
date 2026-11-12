@@ -4,6 +4,7 @@ import type { AppContext } from '@/lib/session';
 import Image from 'next/image';
 import { MobileNavigationDrawer } from './sidebar';
 import type { NavItem } from './nav';
+import { BRAND_ASSETS } from '@/lib/brand-assets';
 import { switchWorkspace, signOut } from './actions';
 
 function initials(name: string) {
@@ -31,13 +32,7 @@ export function Topbar({
     <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-ivory/95 px-4 backdrop-blur sm:px-6">
       <MobileNavigationDrawer items={nav} cta={cta} />
       <Link href="/app" className="rounded-lg lg:hidden" aria-label="Signature Tender dashboard">
-        <Image
-          src="/brand/logo-horizontal.png"
-          alt=""
-          width={316}
-          height={168}
-          className="h-12 w-auto"
-        />
+        <Image {...BRAND_ASSETS.horizontalLight} alt="" className="h-9 w-auto" />
       </Link>
       <div className="flex-1" />
       <a

@@ -25,6 +25,7 @@ import { ProductFAQ, type FaqItem } from '@/components/product/faq';
 import { Heading, Section } from '@/components/product/primitives';
 import { PageViewTracker } from '@/components/product/reveal';
 import { SIGNATURE_FAMILIES } from '@/components/product/studio-fonts';
+import { BRAND_ASSETS } from '@/lib/brand-assets';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,9 +47,9 @@ export function generateMetadata(): Metadata {
       siteName: 'Signature Tender',
       images: [
         {
-          url: appUrl('/brand/logo-reversed.png'),
-          width: 327,
-          height: 168,
+          url: appUrl(BRAND_ASSETS.socialCard.src),
+          width: BRAND_ASSETS.socialCard.width,
+          height: BRAND_ASSETS.socialCard.height,
           alt: 'Signature Tender',
         },
       ],

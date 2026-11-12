@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { FormStatus } from '@/components/ui/form-status';
 import { logoAction, saveBrandingAction } from '../actions';
 
-const DEFAULT = '#5b0a1c';
+const DEFAULT = '#0d1b33';
 
 /** WCAG contrast of white text on a colour; mirrors the server check. */
 function contrast(hex: string) {

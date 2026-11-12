@@ -4,6 +4,7 @@ import { listMyWorkspaces } from '@st/core';
 import { requireUser } from '@/lib/session';
 import { db } from '@/lib/db';
 import { OnboardingForm } from './onboarding-form';
+import { BRAND_ASSETS } from '@/lib/brand-assets';
 
 export const metadata = { title: 'Create your workspace' };
 export const dynamic = 'force-dynamic';
@@ -20,10 +21,8 @@ export default async function OnboardingPage({
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center bg-gradient-to-b from-ivory to-blush px-4 py-10">
       <Image
-        src="/brand/logo-horizontal.png"
+        {...BRAND_ASSETS.horizontalLight}
         alt="Signature Tender"
-        width={316}
-        height={168}
         className="mb-6 h-auto w-48"
         priority
       />

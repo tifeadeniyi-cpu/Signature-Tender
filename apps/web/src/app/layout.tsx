@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { DM_Serif_Display, Inter } from 'next/font/google';
 import { headers } from 'next/headers';
 import './globals.css';
+import { BRAND_ICONS } from '@/lib/brand-assets';
 
 const display = DM_Serif_Display({
   subsets: ['latin'],
@@ -15,10 +16,17 @@ export const metadata: Metadata = {
   title: { default: 'Signature Tender: Send. Sign. Pay Once.', template: '%s | Signature Tender' },
   description:
     'Send documents for electronic signature and pay only when you need to. No subscription required.',
-  icons: { icon: '/brand/app-icon.png', apple: '/brand/app-icon.png' },
+  icons: {
+    icon: [
+      { url: BRAND_ICONS.favicon, sizes: 'any' },
+      { url: BRAND_ICONS.favicon32, sizes: '32x32', type: 'image/png' },
+      { url: BRAND_ICONS.icon192, sizes: '192x192', type: 'image/png' },
+    ],
+    apple: { url: BRAND_ICONS.apple, sizes: '180x180' },
+  },
 };
 
-export const viewport: Viewport = { themeColor: '#5B0A1C' };
+export const viewport: Viewport = { themeColor: '#0D1B33' };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   // Reading request headers makes every page render per request, which the CSP nonce needs.

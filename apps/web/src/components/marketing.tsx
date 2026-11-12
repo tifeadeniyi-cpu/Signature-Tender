@@ -1,6 +1,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { MarketingNav } from './marketing-nav';
+import { BRAND_ASSETS } from '@/lib/brand-assets';
 
 export function MarketingHeader() {
   return <MarketingNav />;
@@ -41,13 +42,7 @@ export function MarketingFooter() {
     <footer className="border-t border-border bg-white">
       <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-[1.4fr_repeat(3,1fr)]">
         <div>
-          <Image
-            src="/brand/logo-reversed.png"
-            alt="Signature Tender"
-            width={327}
-            height={168}
-            className="h-auto w-32 rounded-lg"
-          />
+          <Image {...BRAND_ASSETS.horizontalLight} alt="Signature Tender" className="h-auto w-44" />
           <p className="mt-4 font-display text-lg text-heading">Send. Sign. Pay Once.</p>
           <p className="mt-2 max-w-xs text-sm">
             Electronic signatures without a subscription. Pay only when you send a document.

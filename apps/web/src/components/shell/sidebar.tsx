@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { BRAND_ASSETS } from '@/lib/brand-assets';
 import { NAV_ICONS, SIDEBAR_COOKIE, isActive, isChildActive, type NavItem } from './nav';
 
 export interface SidebarProps {
@@ -55,13 +56,13 @@ function GoldStroke({ className }: { className?: string }) {
   );
 }
 
-/** Two thin gold strokes along the bottom edge. Decorative and never above controls. */
+/** Two thin gold strokes in their own strip at the bottom, so they never sit over a control. */
 export function SidebarGoldWave() {
   return (
     <svg
       viewBox="0 0 280 70"
       preserveAspectRatio="none"
-      className="pointer-events-none absolute inset-x-0 bottom-0 h-16 w-full"
+      className="pointer-events-none block h-14 w-full shrink-0"
       aria-hidden
       focusable="false"
     >
@@ -132,23 +133,9 @@ function SidebarBrand({ collapsed }: { collapsed: boolean }) {
       aria-label="Signature Tender dashboard"
     >
       {collapsed ? (
-        <Image
-          src="/brand/icon-on-navy.png"
-          alt=""
-          width={119}
-          height={112}
-          className="mx-auto h-11 w-auto"
-          priority
-        />
+        <Image {...BRAND_ASSETS.nibMark} alt="" className="mx-auto h-auto w-10" priority />
       ) : (
-        <Image
-          src="/brand/logo-on-navy.png"
-          alt=""
-          width={420}
-          height={144}
-          className="h-auto w-[196px]"
-          priority
-        />
+        <Image {...BRAND_ASSETS.reversed} alt="" className="h-auto w-[200px]" priority />
       )}
     </Link>
   );
@@ -551,7 +538,7 @@ export function AppSidebar({ items, initialCollapsed, cta }: SidebarProps) {
 
       <div
         className={cn(
-          'flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain pb-20 pt-4 [scrollbar-color:rgba(255,255,255,0.2)_transparent] [scrollbar-width:thin]',
+          'flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain pb-4 pt-4 [scrollbar-color:rgba(255,255,255,0.2)_transparent] [scrollbar-width:thin]',
           collapsed ? 'px-3' : 'px-4',
         )}
       >
