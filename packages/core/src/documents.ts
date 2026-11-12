@@ -8,6 +8,12 @@ import { recordAudit } from './audit';
 import { AppError } from './errors';
 import { getMembership } from './workspaces';
 import type { ObjectStorage } from './storage';
+import {
+  DEFAULT_SIGNATURE_DISPLAY,
+  SIGNATURE_DISPLAY_FORMATS,
+  validTimeZone,
+  type SignatureDisplayFormat,
+} from './signature-block/layout';
 
 type Meta = { ipAddress?: string | null; userAgent?: string | null };
 export type DocumentStatus = (typeof schema.documentStatus.enumValues)[number];
@@ -94,8 +100,29 @@ export const documentSettingsSchema = z.object({
     .nullable()
     .default(null),
   showSigningDate: z.boolean().default(true),
+  /** What signature fields show once signed (spec options A-D). D (`full`) is the default. */
+  signatureDisplay: z.enum(SIGNATURE_DISPLAY_FORMATS).default(DEFAULT_SIGNATURE_DISPLAY),
+  /** IANA time zone for signing times on the document. Filled from the sender's profile at send. */
+  timeZone: z
+    .string()
+    .max(64)
+    .nullable()
+    .default(null)
+    .transform((tz) => (tz && validTimeZone(tz) === tz ? tz : null)),
 });
 export type DocumentSettings = z.infer<typeof documentSettingsSchema>;
+
+/** Signature block options for a document or request, with defaults applied. */
+export function signatureBlockSettings(settings: unknown): {
+  format: SignatureDisplayFormat;
+  timeZone: string;
+} {
+  const s = documentSettingsSchema.safeParse(settings ?? {});
+  return {
+    format: s.success ? s.data.signatureDisplay : DEFAULT_SIGNATURE_DISPLAY,
+    timeZone: validTimeZone(s.success ? s.data.timeZone : null),
+  };
+}
 
 export const recipientInputSchema = z.object({
   id: z.string().uuid().optional(),

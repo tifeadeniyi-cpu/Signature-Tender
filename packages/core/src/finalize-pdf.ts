@@ -1,4 +1,25 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
+import {
+  layoutSignatureBlock,
+  roleLabel,
+  type SignatureDisplayFormat,
+} from './signature-block/layout';
+import {
+  drawSignatureBlock,
+  drawSignatureBlockAt,
+  embedBlockFonts,
+  fieldSizePt,
+} from './signature-block/pdf';
+
+/** Who signed a signature field and when, as recorded by the server. Drives the signature block. */
+export interface StampSigner {
+  name: string;
+  role: string;
+  /** Server time the signing event was recorded. Never taken from the signer's device. */
+  signedAt: Date;
+  timeZone: string;
+  format: SignatureDisplayFormat;
+}
 
 export interface StampField {
   type: string;
@@ -9,6 +30,8 @@ export interface StampField {
   height: number;
   value: string | null;
   imagePng: Uint8Array | null;
+  /** Present for signature and initials fields: draws the full signature block. */
+  signer?: StampSigner | null;
 }
 
 const INK = rgb(0.06, 0.09, 0.2);
@@ -45,12 +68,25 @@ export async function buildSignedPdf(
 ): Promise<Uint8Array> {
   const pdf = await PDFDocument.load(source, { updateMetadata: false });
   const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const blockFonts = await embedBlockFonts(pdf);
   const pages = pdf.getPages();
   for (const f of fields) {
     const page = pages[f.page - 1];
     if (!page) throw new Error(`Field on missing page ${f.page}`);
     const b = box(page, f);
-    if ((f.type === 'signature' || f.type === 'initials') && f.imagePng) {
+    if ((f.type === 'signature' || f.type === 'initials') && f.imagePng && f.signer) {
+      const img = await pdf.embedPng(f.imagePng);
+      const size = fieldSizePt(page, f);
+      const layout = layoutSignatureBlock({
+        ...size,
+        format: f.signer.format,
+        kind: f.type,
+        name: f.signer.name,
+        role: roleLabel(f.signer.role),
+        timestamp: { state: 'completed', signedAt: f.signer.signedAt, timeZone: f.signer.timeZone },
+      });
+      drawSignatureBlock(page, f, layout, img, blockFonts);
+    } else if ((f.type === 'signature' || f.type === 'initials') && f.imagePng) {
       const img = await pdf.embedPng(f.imagePng);
       const scale = Math.min(b.w / img.width, b.h / img.height);
       const w = img.width * scale;
@@ -117,6 +153,8 @@ export interface CertificateData {
   pageCount: number;
   signingOrderEnabled: boolean;
   disclosureVersion: string;
+  /** Time zone the signing times are shown in on the document (IANA name). */
+  timeZone?: string;
   recipients: {
     name: string;
     email: string;
@@ -129,6 +167,8 @@ export interface CertificateData {
     ip: string | null;
     userAgent: string | null;
     signatures: { kind: string; method: string; imagePng: Uint8Array }[];
+    /** Short reference to this recipient's recorded signing event (evidence chain hash). */
+    signingEventRef?: string | null;
   }[];
   events: { at: Date; type: string; who: string; detail: string }[];
   chainHead: string;
@@ -141,6 +181,7 @@ export async function buildCertificate(c: CertificateData): Promise<Uint8Array> 
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const blockFonts = await embedBlockFonts(pdf);
   const W = 612;
   const H = 792;
   const M = 50;
@@ -240,9 +281,35 @@ export async function buildCertificate(c: CertificateData): Promise<Uint8Array> 
     if (r.authenticatedAt) line('Code verified', iso(r.authenticatedAt));
     line('Consented', iso(r.consentedAt));
     line('Completed', iso(r.signedAt));
+    if (r.signingEventRef) line('Signing event', r.signingEventRef, { size: 8 });
     line('IP address', r.ip ?? '-');
     line('Browser', r.userAgent ?? '-', { size: 7 });
     for (const s of r.signatures) {
+      if (s.kind === 'signature' && r.signedAt) {
+        // The same signature block that appears on the document, shown in full.
+        const bw = 230;
+        const bh = 78;
+        ensure(bh + 12);
+        page.drawText(`Signature (${s.method})`, {
+          x: M,
+          y: y - 4,
+          size: 8,
+          font: bold,
+          color: MUTED,
+        });
+        const img = await pdf.embedPng(s.imagePng);
+        const layout = layoutSignatureBlock({
+          width: bw,
+          height: bh,
+          format: 'full',
+          name: r.name,
+          role: roleLabel(r.role),
+          timestamp: { state: 'completed', signedAt: r.signedAt, timeZone: c.timeZone ?? 'UTC' },
+        });
+        drawSignatureBlockAt(page, M + 134, y - bh + 6, layout, img, blockFonts);
+        y -= bh + 8;
+        continue;
+      }
       ensure(50);
       const img = await pdf.embedPng(s.imagePng);
       const scale = Math.min(160 / img.width, 40 / img.height);
