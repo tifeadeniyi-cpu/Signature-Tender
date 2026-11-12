@@ -47,12 +47,12 @@ async function sendAndSign(
   const signer = await (await browser.newContext()).newPage();
   await signer.goto(link);
   if (opts.emailCode) {
-    await signer.getByRole('button', { name: 'Email me a code' }).click();
+    await signer.getByRole('button', { name: /^Review/ }).click();
     const mail = await latestMail(opts.email, 'Your signing code');
     await signer.getByLabel('Code').fill(mail.subject.match(/(\d{6})/)![1]!);
     await signer.getByRole('button', { name: 'Verify and continue' }).click();
   } else {
-    await signer.getByRole('button', { name: 'Start review' }).click();
+    await signer.getByRole('button', { name: /^Review/ }).click();
   }
   await signer.getByLabel('I agree to use electronic records').check();
   await signer.getByRole('button', { name: 'Continue' }).click();

@@ -14,6 +14,7 @@ import { RecipientVerifyForm } from '@/components/completed/verify-form';
 import { saveToAccountAction, startAccountAction } from '@/components/completed/actions';
 
 export const dynamic = 'force-dynamic';
+const SIGN_LAYOUT_HAS_HEADER = true;
 export const metadata: Metadata = {
   title: 'Your completed document',
   robots: { index: false, follow: false },
@@ -37,7 +38,9 @@ export default async function SignerCompletedPage({
   const session = await getSession();
   const user = session?.user.emailVerified ? { name: session.user.name } : null;
   const help = await supportEmail();
-  const header = <PublicHeader user={user} supportEmail={help} />;
+  // The shared signing layout currently draws the burgundy header for every /sign page. When it
+  // stops doing so (each signing page renders its own), set this to the PublicHeader below.
+  const header = SIGN_LAYOUT_HAS_HEADER ? null : <PublicHeader user={user} supportEmail={help} />;
 
   let result: Awaited<ReturnType<typeof getCompletedForSigner>>;
   try {

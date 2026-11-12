@@ -18,7 +18,11 @@ export function PublicHeader({
   signInNext?: string | null;
 }) {
   return (
-    <header className="relative isolate overflow-hidden bg-gradient-to-r from-primary-dark via-primary to-primary-hover text-white">
+    <header
+      className="relative isolate overflow-hidden text-white"
+      // Matches the reversed logo's background so the logo sits seamlessly (same as the signing header).
+      style={{ backgroundColor: '#730a2a' }}
+    >
       <svg
         className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-7 w-full sm:h-9"
         viewBox="0 0 1440 40"
@@ -48,7 +52,7 @@ export function PublicHeader({
             alt="Signature Tender"
             width={327}
             height={168}
-            className="h-11 w-auto rounded-md shadow-[0_0_0_1px_rgb(230_184_167/0.25)] sm:h-12"
+            className="h-11 w-auto rounded-md sm:h-12"
             priority
           />
         </Link>
