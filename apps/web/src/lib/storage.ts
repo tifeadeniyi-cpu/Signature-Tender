@@ -76,6 +76,7 @@ export function storage(): ObjectStorage {
     const client = new S3Client({
       region: e.S3_REGION,
       endpoint: e.S3_ENDPOINT || undefined,
+      forcePathStyle: e.S3_FORCE_PATH_STYLE,
       credentials: { accessKeyId: e.S3_ACCESS_KEY_ID, secretAccessKey: e.S3_SECRET_ACCESS_KEY },
     });
     g.__stStorage = new S3Storage(client, e.S3_BUCKET);
