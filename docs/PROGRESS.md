@@ -311,3 +311,51 @@ Built on Phase 5's verified-email retrieval. Details in [email-notifications.md]
 - Visuals are interface compositions built from app styles with fictional, labelled data, not screenshots.
 - No dedicated For Business page: For Business links to the teams section.
 - The homepage still says document upload opens in the next release; it was left unchanged.
+
+## Documents page details drawer: Done (pending review)
+
+Clicking a row, a document name or its View link on `/app/documents` opens a right-side drawer (full screen on phones) with Overview, Signers, Activity, Files and Evidence tabs. Ctrl/Cmd-click still opens the full document page.
+
+| Feature         | Status | Notes                                                                                                                                                                                                          |
+| --------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Data            | Done   | `GET /api/documents/[id]/summary`: signed-in members only, row-level security plus a current-workspace check (404 otherwise), never cached. Built from the same loaders as the document page                   |
+| Actions         | Done   | Computed on the server from status and permissions: download signed copy, view and download the evidence certificate, send reminder (one an hour), cancel with a reason, continue editing, edit and send again |
+| Deep links      | Done   | `?selected=<document id>` reopens the drawer after a refresh; opening another document swaps the content                                                                                                       |
+| States          | Done   | Skeletons while loading, error with retry, empty states for activity, files and recipients                                                                                                                     |
+| Accessibility   | Done   | Modal dialog with focus trap, Escape to close, focus returned to the opener, arrow-key tabs, status text with every color                                                                                      |
+| Short reference | Done   | `ST-` plus the first eight characters of the document ID, shown in the list and drawer and accepted by library search                                                                                          |
+
+### Tests
+
+- Playwright `e2e/documents-drawer.spec.ts`: row click, tabs and keyboard, reminder and the hourly limit, deep link, Escape and focus return, focus trap, completed vs in-progress vs draft actions, downloads, loading, error and retry, cancel, another workspace and signed-out access refused, phone layout, axe scan of the open drawer.
+
+### Known gaps
+
+- Actions the backend does not support yet are not shown in the drawer. They are planned in Phase 10 below.
+
+## Phase 10: Document management actions: Planned
+
+Adds the actions left out of the documents drawer. Each one appears in the drawer only when the server allows it, and every change is recorded in the evidence or audit log.
+
+| Feature                     | Where it shows                 | Rules                                                                                                                                                                                               |
+| --------------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Correct a recipient's email | Signers tab                    | `documents.send`. Only for recipients who have not signed or declined. The old link stops working, a new invitation goes to the new address, and an evidence event records the old and new address. |
+| Replace a recipient         | Signers tab                    | Same rules as correcting an email. The new person takes over the same role, signing position and fields. Not allowed once the request is completed, declined, expired or cancelled.                 |
+| Remind one recipient        | Signers tab, per person        | `documents.send`. Only a recipient whose turn it is. The one-an-hour limit applies per recipient, and the reminder count in the drawer comes from these events.                                     |
+| Duplicate a document        | Overview quick actions         | `documents.create`. Copies the latest original PDF, recipients, fields and settings into a new draft. No signing history, signatures or evidence are copied.                                        |
+| Save as template            | Overview quick actions         | `templates.manage`. Builds a template from the document's PDF, fields and settings. Recipients become roles; names and emails are not kept.                                                         |
+| Tags and folders            | Overview summary, list filters | Workspace-level folders and tags with library filters. Changing them never changes a sent or completed document and is recorded in the audit log.                                                   |
+| Supporting attachments      | Files tab                      | Extra files added to a draft for recipients to read. They can be replaced or deleted only while the document is a draft and are locked once it is sent.                                             |
+| First-page thumbnail        | Overview preview card          | Page 1 rendered to an image when a PDF is uploaded, served through the same access checks as the file. Replaces the drawn page.                                                                     |
+
+### Tests to add
+
+- Each action: allowed and refused by permission, refused in the wrong status, and the evidence or audit event written.
+- Correct and replace: the old link stops working and the new recipient can sign; the evidence certificate lists the change.
+- Duplicate and template: nothing from the signing history carries over.
+- Drawer: each action appears only when allowed; the axe scan still passes.
+
+### Open questions for the owner
+
+- Should correcting an email or replacing a recipient also notify the person being removed?
+- Should duplicating or saving as a template be free, or count toward any plan limit?

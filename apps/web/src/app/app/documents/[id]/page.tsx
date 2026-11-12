@@ -25,6 +25,7 @@ import { buttonClass } from '@/components/ui/button';
 import { StatusBadge } from '@/components/documents/status-badge';
 import { colorFor } from '@/components/documents/colors';
 import { RequestActions } from './request-actions';
+import { EVENT_LABELS } from '@/components/documents/event-labels';
 import { PaymentCard } from './payment-card';
 import { liveSendingEnabled, paymentsAvailable } from '@/lib/billing';
 
@@ -36,53 +37,6 @@ const fmt = new Intl.DateTimeFormat('en-US', {
   timeZone: 'UTC',
 });
 const when = (d: Date | null) => (d ? `${fmt.format(d)} UTC` : null);
-
-const EVENT_LABELS: Record<string, string> = {
-  'request.specialized_notice_confirmed': 'Sender confirmed the document-type notice',
-  'request.created': 'Request prepared',
-  'request.awaiting_payment': 'Waiting for payment',
-  'request.sent': 'Request sent',
-  'recipient.notified': 'Invitation emailed',
-  'recipient.viewed': 'Opened the link',
-  'recipient.session_started': 'Started reviewing',
-  'recipient.code_sent': 'Email code sent',
-  'recipient.code_failed': 'Entered an incorrect code',
-  'recipient.code_verified': 'Verified email code',
-  'recipient.consented': 'Agreed to sign electronically',
-  'recipient.signature_adopted': 'Adopted a signature',
-  'recipient.signed': 'Signed',
-  'recipient.approved': 'Approved',
-  'recipient.reviewed': 'Finished review',
-  'recipient.declined': 'Declined to sign',
-  'recipient.downloaded': 'Downloaded the signed copy',
-  'request.completed': 'Completed: signed copy and certificate created',
-  'request.cancelled': 'Request cancelled',
-  'request.expired': 'Request expired',
-  'request.finalization_failed': 'Creating the signed copy failed',
-  'recipient.retrieved': 'Downloaded a copy from Get your documents',
-  'recipient.link_reissued': 'Asked for a new signing link',
-  'recipient.viewed_copy': 'Viewed the completed copy from a secure link',
-  'email.queued': 'Completion email queued',
-  'email.sent': 'Completion email sent',
-  'email.delivered': 'Completion email accepted by the recipient’s mail server',
-  'email.failed': 'Completion email could not be sent',
-  'email.bounced': 'Completion email bounced',
-  'document.uploaded': 'Uploaded',
-  'document.details_updated': 'Details changed',
-  'document.recipients_updated': 'Recipients changed',
-  'document.fields_updated': 'Fields changed',
-  'document.settings_updated': 'Settings changed',
-  'document.ready_to_send': 'Marked ready to send',
-  'document.draft_deleted': 'Draft deleted',
-  'document.draft_restored': 'Draft restored',
-  'document.archived': 'Archived',
-  'document.unarchived': 'Unarchived',
-  'document.file_viewed': 'Viewed a file',
-  'document.file_downloaded': 'Downloaded a file',
-  'document.files_deleted': 'Files deleted after the retention period',
-  'document.legal_hold_placed': 'Legal hold placed',
-  'document.legal_hold_lifted': 'Legal hold lifted',
-};
 
 const TABS = [
   ['overview', 'Overview'],

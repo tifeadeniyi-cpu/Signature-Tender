@@ -178,7 +178,14 @@ test('search, filter, archive and set retention in the library', async ({ page }
   await page.getByRole('link', { name: 'Clear filters' }).click();
 
   // Open requests cannot be archived; cancel first, then archive and unarchive.
+  // View opens the details drawer; its View Document link goes to the full page.
   await page.getByRole('link', { name: 'View Booking' }).click();
+  await page
+    .getByRole('dialog', { name: 'Booking' })
+    .getByRole('link', { name: 'View Document' })
+    .first()
+    .click();
+  await expect(page).toHaveURL(/\/app\/documents\/[0-9a-f-]{36}$/);
   await page.getByRole('button', { name: 'Cancel request' }).click();
   await page.getByRole('button', { name: 'Cancel request' }).click();
   await expect(page.getByRole('button', { name: 'Archive Booking' })).toBeVisible();
