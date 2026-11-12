@@ -69,6 +69,49 @@ test('upload, add signers, place fields, set options and mark ready', async ({ p
   await page.getByRole('radio', { name: 'Date signed' }).click();
   await canvas.click({ position: { x: 450, y: 300 } });
   await expect(page.getByText('2 fields placed')).toBeVisible();
+
+  // Drag a text field from the palette onto page 2.
+  const page2 = page.getByRole('img', { name: 'Page 2 of 2' });
+  await page2.scrollIntoViewIfNeeded();
+  const chip = page.getByRole('radio', { name: 'Text', exact: true });
+  const cb = (await chip.boundingBox())!;
+  const pb = (await page2.boundingBox())!;
+  await page.mouse.move(cb.x + cb.width / 2, cb.y + cb.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(pb.x + 150, pb.y + 150, { steps: 8 });
+  await page.mouse.move(pb.x + 200, pb.y + 200, { steps: 8 });
+  await page.mouse.up();
+  const textField = page.getByRole('button', { name: /Text field for Ada Client, page 2/ });
+  await expect(textField).toBeVisible();
+  const tb = (await textField.boundingBox())!;
+  expect(Math.abs(tb.x + tb.width / 2 - (pb.x + 200))).toBeLessThan(4);
+  expect(Math.abs(tb.y + tb.height / 2 - (pb.y + 200))).toBeLessThan(4);
+  await expect(page.getByText('3 fields placed')).toBeVisible();
+
+  // Delete it with the button on the selected field.
+  await page.getByRole('button', { name: 'Delete text field' }).click();
+  await expect(textField).toHaveCount(0);
+  await expect(page.getByText('2 fields placed')).toBeVisible();
+
+  // A placed field can be dragged onto another page.
+  const dateField = page.getByRole('button', { name: /Date signed field for Ada Client, page 1/ });
+  await dateField.scrollIntoViewIfNeeded();
+  const db = (await dateField.boundingBox())!;
+  await page.mouse.move(db.x + db.width / 2, db.y + db.height / 2);
+  await page.mouse.down();
+  // Holding near the bottom edge scrolls the next page into view.
+  const vh = page.viewportSize()!.height;
+  await page.mouse.move(db.x + db.width / 2, vh - 10, { steps: 10 });
+  await expect
+    .poll(async () => (await page2.boundingBox())!.y, { timeout: 5000 })
+    .toBeLessThan(vh / 2);
+  const pb2 = (await page2.boundingBox())!;
+  await page.mouse.move(pb2.x + 300, pb2.y + 100, { steps: 10 });
+  await page.mouse.up();
+  await expect(
+    page.getByRole('button', { name: /Date signed field for Ada Client, page 2/ }),
+  ).toBeVisible();
+
   await field.focus();
   await page.keyboard.press('ArrowDown');
   await page.getByRole('button', { name: 'Save and continue' }).click();
