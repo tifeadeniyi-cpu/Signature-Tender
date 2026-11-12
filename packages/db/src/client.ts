@@ -65,6 +65,21 @@ export async function withBillingSystem<T>(db: Database, fn: (tx: Tx) => Promise
 }
 
 /**
+ * Runs `fn` as the notification dispatcher: it claims queued emails, records send results and
+ * provider delivery events. Policies let only this context update notification rows.
+ * Only the notification service in @st/core may call this.
+ */
+export async function withNotificationSystem<T>(
+  db: Database,
+  fn: (tx: Tx) => Promise<T>,
+): Promise<T> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select set_config('app.system_actor', 'notifications', true)`);
+    return fn(tx);
+  });
+}
+
+/**
  * Runs `fn` with a verified-email retrieval session bound (spec 17.3). Policies resolve the
  * session hash to one email and expose only that recipient's own requests and allowed files.
  */

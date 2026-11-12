@@ -17,6 +17,7 @@ import { ZodError } from 'zod';
 import { db } from '@/lib/db';
 import { storage } from '@/lib/storage';
 import { env } from '@/lib/env';
+import { dispatchAfterResponse } from '@/lib/notifications';
 import { requestMeta } from '@/lib/session';
 import { signCookieName, readSignSession } from '@/lib/sign-session';
 import {
@@ -153,9 +154,10 @@ export async function completeAction(
   try {
     await sendInvitations(result.invitations, ctx);
     if (result.readyToFinalize) {
-      const fin = await finalizeRequest(db(), storage(), { token }, result.requestId);
-      await sendInvitations(fin.invitations, ctx);
-      await sendSenderNotice(fin.senderEmail, 'completed', { ...ctx, documentId: fin.documentId });
+      // Finalizing queues the completion emails (sender and every recipient) in the same
+      // transaction; they are sent after this response so signing never waits on email.
+      await finalizeRequest(db(), storage(), { token }, result.requestId);
+      dispatchAfterResponse(result.requestId);
     }
   } catch (err) {
     // Your signature is already committed; delivery or finalization problems are recorded separately.

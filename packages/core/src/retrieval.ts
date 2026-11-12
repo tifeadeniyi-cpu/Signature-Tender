@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { schema, withRetrieval, type Database } from '@st/db';
 import { AppError } from './errors';
@@ -160,6 +160,7 @@ export async function readRetrievedFile(
   requestId: string,
   kind: 'signed' | 'certificate',
   meta: Meta = {},
+  purpose: 'download' | 'view' = 'download',
 ) {
   if (!z.string().uuid().safeParse(requestId).success) throw new AppError('not_found', 'Not found');
   const hash = sessionHash(token);
@@ -196,7 +197,7 @@ export async function readRetrievedFile(
       requestId,
       workspaceId: req.workspaceId,
       recipientId,
-      type: 'recipient.retrieved',
+      type: purpose === 'view' ? 'recipient.viewed_copy' : 'recipient.retrieved',
       data: { kind, via: 'verified_email' },
       ...meta,
     }),
@@ -277,5 +278,115 @@ export async function reissueSigningLink(
       workspaceName: req.workspaceName,
       isTest: req.isTest,
     };
+  });
+}
+
+export interface RetrievedRequestView {
+  email: string;
+  request: {
+    id: string;
+    title: string;
+    senderName: string;
+    workspaceName: string;
+    status: string;
+    isTest: boolean;
+    sentAt: Date | null;
+    completedAt: Date | null;
+  };
+  /** Completed and the sender allowed downloads: the signed copy and certificate can be opened. */
+  canOpenFiles: boolean;
+  files: { kind: 'signed' | 'certificate'; sha256: string; pageCount: number | null }[];
+  signers: {
+    name: string;
+    role: string;
+    status: string;
+    signingOrder: number;
+    signedAt: Date | null;
+  }[];
+  events: { at: Date; type: string; hash: string }[];
+}
+
+/**
+ * One request as a verified recipient may see it: status, the other participants' progress
+ * (names and roles only), fingerprints of the completed files and the evidence event list.
+ */
+export async function getRetrievedRequest(
+  db: Database,
+  token: string | undefined,
+  requestId: string,
+): Promise<RetrievedRequestView> {
+  if (!z.string().uuid().safeParse(requestId).success) throw new AppError('not_found', 'Not found');
+  return withRetrieval(db, sessionHash(token), async (tx) => {
+    const email = await requireEmail(tx);
+    const [req] = await tx
+      .select()
+      .from(schema.signingRequests)
+      .where(eq(schema.signingRequests.id, requestId));
+    if (!req) throw new AppError('not_found', 'This document is not available to this address.');
+    const fileIds = [req.signedFileId, req.certificateFileId].filter(Boolean) as string[];
+    // Visible only when completed, downloads are allowed and the files were not purged.
+    const files = fileIds.length
+      ? await tx
+          .select()
+          .from(schema.documentFiles)
+          .where(inArray(schema.documentFiles.id, fileIds))
+      : [];
+    const signers = (await tx.execute(
+      sql`select * from st_retrieval_signers(${requestId}::uuid)`,
+    )) as unknown as {
+      name: string;
+      role: string;
+      status: string;
+      signing_order: number;
+      signed_at: string | Date | null;
+    }[];
+    const events = await tx
+      .select({
+        at: schema.signingEvents.createdAt,
+        type: schema.signingEvents.type,
+        hash: schema.signingEvents.hash,
+      })
+      .from(schema.signingEvents)
+      .where(eq(schema.signingEvents.requestId, requestId))
+      .orderBy(asc(schema.signingEvents.seq));
+    return {
+      email,
+      request: {
+        id: req.id,
+        title: req.title,
+        senderName: req.senderName,
+        workspaceName: req.workspaceName,
+        status: req.status,
+        isTest: req.isTest,
+        sentAt: req.sentAt,
+        completedAt: req.completedAt,
+      },
+      canOpenFiles:
+        req.status === 'completed' && files.length === fileIds.length && files.length > 0,
+      files: files.map((f) => ({
+        kind: f.id === req.certificateFileId ? ('certificate' as const) : ('signed' as const),
+        sha256: f.sha256,
+        pageCount: f.pageCount,
+      })),
+      signers: signers.map((s) => ({
+        name: s.name,
+        role: s.role,
+        status: s.status,
+        signingOrder: s.signing_order,
+        signedAt: s.signed_at ? new Date(s.signed_at) : null,
+      })),
+      events,
+    };
+  });
+}
+
+/** The verified address of a retrieval session, or null when there is no valid session. */
+export async function retrievalSessionEmail(db: Database, token: string | undefined) {
+  if (!token || !isPlausibleSecret(token)) return null;
+  return withRetrieval(db, hashSecret(token), async (tx) => {
+    const [row] = (await tx.execute(sql`select st_retrieval_email() as email`)) as unknown as {
+      email: string | null;
+    }[];
+    return row?.email ?? null;
   });
 }
