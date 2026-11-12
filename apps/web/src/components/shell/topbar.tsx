@@ -1,7 +1,10 @@
 import Link from 'next/link';
 import { CircleHelp, LogOut, UserRound, ShieldCheck, Plus } from 'lucide-react';
 import type { AppContext } from '@/lib/session';
-import { MobileNav } from './sidebar';
+import Image from 'next/image';
+import { MobileNavigationDrawer } from './sidebar';
+import type { NavItem } from './nav';
+import { BRAND_ASSETS } from '@/lib/brand-assets';
 import { switchWorkspace, signOut } from './actions';
 
 function initials(name: string) {
@@ -13,11 +16,24 @@ function initials(name: string) {
     .join('');
 }
 
-export function Topbar({ ctx, supportEmail }: { ctx: AppContext; supportEmail: string }) {
+export function Topbar({
+  ctx,
+  supportEmail,
+  nav,
+  cta,
+}: {
+  ctx: AppContext;
+  supportEmail: string;
+  nav: NavItem[];
+  cta: { returning: boolean } | null;
+}) {
   const { user, membership, workspaces } = ctx;
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-ivory/95 px-4 backdrop-blur sm:px-6">
-      <MobileNav />
+      <MobileNavigationDrawer items={nav} cta={cta} />
+      <Link href="/app" className="rounded-lg lg:hidden" aria-label="Signature Tender dashboard">
+        <Image {...BRAND_ASSETS.horizontalLight} alt="" className="h-9 w-auto" />
+      </Link>
       <div className="flex-1" />
       <a
         href={`mailto:${supportEmail}`}

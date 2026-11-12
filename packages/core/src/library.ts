@@ -770,3 +770,27 @@ export async function readDocumentVersion(
     filename: file.originalFilename.replace(/\.pdf$/i, '') + suffix + '.pdf',
   };
 }
+
+/**
+ * Whether this person has ever sent a document (test or real) in the workspace. Used to choose
+ * between the sidebar's "Get Started" and "Ready to Send?" cards. Row-level security applies.
+ */
+export async function hasSentDocument(
+  db: Database,
+  actor: ActorContext,
+  workspaceId: string,
+): Promise<boolean> {
+  return withActor(db, actor, async (tx) => {
+    const rows = await tx
+      .select({ id: schema.signingRequests.id })
+      .from(schema.signingRequests)
+      .where(
+        and(
+          eq(schema.signingRequests.workspaceId, workspaceId),
+          eq(schema.signingRequests.sentBy, actor.userId),
+        ),
+      )
+      .limit(1);
+    return rows.length > 0;
+  });
+}
