@@ -69,7 +69,7 @@ test('sender picks the signature block, small fields are flagged, and the seal o
   const link = await latestLinkFor(signerEmail, 'Please sign');
   const signer = await (await browser.newContext()).newPage();
   await signer.goto(link);
-  const start = signer.getByRole('button', { name: 'Start review' });
+  const start = signer.getByRole('button', { name: /^Review/ });
   try {
     await expect(start).toBeVisible({ timeout: 20_000 });
   } catch (err) {
