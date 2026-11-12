@@ -12,7 +12,7 @@ import {
   sendPaidRequest,
 } from '@st/core';
 import { db } from '@/lib/db';
-import { stripe, webhookSecret } from '@/lib/stripe';
+import { stripe, stripeLiveMode, webhookSecret } from '@/lib/stripe';
 import { liveSendingEnabled } from '@/lib/billing';
 import { checkoutFacts, invoiceFacts, subscriptionFacts } from '@/lib/stripe-events';
 import { sendInvitations } from '@/lib/signing-mail';
@@ -119,8 +119,9 @@ export async function POST(req: Request) {
   } catch {
     return new Response('Invalid signature', { status: 400 });
   }
-  // Test mode only for now: live events are acknowledged and ignored.
-  if (event.livemode) return Response.json({ received: true, ignored: 'livemode' });
+  // Only act on events from the same mode as our key (live key: live events; test key: test events).
+  if (event.livemode !== stripeLiveMode())
+    return Response.json({ received: true, ignored: event.livemode ? 'livemode' : 'testmode' });
 
   if (!(await claimStripeEvent(db(), event)))
     return Response.json({ received: true, duplicate: true });

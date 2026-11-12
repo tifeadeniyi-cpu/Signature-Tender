@@ -32,7 +32,7 @@ function Revenue({ title, rows }: { title: string; rows: RevenueRow[] }) {
     <Card>
       <CardHeader
         title={title}
-        description="Net of refunds. Test-mode Stripe payments are included while Stripe is in test mode."
+        description="Net of refunds. While Stripe runs on a test key, these are test-mode payments."
       />
       {rows.length ? (
         <dl className="flex flex-col gap-1 text-sm">
