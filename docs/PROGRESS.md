@@ -229,7 +229,7 @@ Built on Phase 5's verified-email retrieval. Details in [email-notifications.md]
 
 ### Tests
 
-- `packages/core`: 14 new notification tests (89 in total), against real Postgres with row-level security.
+- `packages/core`: 14 new notification tests, against real Postgres with row-level security.
 - `apps/web`: 12 template unit tests; Playwright: full completion flow and the preview page.
 
 ### Known gaps
