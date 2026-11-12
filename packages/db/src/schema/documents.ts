@@ -16,6 +16,7 @@ import {
 import { sql } from 'drizzle-orm';
 import { user } from './auth';
 import { workspaces } from './tenancy';
+import { templates, templateVersions } from './teams';
 
 /**
  * Preparation states from spec Part 30. Request states (awaiting payment, sent, completed...) are
@@ -79,6 +80,11 @@ export const documents = pgTable(
     legalHoldReason: text('legal_hold_reason'),
     /** Set when retention ran out and the stored files were removed. Metadata and evidence remain. */
     purgedAt: timestamp('purged_at', { withTimezone: true }),
+    /** Set when created from a template; the version keeps what was used even after edits. */
+    templateId: uuid('template_id').references(() => templates.id, { onDelete: 'set null' }),
+    templateVersionId: uuid('template_version_id').references(() => templateVersions.id, {
+      onDelete: 'set null',
+    }),
   },
   (t) => [
     index('documents_ws_updated_idx').on(t.workspaceId, t.updatedAt),

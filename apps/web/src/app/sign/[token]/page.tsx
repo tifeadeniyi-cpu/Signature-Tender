@@ -1,5 +1,12 @@
 import { CircleCheck, CircleX, Clock, Ban, Download, Mail } from 'lucide-react';
-import { getSignerView, getSigningWorkspace, AppError, type SignerView } from '@st/core';
+import {
+  getSignerView,
+  getSigningWorkspace,
+  getBrand,
+  AppError,
+  type SignerView,
+  type Brand,
+} from '@st/core';
 import { db } from '@/lib/db';
 import { requestMeta } from '@/lib/session';
 import { readSignSession } from '@/lib/sign-session';
@@ -72,6 +79,44 @@ export default async function SignPage({ params }: { params: Promise<{ token: st
     }
     throw err;
   }
+  const brand = await getBrand(db(), view.workspaceId).catch(() => null);
+  return (
+    <>
+      {brand ? <BrandBar brand={brand} workspaceId={view.workspaceId} /> : null}
+      {await stage(view, token, session)}
+    </>
+  );
+}
+
+/**
+ * The sending workspace's name, colour and logo. Shown under the Signature Tender header so it
+ * never covers the security indicators, the electronic-records disclosure or the signing controls.
+ */
+function BrandBar({ brand, workspaceId }: { brand: Brand; workspaceId: string }) {
+  const name = brand.brandName ?? brand.name;
+  return (
+    <div
+      className="border-b border-border bg-white"
+      style={brand.color ? { borderTop: `4px solid ${brand.color}` } : undefined}
+    >
+      <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-2">
+        {brand.hasLogo ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={`/api/brand/${workspaceId}/logo?v=${brand.logoSha256?.slice(0, 12)}`}
+            alt=""
+            className="h-8 max-w-40 object-contain"
+          />
+        ) : null}
+        <p className="text-sm">
+          Sent by <span className="font-semibold text-heading">{name}</span> using Signature Tender
+        </p>
+      </div>
+    </div>
+  );
+}
+
+async function stage(view: SignerView, token: string, session: string | undefined) {
   const t = view.isTest;
 
   switch (view.stage) {

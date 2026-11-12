@@ -12,3 +12,7 @@ export * from './finalize-pdf';
 export * from './billing';
 export * from './library';
 export * from './retrieval';
+export * from './team';
+export * from './contacts';
+export * from './templates';
+export * from './branding';

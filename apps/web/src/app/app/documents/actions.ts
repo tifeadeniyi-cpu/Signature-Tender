@@ -160,6 +160,7 @@ export async function sendTestAction(
       workspaceName: ws?.name ?? '',
       message: d.document.emailMessage,
       isTest: true,
+      workspaceId: d.document.workspaceId,
     });
   } catch (err) {
     const r = toActionError(err);
@@ -194,6 +195,7 @@ export async function sendLiveAction(
         workspaceName: ws?.name ?? '',
         message: d.document.emailMessage,
         isTest: false,
+        workspaceId: d.document.workspaceId,
       });
     }
   } catch (err) {
@@ -225,6 +227,7 @@ export async function sendWithCreditAction(
       workspaceName: sent.workspaceName,
       message: sent.emailMessage,
       isTest: false,
+      workspaceId: sent.workspaceId,
     });
   } catch (err) {
     return toActionError(err);

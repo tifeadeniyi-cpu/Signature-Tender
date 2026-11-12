@@ -24,7 +24,6 @@ import { Alert } from '@/components/ui/feedback';
 import { FormStatus } from '@/components/ui/form-status';
 import { colorFor } from '@/components/documents/colors';
 import { cn } from '@/lib/cn';
-import { saveFieldsAction } from '../../../actions';
 
 type Field = {
   id: string;
@@ -40,6 +39,15 @@ type Field = {
   options: string[] | null;
 };
 type Recipient = { id: string; name: string; colorIndex: number };
+export type FieldInput = Omit<Field, 'id'>;
+export interface EditorNav {
+  /** Saves the fields (a bound server action). */
+  onSave: (fields: FieldInput[]) => Promise<ActionState>;
+  fileSrc: string;
+  backHref: string;
+  nextHref: string;
+  nextLabel: string;
+}
 
 const PALETTE: { type: FieldType; label: string; Icon: typeof Type; w: number; h: number }[] = [
   { type: 'signature', label: 'Signature', Icon: Signature, w: 0.26, h: 0.06 },
@@ -62,13 +70,13 @@ const uid = () =>
     : String(Math.random());
 
 export function FieldEditor({
-  documentId,
+  nav,
   disabled,
   pageCount,
   recipients,
   initial,
 }: {
-  documentId: string;
+  nav: EditorNav;
   disabled: boolean;
   pageCount: number;
   recipients: Recipient[];
@@ -225,8 +233,7 @@ export function FieldEditor({
       }
     }
     start(async () => {
-      const res = await saveFieldsAction(
-        documentId,
+      const res = await nav.onSave(
         fields.map(({ options, label, ...rest }) => ({
           recipientId: rest.recipientId,
           type: rest.type,
@@ -416,7 +423,7 @@ export function FieldEditor({
           onPointerCancel={onPointerUp}
         >
           <PdfPages
-            src={`/api/documents/${documentId}/file`}
+            src={nav.fileSrc}
             onPageClick={(page, x, y) => place(page, x, y)}
             overlay={(page, size) =>
               fields
@@ -472,29 +479,19 @@ export function FieldEditor({
         <div className="mt-4 flex flex-col gap-3">
           <FormStatus state={state} />
           <div className="flex flex-wrap justify-between gap-2">
-            <Link
-              href={`/app/documents/${documentId}/prepare/signers`}
-              className={buttonClass('ghost')}
-            >
+            <Link href={nav.backHref} className={buttonClass('ghost')}>
               Back
             </Link>
             {disabled ? (
-              <Link
-                href={`/app/documents/${documentId}/prepare/settings`}
-                className={buttonClass('primary')}
-              >
-                Next: Settings
+              <Link href={nav.nextHref} className={buttonClass('primary')}>
+                {nav.nextLabel}
               </Link>
             ) : (
               <span className="flex gap-2">
                 <Button type="button" variant="secondary" onClick={() => save()} loading={pending}>
                   Save
                 </Button>
-                <Button
-                  type="button"
-                  onClick={() => save(`/app/documents/${documentId}/prepare/settings`)}
-                  disabled={pending}
-                >
+                <Button type="button" onClick={() => save(nav.nextHref)} disabled={pending}>
                   Save and continue
                 </Button>
               </span>

@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { nextFromLocation } from '@/lib/next-path';
 import { useState } from 'react';
 import { authClient } from '@/lib/auth-client';
 import { TextField } from '@/components/ui/field';
@@ -29,11 +30,14 @@ export default function SignUpPage() {
             name: String(fd.get('name')).trim(),
             email,
             password: String(fd.get('password')),
-            callbackURL: '/onboarding',
+            callbackURL: nextFromLocation() ?? '/onboarding',
           });
           setBusy(false);
           if (err) return setError(err.message || 'Could not create your account.');
-          router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+          const next = nextFromLocation();
+          router.push(
+            `/verify-email?email=${encodeURIComponent(email)}${next ? `&next=${encodeURIComponent(next)}` : ''}`,
+          );
         }}
       >
         <TextField label="Full name" name="name" autoComplete="name" required maxLength={120} />

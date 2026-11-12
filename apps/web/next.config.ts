@@ -44,7 +44,7 @@ const config: NextConfig = {
       },
       {
         // Recipient links carry a secret token: never leak it via Referer, cache or index the pages.
-        source: '/(sign|api/sign|retrieve|api/retrieve)/:path*',
+        source: '/(sign|api/sign|retrieve|api/retrieve|invite)/:path*',
         headers: [
           { key: 'Referrer-Policy', value: 'no-referrer' },
           { key: 'X-Robots-Tag', value: 'noindex, nofollow' },

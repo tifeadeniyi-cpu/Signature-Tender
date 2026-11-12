@@ -1,4 +1,5 @@
 'use client';
+import { nextFromLocation } from '@/lib/next-path';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
@@ -37,7 +38,7 @@ function VerifyEmail() {
             setBusy(true);
             const { error } = await authClient.sendVerificationEmail({
               email,
-              callbackURL: '/onboarding',
+              callbackURL: nextFromLocation() ?? '/onboarding',
             });
             setBusy(false);
             setMsg(

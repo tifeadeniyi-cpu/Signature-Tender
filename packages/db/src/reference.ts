@@ -28,7 +28,14 @@ export type PermissionKey = keyof typeof PERMISSIONS;
 const ALL = Object.keys(PERMISSIONS) as PermissionKey[];
 
 export const SYSTEM_ROLES: Record<
-  'owner' | 'admin' | 'manager' | 'editor' | 'viewer' | 'signer',
+  | 'owner'
+  | 'admin'
+  | 'manager'
+  | 'editor'
+  | 'viewer'
+  | 'billing_admin'
+  | 'api_developer'
+  | 'signer',
   { name: string; description: string; permissions: PermissionKey[] }
 > = {
   owner: {
@@ -78,6 +85,16 @@ export const SYSTEM_ROLES: Record<
       'templates.view',
       'contacts.view',
     ],
+  },
+  billing_admin: {
+    name: 'Billing Administrator',
+    description: 'Manage billing, credits and invoices; view own documents',
+    permissions: ['billing.manage', 'team.view', 'documents.view_own'],
+  },
+  api_developer: {
+    name: 'API Developer',
+    description: 'Manage API keys, webhooks and integrations',
+    permissions: ['api.manage', 'integrations.manage', 'documents.view_own', 'templates.view'],
   },
   signer: {
     name: 'Signer',

@@ -7,6 +7,7 @@ import { authClient } from '@/lib/auth-client';
 import { TextField } from '@/components/ui/field';
 import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/feedback';
+import { nextFromLocation } from '@/lib/next-path';
 
 export default function SignInPage() {
   const router = useRouter();
@@ -31,7 +32,9 @@ export default function SignInPage() {
           setBusy(false);
           if (err) {
             if (err.status === 403)
-              return router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+              return router.push(
+                `/verify-email?email=${encodeURIComponent(email)}${nextFromLocation() ? `&next=${encodeURIComponent(nextFromLocation()!)}` : ''}`,
+              );
             return setError(
               err.status === 429
                 ? 'Too many attempts. Wait a minute and try again.'
@@ -39,7 +42,7 @@ export default function SignInPage() {
             );
           }
           if (data && 'twoFactorRedirect' in data && data.twoFactorRedirect) return; // handled by plugin redirect
-          router.push('/app');
+          router.push(nextFromLocation() ?? '/app');
           router.refresh();
         }}
       >
@@ -73,7 +76,7 @@ export default function SignInPage() {
           setError('');
           const res = await authClient.signIn.passkey();
           if (res?.error) return setError(res.error.message || 'Passkey sign-in did not complete.');
-          router.push('/app');
+          router.push(nextFromLocation() ?? '/app');
           router.refresh();
         }}
       >
