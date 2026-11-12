@@ -128,6 +128,7 @@ function PdfPage({
 
   return (
     <div
+      data-pdf-page={pageNumber}
       className="relative bg-white shadow-card"
       style={size ? { width: size.width, height: size.height } : { width }}
     >
