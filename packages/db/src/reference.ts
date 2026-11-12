@@ -280,6 +280,12 @@ export const APP_CONFIG = [
       'Delivery attempts before a webhook is marked failed for good (about 32 minutes of retries at 8)',
   },
   {
+    key: 'notifications.link_valid_days',
+    value: 30,
+    description:
+      'How long the access links in completion emails work. Each click still requires the recipient to verify their email; expired links can be renewed after verification',
+  },
+  {
     key: 'support.email',
     value: 'support@signaturetender.com',
     description: 'Support contact shown in the app',
