@@ -288,3 +288,26 @@ Built on Phase 5's verified-email retrieval. Details in [email-notifications.md]
 ### Known gaps
 
 - External gates remain: penetration test, attorney review, manual accessibility audit, staging load run, restore drill for files, monitoring setup and the owner's flag decisions. See `docs/RELEASE_CHECKLIST.md`.
+
+## Public Product page: Done (pending review)
+
+`/product`, linked from a new sticky header (Product, How It Works, Pricing, Integrations, For Business, Resources) with a phone menu, and an expanded footer.
+
+| Feature             | Status | Notes                                                                                                                                                                                        |
+| ------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sections            | Done   | Hero, eight features, preparation, Signature Studio, workflows, documents, security, templates, teams, integrations, developer API, three steps, pricing, FAQ, final call to action          |
+| Interactive demos   | Done   | Field placement and Signature Studio run only in the browser; nothing is saved or sent and nothing is signed                                                                                 |
+| Honest availability | Done   | Coming-soon labels for automatic reminders, tags and folders, dashboard reminders, team activity, extra signature families and Studio controls; integrations read from the catalogue         |
+| Pricing             | Done   | Read from the price list and plans tables, never hard-coded                                                                                                                                  |
+| SEO                 | Done   | Title, description, canonical, Open Graph, SoftwareApplication and FAQPage structured data (with the CSP nonce)                                                                              |
+| Analytics           | Done   | Events queue in the browser only (`window.stAnalytics`, `st:analytics`); no provider or consent banner yet; skipped under Do Not Track or Global Privacy Control; typed names never recorded |
+
+### Tests
+
+- Playwright `e2e/product.spec.ts`: metadata, active nav, prices from the database, CTA destinations, every internal link and anchor resolves, demos work with no requests sent, FAQ, phone menu. `/product` added to the axe and phone-width checks.
+
+### Known gaps
+
+- Visuals are interface compositions built from app styles with fictional, labelled data, not screenshots.
+- No dedicated For Business page: For Business links to the teams section.
+- The homepage still says document upload opens in the next release; it was left unchanged.
