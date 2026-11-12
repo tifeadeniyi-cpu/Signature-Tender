@@ -184,6 +184,7 @@ export const APP_CONFIG = [
     description: 'Maximum signers included in one signing request',
   },
   { key: 'limits.max_upload_mb', value: 25, description: 'Maximum PDF upload size in megabytes' },
+  { key: 'limits.max_pages', value: 200, description: 'Maximum pages in an uploaded PDF' },
   {
     key: 'support.email',
     value: 'support@signaturetender.com',

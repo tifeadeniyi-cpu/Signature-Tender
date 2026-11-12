@@ -3,7 +3,7 @@ import nextTs from 'eslint-config-next/typescript';
 
 const config = [
   {
-    ignores: [
+    ignores: ['public/pdf.worker.min.mjs', 
       '.next/**',
       'node_modules/**',
       'playwright-report/**',

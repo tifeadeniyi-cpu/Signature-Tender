@@ -10,9 +10,14 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:e2e": "playwright test --trace off"
+    "test:e2e": "playwright test --trace off",
+    "copy-pdf-worker": "node -e \"require('fs').copyFileSync(require.resolve('pdfjs-dist/build/pdf.worker.min.mjs'),'public/pdf.worker.min.mjs')\"",
+    "predev": "pnpm copy-pdf-worker",
+    "prebuild": "pnpm copy-pdf-worker"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1167.0",
+    "@aws-sdk/s3-request-presigner": "^3.1167.0",
     "@better-auth/passkey": "^1.7.21",
     "@st/core": "workspace:*",
     "@st/db": "workspace:*",
@@ -20,6 +25,8 @@
     "clsx": "^2.1.1",
     "lucide-react": "^1.72.0",
     "next": "^16.4.6",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^6.5.438",
     "postgres": "^4.1.1",
     "qrcode": "^1.5.4",
     "react": "^19.3.1",

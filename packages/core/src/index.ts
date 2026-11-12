@@ -4,3 +4,5 @@ export * from './audit';
 export * from './workspaces';
 export * from './profile';
 export * from './config';
+export * from './storage';
+export * from './documents';

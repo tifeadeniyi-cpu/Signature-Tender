@@ -9,6 +9,13 @@ const schema = z.object({
   EMAIL_FROM: z.string().default('Signature Tender <no-reply@example.com>'),
   APP_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),
   DEV_MAIL_DIR: z.string().optional(),
+  STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
+  STORAGE_LOCAL_DIR: z.string().optional(),
+  S3_ENDPOINT: z.string().optional(),
+  S3_REGION: z.string().default('auto'),
+  S3_BUCKET: z.string().optional(),
+  S3_ACCESS_KEY_ID: z.string().optional(),
+  S3_SECRET_ACCESS_KEY: z.string().optional(),
 });
 
 let cached: z.infer<typeof schema> | undefined;
