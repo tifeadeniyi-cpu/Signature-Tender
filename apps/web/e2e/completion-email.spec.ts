@@ -27,6 +27,7 @@ async function sendAndSign(page: Page, browser: import('@playwright/test').Brows
   await page.getByRole('button', { name: 'Save and continue' }).click();
   await page.getByRole('button', { name: 'Save and continue' }).click();
   await page.getByRole('button', { name: 'Mark ready to send' }).click();
+  await page.getByRole('checkbox', { name: /This document is not one of these/ }).check();
   await page.getByRole('button', { name: 'Send test request' }).click();
   await expect(page.getByRole('heading', { name: 'Recipients' })).toBeVisible();
   const docUrl = page.url();
