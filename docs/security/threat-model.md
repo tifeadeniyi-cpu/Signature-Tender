@@ -31,10 +31,25 @@ Living document. Each later phase adds its own section.
 | Denial of service      | Double submit or race on completion        | Row locks, status checks and a unique open-request index; finalization is idempotent                                                                 | `signing.test.ts`                                   |
 | Elevation of privilege | Sending without permission                 | `documents.send` required in service and RLS                                                                                                         | `signing.test.ts` (viewer refused)                  |
 
+## Phase 4: payments and credits
+
+| Category               | Threat                                           | Control in place                                                                                                                                                                       | Test                                     |
+| ---------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| Spoofing               | Forged "payment succeeded" (redirect or webhook) | The return page only reads our records. Credits are granted only from webhook events whose Stripe signature verifies with the endpoint secret                                          | `billing.spec.ts` (unsigned and forged)  |
+| Tampering              | Paying less than the price                       | Amount and currency are fixed in a `payments` row from database prices before checkout; the webhook grants nothing unless Stripe's subtotal and currency match                         | `billing.test.ts` (amount mismatch)      |
+| Tampering              | Minting credits through the app                  | The ledger is append-only (no UPDATE/DELETE grant). Signed-in users may only move one credit into or out of a hold for a request they can send; grants need the billing system context | `billing.test.ts` (forged grant refused) |
+| Repudiation            | Disputed balance                                 | Every movement is a ledger row with source (payment, request), idempotency key and author; reconciliation compares paid payments with granted credits                                  | `billing.test.ts` (reconcile)            |
+| Information disclosure | Card data                                        | Card entry happens on Stripe Checkout and the Stripe portal; the app stores only Stripe ids                                                                                            | By design                                |
+| Information disclosure | Billing data seen by other roles or workspaces   | RLS: payments and invoices need `billing.manage`; balances need `billing.manage` or `documents.send`; event log is system-only                                                         | `billing.test.ts` (access rules)         |
+| Denial of service      | Double spend, webhook retries, races             | Per-workspace advisory lock on credit movements; one hold per request; unique idempotency keys; each Stripe event processed once                                                       | `billing.test.ts` (race, replay)         |
+| Elevation of privilege | Live money before release                        | Live Stripe keys are refused and live-mode events ignored; real sending needs both `production_signing` and `payments` flags                                                           | `billing.test.ts`, `stripe.ts`           |
+
 ## Open items
 
 - `user` table readable by `st_app` (needed by auth). Mitigation planned: restricted view for member listings (Phase 6).
 - CSP allows `'unsafe-inline'` scripts for Next.js; move to nonce-based CSP before production.
 - Signer-side rate limiting is per recipient in the database; add IP-level limits at the edge (Vercel firewall) before production.
 - Finalization runs inline after the last signature; move it to a background worker with retries in Phase 5/9.
+- The billing system context is a session setting (`app.system_actor`) that any code using the app role could set. Only `@st/core` billing webhook functions use it; a dedicated database role for the webhook would make this a hard boundary before production.
+- Invitation emails are sent after the database commit. If the process stops in between, the request shows as sent but nobody was emailed and the tokens cannot be re-sent yet; an outbox worker (Phase 5) closes this gap.
 - Secrets management: use Vercel/Neon encrypted environment variables; rotate `BETTER_AUTH_SECRET` per environment.

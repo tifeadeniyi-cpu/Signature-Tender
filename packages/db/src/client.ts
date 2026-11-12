@@ -51,3 +51,15 @@ export async function withSigner<T>(
     return fn(tx);
   });
 }
+
+/**
+ * Runs `fn` as the billing system: the Stripe webhook after it has verified Stripe's signature.
+ * Policies let this context record payments and grant credits, which no signed-in user can do.
+ * Only the webhook handlers in @st/core billing may call this.
+ */
+export async function withBillingSystem<T>(db: Database, fn: (tx: Tx) => Promise<T>): Promise<T> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select set_config('app.system_actor', 'billing', true)`);
+    return fn(tx);
+  });
+}
