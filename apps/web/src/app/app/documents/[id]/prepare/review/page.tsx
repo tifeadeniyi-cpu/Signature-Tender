@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { CircleCheck, CircleAlert, Pencil } from 'lucide-react';
 import {
+  getSpecializedNotice,
   checkReadiness,
   isFeatureEnabled,
   hasPermission,
@@ -29,6 +30,7 @@ export default async function ReviewStep({ params }: { params: Promise<{ id: str
   const s = doc.settings;
   const issues = checkReadiness({ file, recipients, fields, settings: s });
   const appEnv = env().APP_ENV;
+  const notice = await getSpecializedNotice(db());
   const testSending = await isFeatureEnabled(db(), 'test_signing', appEnv);
   const liveSending = await liveSendingEnabled();
   const canSend = data.canEdit && hasPermission(data.membership.permissions, 'documents.send');
@@ -181,6 +183,7 @@ export default async function ReviewStep({ params }: { params: Promise<{ id: str
               sendBlockedReason={sendBlockedReason}
               testEnabled={testSending}
               liveNote={liveNote}
+              notice={notice}
             />
             {data.previousRequest ? (
               <p className="mt-3 text-xs">

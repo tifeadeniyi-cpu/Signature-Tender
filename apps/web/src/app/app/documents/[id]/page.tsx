@@ -38,6 +38,7 @@ const fmt = new Intl.DateTimeFormat('en-US', {
 const when = (d: Date | null) => (d ? `${fmt.format(d)} UTC` : null);
 
 const EVENT_LABELS: Record<string, string> = {
+  'request.specialized_notice_confirmed': 'Sender confirmed the document-type notice',
   'request.created': 'Request prepared',
   'request.awaiting_payment': 'Waiting for payment',
   'request.sent': 'Request sent',

@@ -239,7 +239,6 @@ Built on Phase 5's verified-email retrieval. Details in [email-notifications.md]
 - Real-client rendering (Gmail, Outlook, Apple Mail) is checked by sending previews, not automated.
 - The completed-copy signing links issued at finalization are no longer emailed (the completion email replaces that message); they still work for anyone who already has one.
 
-
 ## Phase 8: Connectors, analytics and reporting: Done (pending review)
 
 | Item                       | Status      | Notes                                                                                                                                                                                                                               |
@@ -261,10 +260,31 @@ Built on Phase 5's verified-email retrieval. Details in [email-notifications.md]
 
 ### Known gaps
 
-- Staff are granted by hand in the database (see `docs/operations/admin.md`). There is no staff sign-in factor beyond the normal account; require a passkey or 2FA for staff before production.
+- Staff are granted by hand in the database (see `docs/operations/admin.md`).
 - Report queries scan the workspace's requests; fine at launch volumes, add summary tables if workspaces reach hundreds of thousands of requests.
 
+## Phase 9: Production readiness: Engineering done (pending review); external gates open
 
-## Phase 9: Not started
+| Item                      | Status      | Notes                                                                                                                                                                                                                                                              |
+| ------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Skipped-migration guard   | Done        | Builds fail if any journal migration is unrecorded (the 2026-11-12 incident). See `docs/operations/migrations.md`                                                                                                                                                  |
+| Staff strong sign-in      | Done        | `/admin` needs two-factor sign-in or a passkey; otherwise the person is sent to Security with an explanation                                                                                                                                                       |
+| Webhook DNS rebinding     | Done        | The sender checks every resolved address inside the socket's own lookup, so the address used is the address checked                                                                                                                                                |
+| Production secrets        | Done        | Webhooks refuse to run in production without `WEBHOOK_SECRETS_KEY` instead of reusing the session secret                                                                                                                                                           |
+| Automatic finishing retry | Done        | The daily job retries failed finishes as the sender, at least 10 minutes apart, at most 3 failures, and emails completed copies                                                                                                                                    |
+| Specialized documents     | Done        | Senders see the configured list (wills, family law, court documents, notarized or recorded instruments, regulated records) and confirm before sending. The confirmation and version are evidence. The API needs `acknowledge_specialized_documents` for live sends |
+| Accessibility             | Done        | Automated scan now also covers staff pages and the staff Security notice; manual audit still open                                                                                                                                                                  |
+| Load testing              | Done        | `scripts/load-test.mjs` (no dependencies) with a p99 budget; run against staging once previews have their own data                                                                                                                                                 |
+| Incident response         | Draft       | `docs/operations/incident-response.md`                                                                                                                                                                                                                             |
+| Infrastructure review     | Done        | `docs/operations/infrastructure-review.md`, 10 findings with owner actions                                                                                                                                                                                         |
+| Independent assessment    | Not started | Brief ready: `docs/security/assessor-brief.md`                                                                                                                                                                                                                     |
+| Legal review              | Not started | Brief ready: `docs/legal/attorney-brief.md`                                                                                                                                                                                                                        |
 
-See the plan doc for scope and order.
+### Tests
+
+- `packages/core`: skipped-migration detection, strong sign-in for staff, pinned webhook sender (local delivery allowed only in development, private addresses refused at connect time, redirects not followed), scheduled finishing retry after a storage failure, live sends refused without the specialized-documents confirmation and the confirmation recorded. 122 tests in total.
+- `apps/web`: staff flow now checks the strong sign-in redirect; accessibility scan of staff pages; send flows confirm the notice.
+
+### Known gaps
+
+- External gates remain: penetration test, attorney review, manual accessibility audit, staging load run, restore drill for files, monitoring setup and the owner's flag decisions. See `docs/RELEASE_CHECKLIST.md`.

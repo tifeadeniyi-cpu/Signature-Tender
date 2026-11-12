@@ -24,6 +24,7 @@ import {
   slackMessage,
   validateSlackWebhookUrl,
   isPlatformAdmin,
+  hasStrongSignIn,
   getAdminOverview,
   listAdminWorkspaces,
   getAdminOperations,
@@ -276,5 +277,12 @@ describe('internal administration', () => {
       'workspaces',
       'workspaces',
     ]);
+  });
+
+  it('requires two-factor sign-in or a passkey before staff count as strongly signed in', async () => {
+    expect(await hasStrongSignIn(db, staff)).toBe(false);
+    await owner_.db.execute(sql`update "user" set two_factor_enabled = true where id = ${staff}`);
+    expect(await hasStrongSignIn(db, staff)).toBe(true);
+    await owner_.db.execute(sql`update "user" set two_factor_enabled = false where id = ${staff}`);
   });
 });

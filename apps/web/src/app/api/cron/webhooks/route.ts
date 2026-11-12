@@ -1,5 +1,9 @@
 import { timingSafeEqual } from 'node:crypto';
 import { env } from '@/lib/env';
+import { retryFailedFinalizations } from '@st/core';
+import { db } from '@/lib/db';
+import { storage } from '@/lib/storage';
+import { dispatchNotifications } from '@/lib/notifications';
 import { runWebhookDispatch } from '@/lib/webhooks';
 
 export const dynamic = 'force-dynamic';
@@ -13,12 +17,38 @@ function authorized(req: Request) {
   return got.length === want.length && timingSafeEqual(got, want);
 }
 
-/** Vercel Cron: sends due webhook deliveries. Refuses to run without CRON_SECRET. */
+/**
+ * Retries documents that failed to finish. A successful finish queues the completion emails in
+ * the same transaction (notifications outbox), so they are sent here and retried by the
+ * notifications sweep if the email provider is down.
+ */
+async function retryFinishing() {
+  const runs = await retryFailedFinalizations(db(), storage());
+  for (const r of runs) {
+    if (!r.ok) continue;
+    await dispatchNotifications({ requestId: r.requestId }).catch((err) =>
+      console.error('[ops-alert] Completion email dispatch failed after retry', err),
+    );
+  }
+  const summary = {
+    attempted: runs.length,
+    succeeded: runs.filter((r) => r.ok).length,
+    failed: runs.filter((r) => !r.ok).map((r) => r.requestId),
+  };
+  console.log(JSON.stringify({ event: 'finalization.retry', ...summary }));
+  return summary;
+}
+
+/**
+ * Vercel Cron (scheduled maintenance): sends due webhook deliveries and retries documents that
+ * failed to finish. Refuses to run without CRON_SECRET.
+ */
 export async function GET(req: Request) {
   if (!authorized(req)) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  const finishing = await retryFinishing();
   const result = await runWebhookDispatch();
   console.log(
     JSON.stringify({ event: 'webhooks.dispatch', ...(result ?? { skipped: 'public_api off' }) }),
   );
-  return Response.json(result ?? { skipped: true });
+  return Response.json({ webhooks: result ?? { skipped: true }, finishing });
 }

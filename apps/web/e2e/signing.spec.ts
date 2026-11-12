@@ -44,6 +44,7 @@ test('send a test request, sign with an email code, and download the completed c
   await expect(page).toHaveURL(/review$/);
   await page.getByRole('button', { name: 'Mark ready to send' }).click();
   await expect(page.getByText('Marked ready to send.')).toBeVisible();
+  await page.getByRole('checkbox', { name: /This document is not one of these/ }).check();
   await page.getByRole('button', { name: 'Send test request' }).click();
 
   // Sender sees the request with a TEST marker; the draft can no longer be edited.
@@ -136,6 +137,7 @@ test('a recipient can decline, and an unknown link shows a clear message', async
   await page.getByRole('button', { name: 'Save and continue' }).click();
   await page.getByRole('button', { name: 'Save and continue' }).click();
   await page.getByRole('button', { name: 'Mark ready to send' }).click();
+  await page.getByRole('checkbox', { name: /This document is not one of these/ }).check();
   await page.getByRole('button', { name: 'Send test request' }).click();
   await expect(page.getByRole('heading', { name: 'Recipients' })).toBeVisible();
 

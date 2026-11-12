@@ -20,6 +20,7 @@ export function ReviewActions({
   sendBlockedReason,
   testEnabled,
   liveNote,
+  notice,
 }: {
   documentId: string;
   canEdit: boolean;
@@ -29,11 +30,15 @@ export function ReviewActions({
   testEnabled: boolean;
   /** Present only when real sending is switched on; explains the credit or price. */
   liveNote: string | null;
+  /** Specialized-documents notice from configuration; the sender must confirm it to send. */
+  notice: { intro: string; categories: string[]; confirm: string } | null;
 }) {
   const router = useRouter();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [pending, start] = useTransition();
+  const [ack, setAck] = useState(false);
+  const needAck = notice !== null && !ack;
 
   return (
     <div className="mt-4 flex flex-col gap-3">
@@ -65,16 +70,36 @@ export function ReviewActions({
         </>
       ) : (
         <>
+          {notice ? (
+            <div className="rounded-xl border border-warning/30 bg-warning-bg p-3 text-sm">
+              <p className="font-semibold text-heading">Check the document type</p>
+              <p className="mt-1">{notice.intro}</p>
+              <ul className="mt-2 list-disc pl-5 text-xs">
+                {notice.categories.map((c) => (
+                  <li key={c}>{c}</li>
+                ))}
+              </ul>
+              <label className="mt-3 flex items-start gap-2 text-sm text-heading">
+                <input
+                  type="checkbox"
+                  className="mt-1 size-4"
+                  checked={ack}
+                  onChange={(e) => setAck(e.target.checked)}
+                />
+                <span>{notice.confirm}</span>
+              </label>
+            </div>
+          ) : null}
           {liveNote !== null ? (
             <>
               <Button
                 type="button"
-                disabled={status !== 'ready_to_send' || pending}
+                disabled={status !== 'ready_to_send' || pending || needAck}
                 loading={pending}
                 aria-describedby="send-live-note"
                 onClick={() =>
                   start(async () => {
-                    const r = await sendLiveAction(documentId);
+                    const r = await sendLiveAction(documentId, ack);
                     if (r && !r.ok) setMsg({ ok: false, text: r.message ?? 'Could not send.' });
                   })
                 }
@@ -91,12 +116,12 @@ export function ReviewActions({
               <Button
                 type="button"
                 variant={liveNote !== null ? 'secondary' : 'primary'}
-                disabled={status !== 'ready_to_send' || pending}
+                disabled={status !== 'ready_to_send' || pending || needAck}
                 loading={pending}
                 aria-describedby="send-test-note"
                 onClick={() =>
                   start(async () => {
-                    const r = await sendTestAction(documentId);
+                    const r = await sendTestAction(documentId, ack);
                     if (r && !r.ok) setMsg({ ok: false, text: r.message ?? 'Could not send.' });
                   })
                 }

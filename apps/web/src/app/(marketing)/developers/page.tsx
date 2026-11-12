@@ -173,6 +173,12 @@ curl -s -X POST $BASE/documents/$DOC/send -H "Authorization: Bearer $KEY" \\
   -H "Content-Type: application/json" -H "Idempotency-Key: send-booking-42" \\
   -d '{"mode":"test"}'`}</Code>
           <p>
+            Live sends must include{' '}
+            <code className="font-mono text-xs">{'"acknowledge_specialized_documents": true'}</code>
+            . It confirms the document is not one that needs extra formalities (for example a will,
+            a notarized deed or a court filing), and it is recorded in the evidence log.
+          </p>
+          <p>
             A <code className="font-mono text-xs">live</code> send uses one credit. If the workspace
             has none, the request waits with status{' '}
             <code className="font-mono text-xs">awaiting_payment</code> until a member pays in the

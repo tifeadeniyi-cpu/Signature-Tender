@@ -5,6 +5,7 @@ import { cache } from 'react';
 import {
   getMembership,
   isPlatformAdmin,
+  hasStrongSignIn,
   listMyWorkspaces,
   touchMembership,
   AppError,
@@ -69,5 +70,7 @@ export async function requestMeta() {
 export const requireStaff = cache(async () => {
   const user = await requireUser();
   if (!(await isPlatformAdmin(db(), { userId: user.id }))) notFound();
+  // Staff accounts reach every workspace's metadata, so a password alone is not enough.
+  if (!(await hasStrongSignIn(db(), user.id))) redirect('/app/settings/security?staff=1');
   return user;
 });

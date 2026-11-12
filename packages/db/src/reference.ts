@@ -232,6 +232,28 @@ export const APP_CONFIG = [
       'Electronic records and signature disclosure shown before signing. Must be replaced with counsel-approved text before production.',
   },
   {
+    key: 'legal.specialized_documents',
+    value: {
+      version: 'draft-2026-11-12',
+      intro:
+        'DRAFT: pending attorney review. Some documents need formalities that electronic signing may not meet, such as witnesses, notarization or filing on paper. Do not send these here unless you have confirmed electronic signing is allowed for them.',
+      categories: [
+        'Wills, codicils and testamentary trusts',
+        'Adoption, divorce and other family law matters',
+        'Court orders, notices and official court documents',
+        'Notices of cancellation or termination of utility services, health or life insurance',
+        'Notices of default, foreclosure, eviction or repossession of a primary residence',
+        'Product recall or safety notices',
+        'Documents that must be notarized, witnessed or recorded (for example some real estate deeds)',
+        'Regulated medical or financial records with their own signature rules',
+      ],
+      confirm:
+        'This document is not one of these, or I have confirmed that electronic signing is allowed for it.',
+    },
+    description:
+      'Documents that may need extra formalities. Senders must confirm before a real send; the confirmation and this version are recorded in the evidence log. Must be reviewed by counsel before production.',
+  },
+  {
     key: 'signing.link_valid_days',
     value: 30,
     description: 'How long a recipient link stays valid when the request has no expiration date',
