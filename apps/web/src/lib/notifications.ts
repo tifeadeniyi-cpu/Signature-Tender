@@ -5,7 +5,7 @@ import {
   dispatchDueNotifications,
   type ClaimedNotification,
   type CompletedPayload,
-  type DispatchResult,
+  type NotificationDispatchResult,
   type NotificationTransport,
   type OutgoingNotificationEmail,
 } from '@st/core';
@@ -81,7 +81,7 @@ const transport: NotificationTransport = {
 /** Sends due notifications now. Failures are retried later; permanent ones raise an ops alert. */
 export async function dispatchNotifications(
   opts: { requestId?: string; limit?: number } = {},
-): Promise<DispatchResult[]> {
+): Promise<NotificationDispatchResult[]> {
   const cfg = await emailConfig();
   const results = await dispatchDueNotifications(
     db(),

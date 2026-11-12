@@ -20,8 +20,6 @@ const schema = z.object({
   EMAIL_TIMEZONE: z.string().default('America/Chicago'),
   /** Secret for emailed access links. Falls back to BETTER_AUTH_SECRET. */
   EMAIL_LINK_SECRET: z.string().min(32).optional(),
-  /** Bearer secret Vercel Cron sends to /api/cron/notifications. */
-  CRON_SECRET: z.string().optional().default(''),
   /** Signing secret of the Resend webhook (delivery and bounce events). */
   RESEND_WEBHOOK_SECRET: z.string().optional().default(''),
   APP_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),

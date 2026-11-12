@@ -1,5 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
-import type { DispatchResult } from '@st/core';
+import type { NotificationDispatchResult } from '@st/core';
 import { env } from '@/lib/env';
 import { dispatchNotifications } from '@/lib/notifications';
 
@@ -20,7 +20,7 @@ function authorized(req: Request) {
  */
 export async function GET(req: Request) {
   if (!authorized(req)) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-  const results: DispatchResult[] = [];
+  const results: NotificationDispatchResult[] = [];
   // Up to 4 batches of 25 per run keeps the run well inside the time limit.
   for (let i = 0; i < 4; i++) {
     const batch = await dispatchNotifications({ limit: 25 });

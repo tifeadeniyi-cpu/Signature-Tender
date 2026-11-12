@@ -290,7 +290,7 @@ export type NotificationRenderer = (
   n: ClaimedNotification,
 ) => OutgoingNotificationEmail | Promise<OutgoingNotificationEmail>;
 
-export interface DispatchResult {
+export interface NotificationDispatchResult {
   id: string;
   status: 'sent' | 'retrying' | 'failed';
   error?: string;
@@ -372,7 +372,7 @@ async function markFailure(
   db: Database,
   row: NotificationRow,
   err: unknown,
-): Promise<DispatchResult> {
+): Promise<NotificationDispatchResult> {
   const retryable = err instanceof TransientEmailError;
   const message = String(err instanceof Error ? err.message : err).slice(0, 500);
   const giveUp = !retryable || row.attempts >= MAX_ATTEMPTS;
@@ -410,9 +410,9 @@ export async function dispatchDueNotifications(
   db: Database,
   deps: { transport: NotificationTransport; render: NotificationRenderer; linkSecret: string },
   opts: { limit?: number; requestId?: string } = {},
-): Promise<DispatchResult[]> {
+): Promise<NotificationDispatchResult[]> {
   const claimed = await claimDueNotifications(db, { linkSecret: deps.linkSecret, ...opts });
-  const results: DispatchResult[] = [];
+  const results: NotificationDispatchResult[] = [];
   for (const n of claimed) {
     try {
       const msg = await deps.render(n);
