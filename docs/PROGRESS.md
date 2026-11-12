@@ -331,5 +331,31 @@ Clicking a row, a document name or its View link on `/app/documents` opens a rig
 
 ### Known gaps
 
-- Not offered because the backend does not support them yet: replacing a recipient or correcting an email after sending, per-recipient reminders, duplicating a document, saving a document as a template, tags and folders, attaching supporting files.
-- The thumbnail is a drawn page, not a render of the PDF's first page.
+- Actions the backend does not support yet are not shown in the drawer. They are planned in Phase 10 below.
+
+## Phase 10: Document management actions: Planned
+
+Adds the actions left out of the documents drawer. Each one appears in the drawer only when the server allows it, and every change is recorded in the evidence or audit log.
+
+| Feature                     | Where it shows                 | Rules                                                                                                                                                                                               |
+| --------------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Correct a recipient's email | Signers tab                    | `documents.send`. Only for recipients who have not signed or declined. The old link stops working, a new invitation goes to the new address, and an evidence event records the old and new address. |
+| Replace a recipient         | Signers tab                    | Same rules as correcting an email. The new person takes over the same role, signing position and fields. Not allowed once the request is completed, declined, expired or cancelled.                 |
+| Remind one recipient        | Signers tab, per person        | `documents.send`. Only a recipient whose turn it is. The one-an-hour limit applies per recipient, and the reminder count in the drawer comes from these events.                                     |
+| Duplicate a document        | Overview quick actions         | `documents.create`. Copies the latest original PDF, recipients, fields and settings into a new draft. No signing history, signatures or evidence are copied.                                        |
+| Save as template            | Overview quick actions         | `templates.manage`. Builds a template from the document's PDF, fields and settings. Recipients become roles; names and emails are not kept.                                                         |
+| Tags and folders            | Overview summary, list filters | Workspace-level folders and tags with library filters. Changing them never changes a sent or completed document and is recorded in the audit log.                                                   |
+| Supporting attachments      | Files tab                      | Extra files added to a draft for recipients to read. They can be replaced or deleted only while the document is a draft and are locked once it is sent.                                             |
+| First-page thumbnail        | Overview preview card          | Page 1 rendered to an image when a PDF is uploaded, served through the same access checks as the file. Replaces the drawn page.                                                                     |
+
+### Tests to add
+
+- Each action: allowed and refused by permission, refused in the wrong status, and the evidence or audit event written.
+- Correct and replace: the old link stops working and the new recipient can sign; the evidence certificate lists the change.
+- Duplicate and template: nothing from the signing history carries over.
+- Drawer: each action appears only when allowed; the axe scan still passes.
+
+### Open questions for the owner
+
+- Should correcting an email or replacing a recipient also notify the person being removed?
+- Should duplicating or saving as a template be free, or count toward any plan limit?
