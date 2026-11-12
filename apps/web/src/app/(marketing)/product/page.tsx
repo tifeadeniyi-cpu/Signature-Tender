@@ -129,7 +129,7 @@ export default async function ProductPage() {
     },
     {
       q: 'Can I integrate Signature Tender into my own application?',
-      a: 'Yes. The REST API lets you upload documents, add recipients and fields, send requests, open embedded signing sessions and download completed files, with signed webhooks for status updates. Beam Artist and Jectstack connect today; other integrations are planned and labelled Coming soon.',
+      a: 'Yes. The REST API lets you upload documents, add recipients and fields, send requests, open embedded signing sessions and download completed files, with signed webhooks for status updates. Beam Artist, Jectstack and Slack connect today; other integrations are planned and labelled Coming soon.',
     },
     {
       q: 'Are electronic signatures legally recognized?',

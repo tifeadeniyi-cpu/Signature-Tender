@@ -411,7 +411,7 @@ export function TeamShowcase({ teamHref }: { teamHref: string }) {
           'Document ownership',
           'Controlled document access',
           'Centralized billing',
-          { label: 'Team activity dashboard', soon: true },
+          'Dashboard and reports by sender, type and month',
         ]}
       />
       <Cta href={teamHref}>Explore Business Features</Cta>
