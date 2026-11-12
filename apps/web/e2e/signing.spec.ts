@@ -96,7 +96,7 @@ test('send a test request, sign with an email code, and download the completed c
   expect((await dl.body()).subarray(0, 5).toString()).toBe('%PDF-');
 
   // Sender: completed, downloads work, integrity holds, emails went out.
-  await latestMail(signerEmail, 'Completed:');
+  await latestMail(signerEmail, 'Your Document Is Complete');
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Completed' })).toBeVisible();
   const signed = await page.request.get(

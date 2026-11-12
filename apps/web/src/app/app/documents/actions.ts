@@ -22,6 +22,7 @@ import {
 import { env } from '@/lib/env';
 import { storage } from '@/lib/storage';
 import { sendInvitations } from '@/lib/signing-mail';
+import { dispatchAfterResponse } from '@/lib/notifications';
 import { db } from '@/lib/db';
 import { liveSendingEnabled } from '@/lib/billing';
 import { requireUser, requireWorkspace, requestMeta } from '@/lib/session';
@@ -273,14 +274,8 @@ export async function retryFinalizeAction(
   kickWebhooks();
   const user = await requireUser();
   try {
-    const res = await finalizeRequest(db(), storage(), { actor: { userId: user.id } }, requestId);
-    await sendInvitations(res.invitations, {
-      title: res.title,
-      senderName: user.name,
-      workspaceName: '',
-      message: null,
-      isTest: res.isTest,
-    });
+    await finalizeRequest(db(), storage(), { actor: { userId: user.id } }, requestId);
+    dispatchAfterResponse(requestId);
   } catch (err) {
     const r = toActionError(err);
     return { ok: false, message: r?.message ?? 'Finalizing failed again. Contact support.' };

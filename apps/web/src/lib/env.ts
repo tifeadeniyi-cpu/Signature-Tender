@@ -7,6 +7,21 @@ const schema = z.object({
   BETTER_AUTH_URL: z.string().url(),
   RESEND_API_KEY: z.string().optional().default(''),
   EMAIL_FROM: z.string().default('Signature Tender <no-reply@example.com>'),
+  // Transactional email content (all optional). Links that are not configured are left out.
+  SUPPORT_EMAIL: z.string().optional(),
+  SUPPORT_URL: z.string().optional(),
+  PRIVACY_URL: z.string().optional(),
+  TERMS_URL: z.string().optional(),
+  COMPANY_NAME: z.string().default('Signature Tender'),
+  SOCIAL_YOUTUBE_URL: z.string().optional(),
+  SOCIAL_INSTAGRAM_URL: z.string().optional(),
+  SOCIAL_LINKEDIN_URL: z.string().optional(),
+  /** IANA time zone for dates in emails until recipients can set their own. */
+  EMAIL_TIMEZONE: z.string().default('America/Chicago'),
+  /** Secret for emailed access links. Falls back to BETTER_AUTH_SECRET. */
+  EMAIL_LINK_SECRET: z.string().min(32).optional(),
+  /** Signing secret of the Resend webhook (delivery and bounce events). */
+  RESEND_WEBHOOK_SECRET: z.string().optional().default(''),
   APP_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),
   DEV_MAIL_DIR: z.string().optional(),
   STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),

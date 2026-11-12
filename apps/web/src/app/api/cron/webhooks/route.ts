@@ -3,7 +3,7 @@ import { env } from '@/lib/env';
 import { retryFailedFinalizations } from '@st/core';
 import { db } from '@/lib/db';
 import { storage } from '@/lib/storage';
-import { sendInvitations } from '@/lib/signing-mail';
+import { dispatchNotifications } from '@/lib/notifications';
 import { runWebhookDispatch } from '@/lib/webhooks';
 
 export const dynamic = 'force-dynamic';
@@ -17,18 +17,18 @@ function authorized(req: Request) {
   return got.length === want.length && timingSafeEqual(got, want);
 }
 
-/** Retries documents that failed to finish and emails the completed copies. */
+/**
+ * Retries documents that failed to finish. A successful finish queues the completion emails in
+ * the same transaction (notifications outbox), so they are sent here and retried by the
+ * notifications sweep if the email provider is down.
+ */
 async function retryFinishing() {
   const runs = await retryFailedFinalizations(db(), storage());
   for (const r of runs) {
-    if (!r.ok || !r.result) continue;
-    await sendInvitations(r.result.invitations, {
-      title: r.result.title,
-      senderName: r.result.senderName,
-      workspaceName: r.result.workspaceName,
-      message: null,
-      isTest: r.result.isTest,
-    }).catch(() => {});
+    if (!r.ok) continue;
+    await dispatchNotifications({ requestId: r.requestId }).catch((err) =>
+      console.error('[ops-alert] Completion email dispatch failed after retry', err),
+    );
   }
   const summary = {
     attempted: runs.length,

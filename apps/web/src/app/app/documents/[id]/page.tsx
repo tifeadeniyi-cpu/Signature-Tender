@@ -16,6 +16,7 @@ import { cn } from '@/lib/cn';
 import { ArchiveButton } from '@/components/documents/library-buttons';
 import { CheckCopy, LegalHoldForm, PreviewOnDemand } from './record-panels';
 import { db } from '@/lib/db';
+import { dispatchAfterResponse } from '@/lib/notifications';
 import { requireWorkspace } from '@/lib/session';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardHeader } from '@/components/ui/card';
@@ -60,6 +61,12 @@ const EVENT_LABELS: Record<string, string> = {
   'request.finalization_failed': 'Creating the signed copy failed',
   'recipient.retrieved': 'Downloaded a copy from Get your documents',
   'recipient.link_reissued': 'Asked for a new signing link',
+  'recipient.viewed_copy': 'Viewed the completed copy from a secure link',
+  'email.queued': 'Completion email queued',
+  'email.sent': 'Completion email sent',
+  'email.delivered': 'Completion email accepted by the recipient’s mail server',
+  'email.failed': 'Completion email could not be sent',
+  'email.bounced': 'Completion email bounced',
   'document.uploaded': 'Uploaded',
   'document.details_updated': 'Details changed',
   'document.recipients_updated': 'Recipients changed',
@@ -131,6 +138,8 @@ export default async function DocumentPage({
   const [current, ...older] = requests;
   const { request: r, recipients } = current!;
   const record = await getDocumentRecord(db(), actor, id);
+  // Picks up any completion email still queued or waiting for a retry (no-op when none are due).
+  if (r.status === 'completed') dispatchAfterResponse(r.id);
   const archived = Boolean(record.document.archivedAt);
   const purged = Boolean(record.retention.purgedAt);
   const fileLabel = (f: { kind: string; version: number }) =>
@@ -379,7 +388,13 @@ export default async function DocumentPage({
                         {when(e.at)}
                         {e.ipAddress ? ` · IP ${e.ipAddress}` : ''}
                         {e.source === 'audit' ? ' · audit log' : ''}
+                        {e.source === 'email' && typeof e.data.to === 'string'
+                          ? ` · to ${e.data.to}`
+                          : ''}
                       </p>
+                      {e.source === 'email' && typeof e.data.error === 'string' ? (
+                        <p className="text-xs text-error">{e.data.error}</p>
+                      ) : null}
                     </li>
                   ))}
               </ol>

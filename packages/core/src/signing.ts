@@ -27,6 +27,7 @@ import {
 } from './signing-crypto';
 import { buildCertificate, buildSignedPdf } from './finalize-pdf';
 import { consumeHold, reserveCredit, restoreOnCancel } from './billing';
+import { enqueueCompletionNotifications } from './notifications';
 
 type Meta = { ipAddress?: string | null; userAgent?: string | null };
 type RequestRow = typeof schema.signingRequests.$inferSelect;
@@ -1681,6 +1682,15 @@ export async function finalizeRequest(
         actorUserId: 'actor' in ctx ? ctx.actor.userId : null,
         type: 'request.completed',
         data: { signedSha256: signedSha, certificateSha256: certSha },
+      });
+      // Completion emails are queued only now: files stored, hashes recorded, evidence closed.
+      await enqueueCompletionNotifications(tx, {
+        request: req,
+        recipients: recips,
+        pageCount: file.pageCount,
+        completedAt,
+        signedFileId: sf!.id,
+        certificateFileId: cf!.id,
       });
 
       // Recipients get a link to the completed request. The person who just finished keeps the link

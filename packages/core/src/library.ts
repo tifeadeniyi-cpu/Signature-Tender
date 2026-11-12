@@ -2,6 +2,7 @@ import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm
 import { z } from 'zod';
 import { schema, withActor, type Database, type ActorContext, type Tx } from '@st/db';
 import { AppError } from './errors';
+import { listDocumentNotifications } from './notifications';
 import { recordAudit } from './audit';
 import { getConfigValue, isFeatureEnabled, type AppEnv } from './config';
 import { documentSettingsSchema } from './documents';
@@ -539,7 +540,7 @@ export async function purgeExpiredRecord(
 
 export interface ActivityItem {
   at: Date;
-  source: 'evidence' | 'audit';
+  source: 'evidence' | 'audit' | 'email';
   type: string;
   actorName: string | null;
   recipientName: string | null;
@@ -660,6 +661,33 @@ export async function getDocumentRecord(db: Database, actor: ActorContext, docum
             (((a.metadata ?? {}) as Record<string, unknown>).requestId as string | null) ?? null,
           data: (a.metadata ?? {}) as Record<string, unknown>,
         })),
+      // Transactional email: queued, sent, delivered (accepted by the receiving server), failed.
+      ...(await listDocumentNotifications(tx, documentId)).flatMap((n) => {
+        const base = {
+          source: 'email' as const,
+          actorName: null,
+          recipientName: n.toName,
+          ipAddress: null,
+          requestId: n.requestId,
+          data: {
+            template: n.template,
+            templateVersion: n.templateVersion,
+            to: n.toEmail,
+            attempts: n.attempts,
+            ...(n.lastError ? { error: n.lastError } : {}),
+          } as Record<string, unknown>,
+        };
+        const out: ActivityItem[] = [{ ...base, at: n.queuedAt, type: 'email.queued' }];
+        if (n.sentAt) out.push({ ...base, at: n.sentAt, type: 'email.sent' });
+        if (n.deliveredAt) out.push({ ...base, at: n.deliveredAt, type: 'email.delivered' });
+        if (n.failedAt)
+          out.push({
+            ...base,
+            at: n.failedAt,
+            type: n.status === 'bounced' ? 'email.bounced' : 'email.failed',
+          });
+        return out;
+      }),
     ].sort((a, b) => a.at.getTime() - b.at.getTime());
     const canManage = (
       (await tx.execute(
