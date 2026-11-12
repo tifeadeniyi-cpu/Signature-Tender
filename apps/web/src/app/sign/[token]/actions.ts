@@ -57,6 +57,7 @@ async function context(token: string): Promise<RequestContext> {
     workspaceName: v.workspaceName,
     message: v.emailMessage,
     isTest: v.isTest,
+    workspaceId: v.workspaceId,
   };
 }
 

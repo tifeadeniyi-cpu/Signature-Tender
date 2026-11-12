@@ -354,6 +354,11 @@ export async function sendForSignature(
       idMap.set(r.id, row!.id);
       inserted.push(row!);
     }
+    // Mark matching address book entries as recently used (never grants them anything).
+    await tx.execute(
+      sql`select st_touch_contacts(${doc.workspace_id}::uuid,
+        array(select lower(jsonb_array_elements_text(${JSON.stringify(recipients.map((r) => r.email))}::jsonb))))`,
+    );
     if (fields.length) {
       await tx.insert(schema.requestFields).values(
         fields.map((f) => ({
@@ -430,6 +435,7 @@ export async function sendPaidRequest(
   meta: Meta = {},
 ): Promise<{
   requestId: string;
+  workspaceId: string;
   documentId: string;
   title: string;
   senderName: string;
@@ -481,6 +487,7 @@ export async function sendPaidRequest(
     });
     return {
       requestId,
+      workspaceId: req.workspaceId,
       documentId: req.documentId,
       title: req.title,
       senderName: req.senderName,
@@ -752,6 +759,8 @@ export type SignerStage =
 
 export interface SignerView {
   stage: SignerStage;
+  /** Used only to look up public workspace branding. */
+  workspaceId: string;
   title: string;
   senderName: string;
   workspaceName: string;
@@ -783,6 +792,7 @@ function toView(request: RequestRow, r: RecipientRow, stage: SignerStage): Signe
   const settings = documentSettingsSchema.parse(request.settings);
   return {
     stage,
+    workspaceId: request.workspaceId,
     title: request.title,
     senderName: request.senderName,
     workspaceName: request.workspaceName,

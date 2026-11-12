@@ -1,13 +1,14 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Building2, UserRound, ShieldCheck, Archive } from 'lucide-react';
+import { Building2, UserRound, ShieldCheck, Archive, Palette } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
 const ITEMS = [
   { href: '/app/settings', label: 'Workspace Settings', icon: Building2 },
   { href: '/app/settings/profile', label: 'Profile & Account', icon: UserRound },
   { href: '/app/settings/security', label: 'Security', icon: ShieldCheck },
+  { href: '/app/settings/branding', label: 'Branding', icon: Palette },
   { href: '/app/settings/retention', label: 'Retention', icon: Archive },
 ];
 
@@ -41,7 +42,7 @@ export function SettingsNav() {
         })}
       </ul>
       <p className="hidden px-3 pb-2 pt-4 text-xs lg:block">
-        Branding, document defaults, notifications and roles arrive in later phases.
+        Document defaults and notifications arrive in a later phase. Roles live on the Team page.
       </p>
     </nav>
   );

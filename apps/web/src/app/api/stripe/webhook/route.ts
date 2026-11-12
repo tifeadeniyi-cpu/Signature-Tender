@@ -37,6 +37,7 @@ async function dispatchPaid(requestId: string, dispatchAs: string) {
       workspaceName: sent.workspaceName,
       message: sent.emailMessage,
       isTest: false,
+      workspaceId: sent.workspaceId,
     });
   } catch (err) {
     // The payment is safe as a credit; the sender can use it from the document page.

@@ -101,7 +101,7 @@ Real sending stays off. The `test_signing` flag allows free requests marked TEST
 - Finalization runs in the request that completes the last signature. A background worker with retries is planned.
 - The e-sign disclosure, certificate wording and excluded-document guidance need attorney review (release checklist).
 
-## Phase 4: Payments and credits: Done (PR #4, pending merge)
+## Phase 4: Payments and credits: Done (merged in PR #4)
 
 Stripe runs in **test mode only**: live keys are refused and live events ignored. The `payments` flag stays off until Stripe test keys are set and reviewed, and real sending also still needs `production_signing`, which stays off until the release gates pass.
 
@@ -160,6 +160,31 @@ Stripe runs in **test mode only**: live keys are refused and live events ignored
 - The retrieval code email goes to whoever controls the inbox, which is the same trust the signing link already relies on.
 - The Neon owner role must be able to bypass RLS for the retrieval helper functions (same assumption as Phase 3).
 
-## Phases 6 to 9: Not started
+## Phase 6: Team, contacts, templates and branding: Done (pending review)
+
+| Feature                   | Status      | Notes                                                                                                                                                                                                                            |
+| ------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Team page                 | Done        | Tabs for All, Internal, External, Pending, Roles and Groups; summary cards; change role, access type and groups; suspend, reactivate, remove                                                                                     |
+| Invitations               | Done        | Email invitation with role, group, access type and expiry (1 to 30 days). Resend (once a minute, new link), cancel. Accepting needs a verified account with the invited email; sign-up and sign-in return to the invitation      |
+| Roles and permissions     | Done        | System roles plus Billing Administrator and API Developer. Custom roles per workspace, limited to permissions the editor holds. The last owner cannot be removed or demoted                                                      |
+| Groups                    | Done        | Create, delete, assign members                                                                                                                                                                                                   |
+| Contacts                  | Done        | Shared or private; search, type and tag filters; Active and Archived; detail page with document history; merge; CSV import (skips existing addresses) and export; last used updates when a document is sent                      |
+| Templates                 | Done        | Create from a PDF, categories (custom ones too), roles with signing order, fields (same editor as documents), settings without a fixed expiry, publish with checks, version history, discard changes, duplicate, archive, delete |
+| Use template              | Done        | Fill names and emails for each role (contact suggestions); creates a draft document from the published version and opens Review. Nothing is sent until the sender sends                                                          |
+| Branding                  | Done        | Display name, accent colour (must reach 4.5:1 contrast with white) and PNG/JPEG logo. Shown in signing emails and as a strip on signing pages under the Signature Tender header                                                  |
+| Team invitation branding  | Not started | Member invitation emails use the standard Signature Tender look                                                                                                                                                                  |
+| Template sharing by group | Not started | A template is shared with the whole workspace or kept to its owner                                                                                                                                                               |
+
+### Tests
+
+- `packages/core`: 12 new tests: invitations and acceptance, role escalation limits, last owner, custom roles, groups, contacts visibility, import and export, merge, template versions and freezing, publish checks, creating a document from a template, branding contrast and logo checks.
+- `apps/web`: Playwright: invite a teammate who signs up from the link and joins; contacts add, import, search and export; build, publish and use a template; branding contrast check.
+
+### Known gaps
+
+- Member listings still read the `user` table directly; a restricted view is still planned.
+- Logos are served publicly by workspace id so recipients can see them. They are not secret, but anyone with the id can fetch the logo.
+
+## Phases 7 to 9: Not started
 
 See the plan doc for scope and order.

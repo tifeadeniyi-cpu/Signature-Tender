@@ -2,7 +2,13 @@ import 'server-only';
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { cache } from 'react';
-import { getMembership, listMyWorkspaces, AppError, type MembershipContext } from '@st/core';
+import {
+  getMembership,
+  listMyWorkspaces,
+  touchMembership,
+  AppError,
+  type MembershipContext,
+} from '@st/core';
 import { auth } from './auth';
 import { db } from './db';
 
@@ -37,6 +43,8 @@ export const requireWorkspace = cache(async (): Promise<AppContext> => {
   const chosen = workspaces.find((w) => w.id === preferred) ?? workspaces[0]!;
   try {
     const membership = await getMembership(db(), actor, chosen.id);
+    // "Last active" for the team page; throttled in the database and never blocks the page.
+    void touchMembership(db(), actor, chosen.id).catch(() => undefined);
     return { user, membership, workspaces };
   } catch (err) {
     if (err instanceof AppError) redirect('/onboarding');

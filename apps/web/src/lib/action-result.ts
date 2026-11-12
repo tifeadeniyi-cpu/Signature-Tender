@@ -20,3 +20,10 @@ export function toActionError(err: unknown): ActionState {
   if (err instanceof AppError) return { ok: false, message: err.message };
   throw err;
 }
+
+/** Like toActionError, for forms that show no inline field errors: the first problem becomes the message. */
+export function toFormError(err: unknown): ActionState {
+  const r = toActionError(err);
+  const first = r?.fieldErrors && Object.values(r.fieldErrors)[0];
+  return first ? { ok: false, message: first } : r;
+}

@@ -7,7 +7,6 @@ import type { ActionState } from '@/lib/action-result';
 import { Card, CardHeader } from '@/components/ui/card';
 import { Button, buttonClass } from '@/components/ui/button';
 import { FormStatus } from '@/components/ui/form-status';
-import { saveSettingsAction } from '../../../actions';
 
 const METHODS: { value: DocumentSettings['signingMethod']; label: string; hint: string }[] = [
   {
@@ -23,13 +22,22 @@ const METHODS: { value: DocumentSettings['signingMethod']; label: string; hint: 
   },
 ];
 
+export interface SettingsNav {
+  onSave: (input: { settings: DocumentSettings; emailMessage: string }) => Promise<ActionState>;
+  backHref: string;
+  nextHref: string;
+  nextLabel: string;
+  /** Templates have no fixed expiry date; it is set when a document is created. */
+  hideExpiry?: boolean;
+}
+
 export function SettingsForm({
-  documentId,
+  nav,
   disabled,
   initial,
   initialMessage,
 }: {
-  documentId: string;
+  nav: SettingsNav;
   disabled: boolean;
   initial: DocumentSettings;
   initialMessage: string;
@@ -45,7 +53,7 @@ export function SettingsForm({
 
   function save(next?: string) {
     start(async () => {
-      const res = await saveSettingsAction(documentId, { settings: s, emailMessage: message });
+      const res = await nav.onSave({ settings: s, emailMessage: message });
       setState(res);
       if (res?.ok) {
         if (next) router.push(next);
@@ -128,16 +136,18 @@ export function SettingsForm({
               </span>
             </label>
           ) : null}
-          <label className="flex flex-col gap-1 text-sm font-medium text-heading">
-            Expiration date (optional)
-            <input
-              type="date"
-              min={today}
-              value={s.expiresAt ?? ''}
-              onChange={(e) => set('expiresAt', e.target.value || null)}
-              className="h-10 w-48 rounded-lg border border-border px-2 font-normal"
-            />
-          </label>
+          {nav.hideExpiry ? null : (
+            <label className="flex flex-col gap-1 text-sm font-medium text-heading">
+              Expiration date (optional)
+              <input
+                type="date"
+                min={today}
+                value={s.expiresAt ?? ''}
+                onChange={(e) => set('expiresAt', e.target.value || null)}
+                className="h-10 w-48 rounded-lg border border-border px-2 font-normal"
+              />
+            </label>
+          )}
           <label className="flex flex-col gap-1 text-sm font-medium text-heading">
             Message to recipients (optional)
             <textarea
@@ -155,29 +165,19 @@ export function SettingsForm({
       <div className="flex flex-col gap-3 lg:col-span-2">
         <FormStatus state={state} />
         <div className="flex flex-wrap justify-between gap-2">
-          <Link
-            href={`/app/documents/${documentId}/prepare/fields`}
-            className={buttonClass('ghost')}
-          >
+          <Link href={nav.backHref} className={buttonClass('ghost')}>
             Back
           </Link>
           {disabled ? (
-            <Link
-              href={`/app/documents/${documentId}/prepare/review`}
-              className={buttonClass('primary')}
-            >
-              Next: Review
+            <Link href={nav.nextHref} className={buttonClass('primary')}>
+              {nav.nextLabel}
             </Link>
           ) : (
             <span className="flex gap-2">
               <Button type="button" variant="secondary" onClick={() => save()} loading={pending}>
                 Save
               </Button>
-              <Button
-                type="button"
-                onClick={() => save(`/app/documents/${documentId}/prepare/review`)}
-                disabled={pending}
-              >
+              <Button type="button" onClick={() => save(nav.nextHref)} disabled={pending}>
                 Save and continue
               </Button>
             </span>

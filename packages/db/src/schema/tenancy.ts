@@ -42,6 +42,12 @@ export const workspaces = pgTable(
     legalName: text('legal_name'),
     contactEmail: text('contact_email'),
     website: text('website'),
+    /** Branding (spec Part 24). Shown on invitations and signing pages, never over legal text. */
+    brandName: text('brand_name'),
+    brandColor: text('brand_color'),
+    brandLogoKey: text('brand_logo_key'),
+    brandLogoType: text('brand_logo_type'),
+    brandLogoSha256: text('brand_logo_sha256'),
     createdBy: text('created_by')
       .notNull()
       .references(() => user.id, { onDelete: 'restrict' }),
@@ -104,10 +110,14 @@ export const workspaceMemberships = pgTable(
       .notNull()
       .references(() => roles.id, { onDelete: 'restrict' }),
     status: membershipStatus('status').notNull().default('active'),
+    /** Internal team or external collaborator (spec Part 20 tabs). Access still comes from the role. */
+    memberType: text('member_type').notNull().default('internal'),
+    lastActiveAt: timestamp('last_active_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
+    check('memberships_member_type', sql`${t.memberType} in ('internal','external')`),
     uniqueIndex('memberships_ws_user_uq').on(t.workspaceId, t.userId),
     index('memberships_user_idx').on(t.userId),
   ],

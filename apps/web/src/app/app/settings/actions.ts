@@ -1,6 +1,14 @@
 'use server';
 import { revalidatePath } from 'next/cache';
-import { updateWorkspace, updateProfile, createWorkspace } from '@st/core';
+import {
+  updateWorkspace,
+  updateProfile,
+  createWorkspace,
+  saveBranding,
+  uploadLogo,
+  removeLogo,
+} from '@st/core';
+import { storage } from '@/lib/storage';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { db } from '@/lib/db';
@@ -75,4 +83,55 @@ export async function createWorkspaceAction(
     path: '/',
   });
   redirect('/app');
+}
+
+export async function saveBrandingAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const { user, membership } = await requireWorkspace();
+  try {
+    await saveBranding(
+      db(),
+      { userId: user.id },
+      membership.workspace.id,
+      {
+        brandName: str(fd, 'brandName'),
+        brandColor: fd.get('useColor') === 'on' ? str(fd, 'brandColor') : '',
+      },
+      await requestMeta(),
+    );
+  } catch (err) {
+    const r = toActionError(err);
+    // The form has no inline field errors, so name the problem in the message.
+    const first = r?.fieldErrors && Object.values(r.fieldErrors)[0];
+    return first ? { ok: false, message: first } : r;
+  }
+  revalidatePath('/app/settings/branding');
+  return { ok: true, message: 'Branding saved.' };
+}
+
+export async function logoAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const { user, membership } = await requireWorkspace();
+  const actor = { userId: user.id };
+  try {
+    if (fd.get('intent') === 'remove') {
+      await removeLogo(db(), actor, membership.workspace.id, await requestMeta());
+      revalidatePath('/app/settings/branding');
+      return { ok: true, message: 'Logo removed.' };
+    }
+    const file = fd.get('logo');
+    if (!(file instanceof File) || file.size === 0)
+      return { ok: false, message: 'Choose a PNG or JPEG image.' };
+    if (file.size > 512 * 1024) return { ok: false, message: 'Use a logo under 512 KB.' };
+    await uploadLogo(
+      db(),
+      storage(),
+      actor,
+      membership.workspace.id,
+      new Uint8Array(await file.arrayBuffer()),
+      await requestMeta(),
+    );
+  } catch (err) {
+    return toActionError(err);
+  }
+  revalidatePath('/app/settings/branding');
+  return { ok: true, message: 'Logo uploaded.' };
 }

@@ -5,6 +5,7 @@ import { PrepareHeader } from '@/components/documents/prepare-header';
 import { EmptyState } from '@/components/ui/feedback';
 import { buttonClass } from '@/components/ui/button';
 import { FieldEditor } from './field-editor';
+import { saveFieldsAction } from '../../../actions';
 
 export const metadata = { title: 'Place fields' };
 
@@ -35,7 +36,13 @@ export default async function FieldsStep({ params }: { params: Promise<{ id: str
         </EmptyState>
       ) : (
         <FieldEditor
-          documentId={id}
+          nav={{
+            onSave: saveFieldsAction.bind(null, id),
+            fileSrc: `/api/documents/${id}/file`,
+            backHref: `/app/documents/${id}/prepare/signers`,
+            nextHref: `/app/documents/${id}/prepare/settings`,
+            nextLabel: 'Next: Settings',
+          }}
           disabled={!data.canEdit}
           pageCount={data.file?.pageCount ?? 0}
           recipients={fillable.map((r) => ({ id: r.id, name: r.name, colorIndex: r.colorIndex }))}

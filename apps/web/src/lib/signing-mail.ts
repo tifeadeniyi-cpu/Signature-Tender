@@ -1,6 +1,7 @@
 import 'server-only';
-import type { Invitation } from '@st/core';
+import { getBrand, type Invitation } from '@st/core';
 import { brandedEmail, sendEmail } from './email';
+import { db } from './db';
 import { env } from './env';
 
 export interface RequestContext {
@@ -9,6 +10,14 @@ export interface RequestContext {
   workspaceName: string;
   message: string | null;
   isTest: boolean;
+  /** When set, recipient-facing emails carry the workspace's name and colour. */
+  workspaceId?: string;
+}
+
+async function brandFor(c: RequestContext) {
+  if (!c.workspaceId) return null;
+  const b = await getBrand(db(), c.workspaceId).catch(() => null);
+  return b ? { name: b.brandName, color: b.color } : null;
 }
 
 const prefix = (c: RequestContext) => (c.isTest ? '[TEST] ' : '');
@@ -16,6 +25,7 @@ export const signUrl = (token: string) => `${env().BETTER_AUTH_URL}/sign/${token
 
 /** Emails each recipient their personal link. Each link is the only copy of its token. */
 export async function sendInvitations(invitations: Invitation[], c: RequestContext) {
+  const brand = await brandFor(c);
   for (const inv of invitations) {
     const from = c.workspaceName ? `${c.senderName} (${c.workspaceName})` : c.senderName;
     const isCopy = inv.kind === 'completed_copy';
@@ -26,6 +36,7 @@ export async function sendInvitations(invitations: Invitation[], c: RequestConte
         : `Please review and sign "${c.title}".${c.message ? `\n\nMessage from ${c.senderName}: ${c.message}` : ''}`,
       actionLabel: isCopy ? 'View completed document' : 'Review and sign',
       actionUrl: signUrl(inv.token),
+      brand,
       footer: `${c.isTest ? 'This is a TEST request from a non-production environment. ' : ''}This link is personal to ${inv.email}. Do not forward it. Lost this email later? Get a copy or a new link at ${env().BETTER_AUTH_URL}/retrieve.`,
     });
     await sendEmail({
@@ -43,6 +54,7 @@ export async function sendSigningCode(to: string, name: string, code: string, c:
     body: `Hi ${name}, your code to open "${c.title}" is ${code}. It expires in 10 minutes and works once. If you did not request it, you can ignore this email.`,
     actionLabel: 'Return to the document',
     actionUrl: env().BETTER_AUTH_URL,
+    brand: await brandFor(c),
   });
   await sendEmail({ to, subject: `${prefix(c)}Your signing code: ${code}`, text, html });
 }
