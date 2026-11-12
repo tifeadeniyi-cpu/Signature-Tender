@@ -4,7 +4,7 @@ import { cn } from '@/lib/cn';
 import { track } from './analytics';
 
 /**
- * Fades a section in the first time it scrolls into view and records one
+ * Slides a section into place the first time it scrolls into view and records one
  * `feature_section_viewed` event. Content is visible without JavaScript and is never hidden
  * for visitors who prefer reduced motion.
  */
@@ -48,9 +48,10 @@ export function Reveal({
     <div
       ref={ref}
       className={cn(
-        'transition-[opacity,transform] duration-700 ease-out',
-        state === 'hidden' && 'translate-y-6 opacity-0',
-        state === 'shown' && 'translate-y-0 opacity-100',
+        // Slide only, never fade: text keeps full contrast at every moment of the animation.
+        'transition-transform duration-700 ease-out',
+        state === 'hidden' && 'translate-y-8',
+        state === 'shown' && 'translate-y-0',
         className,
       )}
     >
