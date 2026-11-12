@@ -9,6 +9,7 @@ import {
   getConfigValue,
   hitRateLimit,
   isFeatureEnabled,
+  recordApiError,
   requireScope,
   sha256Hex,
   type ApiPrincipal,
@@ -178,6 +179,7 @@ export function apiRoute<P = Record<string, never>>(
           new ApiFailure('rate_limited', `Rate limit of ${perMinute} requests per minute reached.`),
           requestId,
         );
+        await recordApiError(d, principal.keyId).catch(() => {});
         return respond(r.status, r.body, requestId, { ...rateHeaders, 'retry-after': '60' });
       }
       requireScope(principal, opts.scope);

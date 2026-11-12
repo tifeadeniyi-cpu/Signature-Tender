@@ -21,13 +21,11 @@ test('send a test request, sign with an email code, and download the completed c
 
   // Prepare: upload, one signer who must confirm an email code, a signature and a text field.
   await page.goto('/app/documents/new');
-  await page
-    .getByLabel('PDF file')
-    .setInputFiles({
-      name: 'Performance.pdf',
-      mimeType: 'application/pdf',
-      buffer: await makePdf(),
-    });
+  await page.getByLabel('PDF file').setInputFiles({
+    name: 'Performance.pdf',
+    mimeType: 'application/pdf',
+    buffer: await makePdf(),
+  });
   await page.getByLabel('Document type').selectOption('agreement');
   await page.getByRole('button', { name: 'Upload and continue' }).click();
   await expect(page).toHaveURL(/signers$/);
@@ -119,7 +117,10 @@ test('send a test request, sign with an email code, and download the completed c
   expect(anon.status()).toBe(404);
 });
 
-test('a recipient can decline, and an unknown link shows a clear message', async ({ page, browser }) => {
+test('a recipient can decline, and an unknown link shows a clear message', async ({
+  page,
+  browser,
+}) => {
   await signUpWithWorkspace(page, 'Dee Sender', 'Dee Co');
   const email = `decliner-${Date.now()}@example.test`;
   await page.goto('/app/documents/new');

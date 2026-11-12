@@ -171,6 +171,12 @@ export async function connectAction(_p: SecretState, fd: FormData): Promise<Secr
     );
     revalidatePath('/app/integrations');
     revalidatePath(DEV);
+    kickWebhooks();
+    if (!r.apiKey)
+      return {
+        ok: true,
+        message: 'Connected. A test message is on its way to your Slack channel.',
+      };
     return {
       ok: true,
       message: 'Connected. Paste these into the partner app now; they will not be shown again.',

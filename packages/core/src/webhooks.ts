@@ -150,6 +150,91 @@ export async function validateWebhookUrl(raw: string, policy: UrlPolicy = {}): P
   return u;
 }
 
+/** Slack incoming webhook URLs only (https://hooks.slack.com/services/...). */
+export function validateSlackWebhookUrl(raw: string): URL {
+  let u: URL;
+  try {
+    u = new URL(raw.trim());
+  } catch {
+    throw new AppError('invalid', 'Paste the full Slack webhook URL.');
+  }
+  if (
+    u.protocol !== 'https:' ||
+    u.hostname !== 'hooks.slack.com' ||
+    (u.port && u.port !== '443') ||
+    u.username ||
+    u.password ||
+    !/^\/services\/[A-Za-z0-9]+\/[A-Za-z0-9]+\/[A-Za-z0-9]+$/.test(u.pathname)
+  )
+    throw new AppError(
+      'invalid',
+      'That is not a Slack incoming webhook URL. It should start with https://hooks.slack.com/services/',
+    );
+  return u;
+}
+
+/** A Slack webhook URL works as a password; only its host is shown after it is saved. */
+export function maskSlackUrl(url: string) {
+  return url.startsWith('https://hooks.slack.com/') ? 'https://hooks.slack.com/services/••••' : url;
+}
+
+/** Events a Slack connection posts by default. */
+export const SLACK_DEFAULT_EVENTS: WebhookEventType[] = [
+  'request.sent',
+  'recipient.signed',
+  'request.completed',
+  'request.declined',
+  'request.expired',
+  'request.cancelled',
+  'payment.failed',
+];
+
+const SLACK_LABELS: Record<string, string> = {
+  'request.created': 'was created',
+  'request.sent': 'was sent for signature',
+  'request.completed': 'is complete. Everyone has signed',
+  'request.declined': 'was declined',
+  'request.expired': 'expired before everyone signed',
+  'request.cancelled': 'was cancelled',
+  'recipient.viewed': 'was opened by a recipient',
+  'recipient.authenticated': 'had a recipient verify their email',
+  'recipient.signed': 'was signed by a recipient',
+  'recipient.approved': 'was approved',
+  'recipient.declined': 'was declined by a recipient',
+  'document.finalized': 'has its signed copy and certificate ready',
+  'document.available': 'is ready to download',
+};
+
+const slackEscape = (s: string) =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/** Plain-text Slack message: title, what happened and a link into the app. No emails or contents. */
+export function slackMessage(
+  type: string,
+  data: Record<string, unknown>,
+  appUrl: string,
+): { text: string } {
+  const test = data.test ? '[TEST] ' : '';
+  if (type === 'webhook.test')
+    return {
+      text: 'Signature Tender is connected. Notifications for this workspace will appear here.',
+    };
+  if (type.startsWith('payment.')) {
+    const amount =
+      typeof data.amount_cents === 'number'
+        ? ` (${(data.amount_cents / 100).toFixed(2)} ${String(data.currency ?? '').toUpperCase()})`
+        : '';
+    return {
+      text: `${type === 'payment.succeeded' ? 'Payment received' : 'A payment failed'}${amount}. <${appUrl}/app/billing|Open Billing & Credits>`,
+    };
+  }
+  const title = slackEscape(String(data.title ?? 'A document'));
+  const link = data.document_id
+    ? ` <${appUrl}/app/documents/${String(data.document_id)}|Open in Signature Tender>`
+    : '';
+  return { text: `${test}*${title}* ${SLACK_LABELS[type] ?? `had an update (${type})`}.${link}` };
+}
+
 // ---------------------------------------------------------------------------------------------
 // Signatures. Header: `t=<unix seconds>,v1=<hex HMAC-SHA256 of "t.body">`, with a second v1
 // during a secret rotation. Receivers reject timestamps older than five minutes (replay).
@@ -255,13 +340,51 @@ export async function createWebhookEndpoint(
   return { id, secret };
 }
 
+/** Slack endpoint for the Slack integration. Slack messages are not signed, so no secret is shown. */
+export async function createSlackEndpoint(
+  db: Database,
+  actor: ActorContext,
+  workspaceId: string,
+  url: string,
+  ctx: WebhookContext,
+  meta: Meta = {},
+): Promise<{ id: string }> {
+  const valid = validateSlackWebhookUrl(url).toString();
+  return withActor(db, actor, async (tx) => {
+    await requireApiManage(tx, workspaceId);
+    const [row] = await tx
+      .insert(schema.webhookEndpoints)
+      .values({
+        workspaceId,
+        url: valid,
+        format: 'slack',
+        description: 'Slack notifications',
+        events: SLACK_DEFAULT_EVENTS,
+        secretEncrypted: encryptSecret(whsec(), ctx.encKey),
+        createdBy: actor.userId,
+      })
+      .returning({ id: schema.webhookEndpoints.id });
+    await recordAudit(tx, {
+      workspaceId,
+      actorUserId: actor.userId,
+      action: 'webhook.endpoint_created',
+      targetType: 'webhook_endpoint',
+      targetId: row!.id,
+      metadata: { format: 'slack' },
+      ...meta,
+    });
+    return { id: row!.id };
+  });
+}
+
 export async function listWebhookEndpoints(db: Database, actor: ActorContext, workspaceId: string) {
   return withActor(db, actor, async (tx) => {
     await requireApiManage(tx, workspaceId);
-    return tx
+    const rows = await tx
       .select({
         id: schema.webhookEndpoints.id,
         url: schema.webhookEndpoints.url,
+        format: schema.webhookEndpoints.format,
         description: schema.webhookEndpoints.description,
         events: schema.webhookEndpoints.events,
         enabled: schema.webhookEndpoints.enabled,
@@ -272,6 +395,7 @@ export async function listWebhookEndpoints(db: Database, actor: ActorContext, wo
       .from(schema.webhookEndpoints)
       .where(eq(schema.webhookEndpoints.workspaceId, workspaceId))
       .orderBy(desc(schema.webhookEndpoints.createdAt));
+    return rows.map((r) => (r.format === 'slack' ? { ...r, url: maskSlackUrl(r.url) } : r));
   });
 }
 
@@ -401,7 +525,7 @@ export async function listWebhookDeliveries(
     if (opts.endpointId && uuid.safeParse(opts.endpointId).success)
       conds.push(eq(schema.webhookDeliveries.endpointId, opts.endpointId));
     if (opts.status) conds.push(eq(schema.webhookDeliveries.status, opts.status));
-    return tx
+    const rows = await tx
       .select({
         id: schema.webhookDeliveries.id,
         endpointId: schema.webhookDeliveries.endpointId,
@@ -428,6 +552,7 @@ export async function listWebhookDeliveries(
       .where(and(...conds))
       .orderBy(desc(schema.webhookDeliveries.createdAt))
       .limit(Math.min(opts.limit ?? 50, 200));
+    return rows.map((r) => ({ ...r, url: maskSlackUrl(r.url) }));
   });
 }
 
@@ -435,6 +560,8 @@ export async function listWebhookDeliveries(
 // Dispatcher. Runs from a cron route with no signed-in member; it can only move outbox rows.
 
 export interface DispatchOptions extends WebhookContext {
+  /** Base URL for links in Slack messages. */
+  appUrl?: string;
   fetch?: typeof fetch;
   maxAttempts?: number;
   limit?: number;
@@ -465,6 +592,7 @@ export async function dispatchWebhooks(
     delivery_id: string;
     endpoint_id: string;
     url: string;
+    format: string;
     secret_encrypted: string;
     previous_secret_encrypted: string | null;
     previous_secret_expires_at: Date | string | null;
@@ -482,64 +610,105 @@ export async function dispatchWebhooks(
     failed: 0,
   };
 
+  type Due = (typeof due)[number];
+  const post = async (d: Due, headers: Record<string, string>, body: string) => {
+    const res = await doFetch(d.url, {
+      method: 'POST',
+      redirect: 'manual',
+      signal: AbortSignal.timeout(opts.timeoutMs ?? 10_000),
+      headers: {
+        'content-type': 'application/json',
+        'user-agent': 'SignatureTender-Webhooks/1',
+        ...headers,
+      },
+      body,
+    });
+    await res.body?.cancel().catch(() => {});
+    return res.status;
+  };
+
+  const deliver = async (
+    d: Due,
+  ): Promise<{ ok: boolean; status: number | null; error: string | null }> => {
+    if (d.format === 'slack') {
+      validateSlackWebhookUrl(d.url);
+      const status = await post(
+        d,
+        {},
+        JSON.stringify(slackMessage(d.event_type, d.event_data, opts.appUrl ?? '')),
+      );
+      const ok = status >= 200 && status < 300;
+      return {
+        ok,
+        status,
+        error: ok
+          ? null
+          : status === 404 || status === 410
+            ? 'Slack says this webhook no longer exists'
+            : `HTTP ${status}`,
+      };
+    }
+    await validateWebhookUrl(d.url, opts.urlPolicy);
+    const secrets = [decryptSecret(d.secret_encrypted, opts.encKey)];
+    if (
+      d.previous_secret_encrypted &&
+      d.previous_secret_expires_at &&
+      new Date(d.previous_secret_expires_at) > new Date()
+    )
+      secrets.push(decryptSecret(d.previous_secret_encrypted, opts.encKey));
+    const body = JSON.stringify({
+      id: d.event_id,
+      type: d.event_type,
+      created_at: new Date(d.event_created_at).toISOString(),
+      workspace_id: d.workspace_id,
+      data: d.event_data,
+    });
+    const t = Math.floor(Date.now() / 1000);
+    const status = await post(
+      d,
+      {
+        [EVENT_ID_HEADER]: d.event_id,
+        'Signature-Tender-Delivery-Id': d.delivery_id,
+        'Signature-Tender-Attempt': String(d.attempts + 1),
+        [SIGNATURE_HEADER]: buildSignatureHeader(secrets, t, body),
+      },
+      body,
+    );
+    const ok = status >= 200 && status < 300;
+    return {
+      ok,
+      status,
+      error: ok
+        ? null
+        : status >= 300 && status < 400
+          ? 'Redirects are not followed'
+          : `HTTP ${status}`,
+    };
+  };
+
   await Promise.all(
     due.map(async (d) => {
-      let ok = false;
-      let status: number | null = null;
-      let error: string | null = null;
+      let r: { ok: boolean; status: number | null; error: string | null };
       try {
-        await validateWebhookUrl(d.url, opts.urlPolicy);
-        const secrets = [decryptSecret(d.secret_encrypted, opts.encKey)];
-        if (
-          d.previous_secret_encrypted &&
-          d.previous_secret_expires_at &&
-          new Date(d.previous_secret_expires_at) > new Date()
-        )
-          secrets.push(decryptSecret(d.previous_secret_encrypted, opts.encKey));
-        const body = JSON.stringify({
-          id: d.event_id,
-          type: d.event_type,
-          created_at: new Date(d.event_created_at).toISOString(),
-          workspace_id: d.workspace_id,
-          data: d.event_data,
-        });
-        const t = Math.floor(Date.now() / 1000);
-        const res = await doFetch(d.url, {
-          method: 'POST',
-          redirect: 'manual',
-          signal: AbortSignal.timeout(opts.timeoutMs ?? 10_000),
-          headers: {
-            'content-type': 'application/json',
-            'user-agent': 'SignatureTender-Webhooks/1',
-            [EVENT_ID_HEADER]: d.event_id,
-            'Signature-Tender-Delivery-Id': d.delivery_id,
-            'Signature-Tender-Attempt': String(d.attempts + 1),
-            [SIGNATURE_HEADER]: buildSignatureHeader(secrets, t, body),
-          },
-          body,
-        });
-        status = res.status;
-        ok = res.status >= 200 && res.status < 300;
-        if (!ok)
-          error =
-            res.status >= 300 && res.status < 400
-              ? 'Redirects are not followed'
-              : `HTTP ${res.status}`;
-        await res.body?.cancel().catch(() => {});
+        r = await deliver(d);
       } catch (err) {
-        error =
-          err instanceof AppError
-            ? err.message
-            : err instanceof Error && err.name === 'TimeoutError'
-              ? 'Timed out after 10 seconds'
-              : 'Could not connect';
+        r = {
+          ok: false,
+          status: null,
+          error:
+            err instanceof AppError
+              ? err.message
+              : err instanceof Error && err.name === 'TimeoutError'
+                ? 'Timed out after 10 seconds'
+                : 'Could not connect',
+        };
       }
       await db.transaction((tx) =>
         tx.execute(
-          sql`select st_webhook_record(${d.delivery_id}::uuid, ${ok}, ${status}, ${error}, ${maxAttempts})`,
+          sql`select st_webhook_record(${d.delivery_id}::uuid, ${r.ok}, ${r.status}, ${r.error}, ${maxAttempts})`,
         ),
       );
-      if (ok) result.succeeded++;
+      if (r.ok) result.succeeded++;
       else result.failed++;
     }),
   );

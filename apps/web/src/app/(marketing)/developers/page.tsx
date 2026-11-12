@@ -9,7 +9,10 @@ export const metadata = {
 
 function Code({ children }: { children: string }) {
   return (
-    <pre tabIndex={0} className="overflow-x-auto rounded-xl bg-heading p-4 text-xs leading-relaxed text-white">
+    <pre
+      tabIndex={0}
+      className="overflow-x-auto rounded-xl bg-heading p-4 text-xs leading-relaxed text-white"
+    >
       <code>{children}</code>
     </pre>
   );

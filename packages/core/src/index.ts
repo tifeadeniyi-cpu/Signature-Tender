@@ -20,4 +20,6 @@ export * from './health';
 export * from './api';
 export * from './webhooks';
 export * from './integrations';
+export * from './reports';
+export * from './admin';
 export * from './notifications';

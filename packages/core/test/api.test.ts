@@ -525,7 +525,7 @@ describe('webhook delivery', () => {
 describe('integrations', () => {
   it('only offers connectors that exist', () => {
     const live = INTEGRATIONS.filter((i) => i.available).map((i) => i.key);
-    expect(live.sort()).toEqual(['beam_artist', 'jectstack']);
+    expect(live.sort()).toEqual(['beam_artist', 'jectstack', 'slack']);
   });
 
   it('connects a partner with its own key and webhook, and disconnects cleanly', async () => {
@@ -538,7 +538,7 @@ describe('integrations', () => {
     );
     expect(res.apiKey).toMatch(/^stk_/);
     expect(res.webhookSecret).toMatch(/^whsec_/);
-    const p = await authenticateApiKey(db, res.apiKey);
+    const p = await authenticateApiKey(db, res.apiKey!);
     expect(p!.scopes).toContain('embedded:sign');
     expect(p!.scopes).not.toContain('billing:read');
     await expect(
@@ -554,7 +554,7 @@ describe('integrations', () => {
     expect(list.find((c) => c.provider === 'beam_artist')?.status).toBe('active');
 
     await disconnectIntegration(db, { userId: dev }, ws, 'beam_artist');
-    expect(await authenticateApiKey(db, res.apiKey)).toBeNull();
+    expect(await authenticateApiKey(db, res.apiKey!)).toBeNull();
     const again = await listConnections(db, { userId: dev }, ws);
     expect(again.find((c) => c.provider === 'beam_artist')?.status).toBe('disabled');
     await expect(

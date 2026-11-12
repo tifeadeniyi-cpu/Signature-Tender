@@ -448,7 +448,7 @@ export function parseCsv(text: string): string[][] {
 }
 
 /** Prevents spreadsheet formula injection when exported files are opened in Excel or Sheets. */
-function csvCell(v: string | null | undefined) {
+export function csvCell(v: string | null | undefined) {
   let s = v ?? '';
   if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;

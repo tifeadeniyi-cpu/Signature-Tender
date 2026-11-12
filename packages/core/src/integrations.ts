@@ -4,7 +4,13 @@ import { schema, withActor, type Database, type ActorContext } from '@st/db';
 import { AppError } from './errors';
 import { recordAudit } from './audit';
 import { createApiKey, revokeApiKey, type ApiScope } from './api';
-import { createWebhookEndpoint, deleteWebhookEndpoint, type WebhookContext } from './webhooks';
+import {
+  createSlackEndpoint,
+  createWebhookEndpoint,
+  deleteWebhookEndpoint,
+  sendTestWebhook,
+  type WebhookContext,
+} from './webhooks';
 
 type Meta = { ipAddress?: string | null; userAgent?: string | null };
 
@@ -19,6 +25,8 @@ export interface IntegrationInfo {
   category: 'Partner apps' | 'Storage' | 'Productivity' | 'Communication' | 'CRM' | 'Payments';
   description: string;
   available: boolean;
+  /** `api`: the partner calls our API with a key. `slack`: we post messages to a Slack webhook. */
+  kind?: 'api' | 'slack';
   /** Scopes the connection's API key gets. */
   scopes?: ApiScope[];
   note?: string;
@@ -40,6 +48,7 @@ export const INTEGRATIONS: IntegrationInfo[] = [
     description:
       'Send booking agreements and contracts for signature from Beam Artist and get status back by webhook.',
     available: true,
+    kind: 'api',
     scopes: PARTNER_SCOPES,
   },
   {
@@ -49,6 +58,7 @@ export const INTEGRATIONS: IntegrationInfo[] = [
     description:
       'Send project agreements for signature from Jectstack and keep a reference to the signed record.',
     available: true,
+    kind: 'api',
     scopes: PARTNER_SCOPES,
   },
   {
@@ -97,8 +107,10 @@ export const INTEGRATIONS: IntegrationInfo[] = [
     key: 'slack',
     name: 'Slack',
     category: 'Communication',
-    description: 'Get notified in Slack when documents are signed.',
-    available: false,
+    description:
+      'Post to a Slack channel when documents are sent, signed, completed, declined, expired or cancelled. Uses a Slack incoming webhook; messages carry the document title and a link, never its contents.',
+    available: true,
+    kind: 'slack',
   },
   {
     key: 'salesforce',
@@ -140,7 +152,9 @@ export async function listConnections(db: Database, actor: ActorContext, workspa
         apiKeyPrefix: schema.apiKeys.prefix,
         apiKeyLastUsedAt: schema.apiKeys.lastUsedAt,
         apiKeyRevokedAt: schema.apiKeys.revokedAt,
-        webhookUrl: schema.webhookEndpoints.url,
+        webhookUrl: sql<
+          string | null
+        >`case when ${schema.webhookEndpoints.format} = 'slack' then 'https://hooks.slack.com/services/••••' else ${schema.webhookEndpoints.url} end`,
         webhookEnabled: schema.webhookEndpoints.enabled,
         failedDeliveries: sql<number>`(select count(*)::int from webhook_deliveries d where d.endpoint_id = ${schema.integrationConnections.webhookEndpointId} and d.status in ('failed','dead'))`,
       })
@@ -159,6 +173,43 @@ export const connectInputSchema = z.object({
   webhookUrl: z.string().trim().max(2000).optional().or(z.literal('')),
 });
 
+async function saveConnection(
+  db: Database,
+  actor: ActorContext,
+  workspaceId: string,
+  provider: string,
+  apiKeyId: string | null,
+  webhookEndpointId: string | null,
+  meta: Meta,
+  metadata: Record<string, unknown>,
+) {
+  await withActor(db, actor, async (tx) => {
+    await tx
+      .insert(schema.integrationConnections)
+      .values({
+        workspaceId,
+        provider,
+        status: 'active',
+        apiKeyId,
+        webhookEndpointId,
+        createdBy: actor.userId,
+      })
+      .onConflictDoUpdate({
+        target: [schema.integrationConnections.workspaceId, schema.integrationConnections.provider],
+        set: { status: 'active', apiKeyId, webhookEndpointId, updatedAt: new Date() },
+      });
+    await recordAudit(tx, {
+      workspaceId,
+      actorUserId: actor.userId,
+      action: 'integration.connected',
+      targetType: 'integration',
+      targetId: provider,
+      metadata,
+      ...meta,
+    });
+  });
+}
+
 /**
  * Connects a partner app: issues an API key with the partner's scopes and, if given, a webhook
  * endpoint for status updates. The key and webhook secret are returned once, to paste into the
@@ -171,11 +222,10 @@ export async function connectIntegration(
   raw: z.input<typeof connectInputSchema>,
   ctx: WebhookContext,
   meta: Meta = {},
-): Promise<{ apiKey: string; webhookSecret: string | null }> {
+): Promise<{ apiKey: string | null; webhookSecret: string | null }> {
   const input = connectInputSchema.parse(raw);
   const info = getIntegration(input.provider);
-  if (!info?.available || !info.scopes)
-    throw new AppError('invalid', 'This integration is not available yet.');
+  if (!info?.available) throw new AppError('invalid', 'This integration is not available yet.');
   const existing = await withActor(db, actor, async (tx) => {
     const [ok] = (await tx.execute(
       sql`select st_has_permission(${workspaceId}::uuid, 'integrations.manage') and st_has_permission(${workspaceId}::uuid, 'api.manage') as ok`,
@@ -196,11 +246,19 @@ export async function connectIntegration(
   if (existing?.status === 'active')
     throw new AppError('conflict', `${info.name} is already connected.`);
 
+  if (info.kind === 'slack') {
+    if (!input.webhookUrl) throw new AppError('invalid', 'Paste the Slack incoming webhook URL.');
+    const hook = await createSlackEndpoint(db, actor, workspaceId, input.webhookUrl, ctx, meta);
+    await saveConnection(db, actor, workspaceId, info.key, null, hook.id, meta, { webhook: true });
+    // A hello message, so people can see in Slack that it works.
+    await sendTestWebhook(db, actor, hook.id);
+    return { apiKey: null, webhookSecret: null };
+  }
   const key = await createApiKey(
     db,
     actor,
     workspaceId,
-    { name: `${info.name} connection`, scopes: info.scopes },
+    { name: `${info.name} connection`, scopes: info.scopes ?? [] },
     meta,
   );
   let hook: { id: string; secret: string } | null = null;
@@ -218,35 +276,9 @@ export async function connectIntegration(
     await revokeApiKey(db, actor, key.id, meta);
     throw err;
   }
-  await withActor(db, actor, async (tx) => {
-    await tx
-      .insert(schema.integrationConnections)
-      .values({
-        workspaceId,
-        provider: info.key,
-        status: 'active',
-        apiKeyId: key.id,
-        webhookEndpointId: hook?.id ?? null,
-        createdBy: actor.userId,
-      })
-      .onConflictDoUpdate({
-        target: [schema.integrationConnections.workspaceId, schema.integrationConnections.provider],
-        set: {
-          status: 'active',
-          apiKeyId: key.id,
-          webhookEndpointId: hook?.id ?? null,
-          updatedAt: new Date(),
-        },
-      });
-    await recordAudit(tx, {
-      workspaceId,
-      actorUserId: actor.userId,
-      action: 'integration.connected',
-      targetType: 'integration',
-      targetId: info.key,
-      metadata: { apiKeyPrefix: key.prefix, webhook: Boolean(hook) },
-      ...meta,
-    });
+  await saveConnection(db, actor, workspaceId, info.key, key.id, hook?.id ?? null, meta, {
+    apiKeyPrefix: key.prefix,
+    webhook: Boolean(hook),
   });
   return { apiKey: key.key, webhookSecret: hook?.secret ?? null };
 }
