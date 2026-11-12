@@ -10,6 +10,7 @@ import {
   Trash2,
   Download,
   TimerOff,
+  Eye,
 } from 'lucide-react';
 import {
   searchLibrary,
@@ -28,6 +29,8 @@ import { EmptyState } from '@/components/ui/feedback';
 import { StatusBadge } from '@/components/documents/status-badge';
 import { ArchiveButton } from '@/components/documents/library-buttons';
 import { cn } from '@/lib/cn';
+import { DocumentDrawerHost } from '@/components/documents/drawer/document-drawer';
+import { documentReference } from '@/lib/document-summary';
 import type { DocumentStatus } from '@st/core';
 
 export const metadata = { title: 'Documents' };
@@ -55,8 +58,9 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
   const sp = await searchParams;
   const { user, membership } = await requireWorkspace();
   const canCreate = hasPermission(membership.permissions, 'documents.create');
+  const { selected, ...rest } = sp;
   const raw = Object.fromEntries(
-    Object.entries(sp).map(([k, v]) => [k, one(v) ?? '']),
+    Object.entries(rest).map(([k, v]) => [k, one(v) ?? '']),
   ) as unknown as LibraryQuery;
   const lib = await searchLibrary(db(), { userId: user.id }, membership.workspace.id, raw);
   const f = lib.query;
@@ -187,7 +191,7 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
                 type="search"
                 name="q"
                 defaultValue={f.q}
-                placeholder="Title, signer name or email, or reference"
+                placeholder="Title, signer name or email, or reference (ST-…)"
                 className="h-10 w-full rounded-lg border border-border bg-white pl-9 pr-3 text-sm font-normal"
               />
             </span>
@@ -271,126 +275,141 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
         </div>
       </form>
 
-      {lib.rows.length === 0 ? (
-        <EmptyState
-          icon={<FileText className="size-5" />}
-          title={
-            filtered
-              ? 'No documents match'
-              : f.tab === 'all'
-                ? 'No documents yet'
-                : `Nothing in ${TAB_LABELS[f.tab]}`
-          }
-          action={!filtered && f.tab === 'all' ? newButton : null}
-        >
-          {filtered
-            ? 'Try a different search or clear the filters.'
-            : f.tab !== 'all'
-              ? 'Documents move here as their status changes.'
-              : canCreate
-                ? 'Upload a PDF to start preparing your first signing request.'
-                : 'Documents shared with you in this workspace will appear here.'}
-        </EmptyState>
-      ) : (
-        <div className="overflow-x-auto rounded-2xl border border-border bg-white shadow-card">
-          <table className="w-full min-w-[960px] text-left text-sm">
-            <caption className="sr-only">
-              {TAB_LABELS[f.tab]} documents, page {f.page} of {lib.pages}
-            </caption>
-            <thead className="border-b border-border bg-blush/40 text-xs uppercase tracking-wide text-heading">
-              <tr>
-                <th scope="col" className="px-4 py-3" aria-sort={ariaSort('title')}>
-                  {sortLink('title', 'Name')}
-                </th>
-                <th scope="col" className="px-4 py-3">
-                  Owner
-                </th>
-                <th scope="col" className="px-4 py-3">
-                  Signers
-                </th>
-                <th scope="col" className="px-4 py-3">
-                  Status
-                </th>
-                <th scope="col" className="px-4 py-3" aria-sort={ariaSort('sent')}>
-                  {sortLink('sent', 'Sent')}
-                </th>
-                <th scope="col" className="px-4 py-3" aria-sort={ariaSort('expires')}>
-                  {sortLink('expires', 'Expires')}
-                </th>
-                <th scope="col" className="px-4 py-3" aria-sort={ariaSort('activity')}>
-                  {sortLink('activity', 'Last activity')}
-                </th>
-                <th scope="col" className="px-4 py-3">
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {lib.rows.map((d) => (
-                <tr key={d.id} className="align-top hover:bg-blush/30">
-                  <td className="px-4 py-3">
-                    <Link
-                      href={`/app/documents/${d.id}`}
-                      className="font-semibold text-heading hover:underline"
-                    >
-                      {d.title}
-                    </Link>
-                    <p className="text-xs">{typeLabel(d.documentType)}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    {d.createdBy === user.id ? 'You' : (d.ownerName ?? '—')}
-                  </td>
-                  <td className="max-w-48 truncate px-4 py-3" title={d.signers ?? ''}>
-                    {d.signers ?? '—'}
-                  </td>
-                  <td className="px-4 py-3">
-                    <StatusBadge
-                      status={d.status as DocumentStatus}
-                      requestStatus={d.requestStatus}
-                      isTest={d.isTest}
-                    />
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap">{day(d.sentAt)}</td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    {d.requestId && d.bucket === 'in_progress' ? day(d.expiresAt) : '—'}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap">{day(d.lastActivity)}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap items-start justify-end gap-1">
+      <DocumentDrawerHost initialId={one(selected) ?? null}>
+        {lib.rows.length === 0 ? (
+          <EmptyState
+            icon={<FileText className="size-5" />}
+            title={
+              filtered
+                ? 'No documents match'
+                : f.tab === 'all'
+                  ? 'No documents yet'
+                  : `Nothing in ${TAB_LABELS[f.tab]}`
+            }
+            action={!filtered && f.tab === 'all' ? newButton : null}
+          >
+            {filtered
+              ? 'Try a different search or clear the filters.'
+              : f.tab !== 'all'
+                ? 'Documents move here as their status changes.'
+                : canCreate
+                  ? 'Upload a PDF to start preparing your first signing request.'
+                  : 'Documents shared with you in this workspace will appear here.'}
+          </EmptyState>
+        ) : (
+          <div className="overflow-x-auto rounded-2xl border border-border bg-white shadow-card">
+            <table className="w-full min-w-[960px] text-left text-sm">
+              <caption className="sr-only">
+                {TAB_LABELS[f.tab]} documents, page {f.page} of {lib.pages}
+              </caption>
+              <thead className="border-b border-border bg-blush/40 text-xs uppercase tracking-wide text-heading">
+                <tr>
+                  <th scope="col" className="px-4 py-3" aria-sort={ariaSort('title')}>
+                    {sortLink('title', 'Name')}
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    Owner
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    Signers
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    Status
+                  </th>
+                  <th scope="col" className="px-4 py-3" aria-sort={ariaSort('sent')}>
+                    {sortLink('sent', 'Sent')}
+                  </th>
+                  <th scope="col" className="px-4 py-3" aria-sort={ariaSort('expires')}>
+                    {sortLink('expires', 'Expires')}
+                  </th>
+                  <th scope="col" className="px-4 py-3" aria-sort={ariaSort('activity')}>
+                    {sortLink('activity', 'Last activity')}
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    <span className="sr-only">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {lib.rows.map((d) => (
+                  <tr
+                    key={d.id}
+                    data-doc-id={d.id}
+                    className="cursor-pointer align-top hover:bg-blush/30"
+                  >
+                    <td className="px-4 py-3">
                       <Link
                         href={`/app/documents/${d.id}`}
-                        className={buttonClass('ghost', 'sm')}
-                        aria-label={`View ${d.title}`}
+                        data-drawer-open={d.id}
+                        aria-haspopup="dialog"
+                        className="font-semibold text-heading hover:underline"
                       >
-                        View
+                        {d.title}
                       </Link>
-                      {d.canDownload && d.requestId ? (
-                        <a
-                          href={`/api/requests/${d.requestId}/file?kind=signed`}
+                      <p className="text-xs">
+                        {typeLabel(d.documentType)} ·{' '}
+                        <span className="whitespace-nowrap font-mono">
+                          {documentReference(d.id)}
+                        </span>
+                      </p>
+                    </td>
+                    <td className="px-4 py-3">
+                      {d.createdBy === user.id ? 'You' : (d.ownerName ?? '—')}
+                    </td>
+                    <td className="max-w-48 truncate px-4 py-3" title={d.signers ?? ''}>
+                      {d.signers ?? '—'}
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusBadge
+                        status={d.status as DocumentStatus}
+                        requestStatus={d.requestStatus}
+                        isTest={d.isTest}
+                      />
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">{day(d.sentAt)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {d.requestId && d.bucket === 'in_progress' ? day(d.expiresAt) : '—'}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">{day(d.lastActivity)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap items-start justify-end gap-1">
+                        <Link
+                          href={`/app/documents/${d.id}`}
+                          data-drawer-open={d.id}
+                          aria-haspopup="dialog"
                           className={buttonClass('ghost', 'sm')}
-                          aria-label={`Download signed copy of ${d.title}`}
+                          aria-label={`View ${d.title}`}
                         >
-                          <Download className="size-4" aria-hidden /> Download
-                        </a>
-                      ) : null}
-                      {d.bucket === 'archived' ||
-                      ['completed', 'declined', 'expired', 'cancelled', 'drafts'].includes(
-                        d.bucket,
-                      ) ? (
-                        <ArchiveButton
-                          documentId={d.id}
-                          archived={d.bucket === 'archived'}
-                          title={d.title}
-                        />
-                      ) : null}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+                          <Eye className="size-4" aria-hidden /> View
+                        </Link>
+                        {d.canDownload && d.requestId ? (
+                          <a
+                            href={`/api/requests/${d.requestId}/file?kind=signed`}
+                            className={buttonClass('ghost', 'sm')}
+                            aria-label={`Download signed copy of ${d.title}`}
+                          >
+                            <Download className="size-4" aria-hidden /> Download
+                          </a>
+                        ) : null}
+                        {d.bucket === 'archived' ||
+                        ['completed', 'declined', 'expired', 'cancelled', 'drafts'].includes(
+                          d.bucket,
+                        ) ? (
+                          <ArchiveButton
+                            documentId={d.id}
+                            archived={d.bucket === 'archived'}
+                            title={d.title}
+                          />
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </DocumentDrawerHost>
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm">
         <Link

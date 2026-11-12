@@ -99,8 +99,11 @@ export async function searchLibrary(
     const conds = [sql`d.workspace_id = ${workspaceId}::uuid`, sql`d.deleted_at is null`];
     if (f.q) {
       const like = `%${f.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+      // The short reference shown in the documents drawer, e.g. ST-1A2B3C4D or #ST-1A2B3C4D.
+      const ref = /^#?ST-([0-9a-f]{8})$/i.exec(f.q)?.[1]?.toLowerCase() ?? null;
       conds.push(sql`(d.title ilike ${like}
         or d.id::text = ${f.q.toLowerCase()}
+        or (${ref}::text is not null and d.id::text like ${ref ? `${ref}%` : ''})
         or exists (select 1 from document_recipients r where r.document_id = d.id
                    and (r.name ilike ${like} or r.email ilike ${like})))`);
     }

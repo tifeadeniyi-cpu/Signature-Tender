@@ -311,3 +311,25 @@ Built on Phase 5's verified-email retrieval. Details in [email-notifications.md]
 - Visuals are interface compositions built from app styles with fictional, labelled data, not screenshots.
 - No dedicated For Business page: For Business links to the teams section.
 - The homepage still says document upload opens in the next release; it was left unchanged.
+
+## Documents page details drawer: Done (pending review)
+
+Clicking a row, a document name or its View link on `/app/documents` opens a right-side drawer (full screen on phones) with Overview, Signers, Activity, Files and Evidence tabs. Ctrl/Cmd-click still opens the full document page.
+
+| Feature         | Status | Notes                                                                                                                                                                                                          |
+| --------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Data            | Done   | `GET /api/documents/[id]/summary`: signed-in members only, row-level security plus a current-workspace check (404 otherwise), never cached. Built from the same loaders as the document page                   |
+| Actions         | Done   | Computed on the server from status and permissions: download signed copy, view and download the evidence certificate, send reminder (one an hour), cancel with a reason, continue editing, edit and send again |
+| Deep links      | Done   | `?selected=<document id>` reopens the drawer after a refresh; opening another document swaps the content                                                                                                       |
+| States          | Done   | Skeletons while loading, error with retry, empty states for activity, files and recipients                                                                                                                     |
+| Accessibility   | Done   | Modal dialog with focus trap, Escape to close, focus returned to the opener, arrow-key tabs, status text with every color                                                                                      |
+| Short reference | Done   | `ST-` plus the first eight characters of the document ID, shown in the list and drawer and accepted by library search                                                                                          |
+
+### Tests
+
+- Playwright `e2e/documents-drawer.spec.ts`: row click, tabs and keyboard, reminder and the hourly limit, deep link, Escape and focus return, focus trap, completed vs in-progress vs draft actions, downloads, loading, error and retry, cancel, another workspace and signed-out access refused, phone layout, axe scan of the open drawer.
+
+### Known gaps
+
+- Not offered because the backend does not support them yet: replacing a recipient or correcting an email after sending, per-recipient reminders, duplicating a document, saving a document as a template, tags and folders, attaching supporting files.
+- The thumbnail is a drawn page, not a render of the PDF's first page.
