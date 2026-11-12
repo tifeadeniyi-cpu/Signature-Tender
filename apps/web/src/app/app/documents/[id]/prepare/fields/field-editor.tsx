@@ -15,6 +15,7 @@ import {
   Hash,
   Trash2,
   Copy,
+  X,
 } from 'lucide-react';
 import type { FieldType } from '@st/core';
 import type { ActionState } from '@/lib/action-result';
@@ -64,6 +65,15 @@ const PALETTE: { type: FieldType; label: string; Icon: typeof Type; w: number; h
 const meta = (t: FieldType) => PALETTE.find((p) => p.type === t)!;
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 const round = (v: number) => Math.round(v * 10000) / 10000;
+/** Finds the PDF page under a screen point (ignores pointer-events-none elements like the ghost). */
+function pageAt(cx: number, cy: number) {
+  for (const el of document.elementsFromPoint(cx, cy)) {
+    const p = (el as HTMLElement).closest<HTMLElement>('[data-pdf-page]');
+    if (p) return { page: Number(p.dataset.pdfPage), rect: p.getBoundingClientRect() };
+  }
+  return null;
+}
+const DRAG_THRESHOLD = 4;
 const uid = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
@@ -98,6 +108,23 @@ export function FieldEditor({
     orig: Field;
     w: number;
     h: number;
+    /** Pointer offset inside the field, in px, so a drop on another page keeps the grab point. */
+    offX: number;
+    offY: number;
+  } | null>(null);
+  const paletteDrag = useRef<{
+    type: FieldType;
+    startX: number;
+    startY: number;
+    moved: boolean;
+  } | null>(null);
+  const [ghost, setGhost] = useState<{
+    type: FieldType;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    over: boolean;
   } | null>(null);
 
   const rIndex = useCallback(
@@ -114,6 +141,36 @@ export function FieldEditor({
     setDirty(true);
   }, []);
 
+  // Scroll the window while a drag is held near the top or bottom edge, so fields can reach
+  // pages that are off screen.
+  const pointer = useRef<{ x: number; y: number } | null>(null);
+  const scrolling = useRef(false);
+  const applyRef = useRef<(cx: number, cy: number) => void>(() => {});
+  function trackPointer(x: number, y: number) {
+    pointer.current = { x, y };
+    if (scrolling.current) return;
+    scrolling.current = true;
+    const tick = () => {
+      const p = pointer.current;
+      if (!p) {
+        scrolling.current = false;
+        return;
+      }
+      const edge = 72;
+      const top = 64 + edge; // below the sticky top bar
+      let dy = 0;
+      if (p.y < top) dy = -Math.ceil((top - p.y) / 6);
+      else if (p.y > window.innerHeight - edge)
+        dy = Math.ceil((p.y - (window.innerHeight - edge)) / 6);
+      if (dy) {
+        window.scrollBy(0, dy);
+        applyRef.current(p.x, p.y);
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+
   useEffect(() => {
     if (!dirty) return;
     const warn = (e: BeforeUnloadEvent) => e.preventDefault();
@@ -121,21 +178,21 @@ export function FieldEditor({
     return () => window.removeEventListener('beforeunload', warn);
   }, [dirty]);
 
-  function place(page: number, px: number, py: number) {
-    if (disabled || !tool) return;
-    const m = meta(tool);
+  function place(page: number, px: number, py: number, type: FieldType | null = tool) {
+    if (disabled || !type) return;
+    const m = meta(type);
     const f: Field = {
       id: uid(),
       recipientId,
-      type: tool,
+      type,
       page,
       x: round(clamp(px - m.w / 2, 0, 1 - m.w)),
       y: round(clamp(py - m.h / 2, 0, 1 - m.h)),
       width: m.w,
       height: m.h,
-      required: tool !== 'checkbox',
+      required: type !== 'checkbox',
       label: null,
-      options: tool === 'dropdown' || tool === 'radio' ? ['Option 1', 'Option 2'] : null,
+      options: type === 'dropdown' || type === 'radio' ? ['Option 1', 'Option 2'] : null,
     };
     setFields((fs) => [...fs, f]);
     setSelected(f.id);
@@ -152,21 +209,30 @@ export function FieldEditor({
     e.stopPropagation();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     setSelected(f.id);
+    const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
     drag.current = {
+      offX: e.clientX - box.left,
+      offY: e.clientY - box.top,
       id: f.id,
       mode,
-      startX: e.clientX,
-      startY: e.clientY,
+      startX: e.clientX + window.scrollX,
+      startY: e.clientY + window.scrollY,
       orig: f,
       w: size.width,
       h: size.height,
     };
   }
   function onPointerMove(e: React.PointerEvent) {
+    if (!drag.current) return;
+    trackPointer(e.clientX, e.clientY);
+    applyFieldDrag(e.clientX, e.clientY);
+  }
+  // Uses document coordinates so the field keeps up when the page auto-scrolls mid-drag.
+  function applyFieldDrag(cx: number, cy: number) {
     const d = drag.current;
     if (!d) return;
-    const dx = (e.clientX - d.startX) / d.w;
-    const dy = (e.clientY - d.startY) / d.h;
+    const dx = (cx + window.scrollX - d.startX) / d.w;
+    const dy = (cy + window.scrollY - d.startY) / d.h;
     if (d.mode === 'move') {
       change(d.id, {
         x: round(clamp(d.orig.x + dx, 0, 1 - d.orig.width)),
@@ -179,9 +245,71 @@ export function FieldEditor({
       });
     }
   }
-  const onPointerUp = () => {
+  function onPointerUp(e: React.PointerEvent) {
+    const d = drag.current;
     drag.current = null;
-  };
+    pointer.current = null;
+    if (!d || d.mode !== 'move') return;
+    // Dropped over a different page: move the field there, keeping the grab point.
+    const hit = pageAt(e.clientX, e.clientY);
+    if (!hit || hit.page === d.orig.page) return;
+    change(d.id, {
+      page: hit.page,
+      x: round(clamp((e.clientX - d.offX - hit.rect.left) / hit.rect.width, 0, 1 - d.orig.width)),
+      y: round(clamp((e.clientY - d.offY - hit.rect.top) / hit.rect.height, 0, 1 - d.orig.height)),
+    });
+  }
+
+  // Dragging a field type from the palette onto a page.
+  function ghostFor(type: FieldType, cx: number, cy: number) {
+    const m = meta(type);
+    const hit = pageAt(cx, cy);
+    const ref =
+      hit?.rect ?? document.querySelector('[data-pdf-page]')?.getBoundingClientRect() ?? null;
+    const w = ref ? m.w * ref.width : 120;
+    const h = ref ? m.h * ref.height : 28;
+    return { type, x: cx - w / 2, y: cy - h / 2, w, h, over: !!hit };
+  }
+  function onPalettePointerDown(e: React.PointerEvent, type: FieldType) {
+    if (disabled || e.button !== 0) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    paletteDrag.current = { type, startX: e.clientX, startY: e.clientY, moved: false };
+  }
+  function onPalettePointerMove(e: React.PointerEvent) {
+    const d = paletteDrag.current;
+    if (!d) return;
+    if (!d.moved && Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < DRAG_THRESHOLD) return;
+    d.moved = true;
+    trackPointer(e.clientX, e.clientY);
+    setGhost(ghostFor(d.type, e.clientX, e.clientY));
+  }
+  function onPalettePointerUp(e: React.PointerEvent) {
+    const d = paletteDrag.current;
+    paletteDrag.current = null;
+    pointer.current = null;
+    setGhost(null);
+    if (!d?.moved) return;
+    setTool(d.type);
+    const hit = pageAt(e.clientX, e.clientY);
+    if (!hit) return;
+    place(
+      hit.page,
+      (e.clientX - hit.rect.left) / hit.rect.width,
+      (e.clientY - hit.rect.top) / hit.rect.height,
+      d.type,
+    );
+  }
+  function cancelPaletteDrag() {
+    paletteDrag.current = null;
+    pointer.current = null;
+    setGhost(null);
+  }
+  useEffect(() => {
+    if (!ghost) return;
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && cancelPaletteDrag();
+    window.addEventListener('keydown', esc);
+    return () => window.removeEventListener('keydown', esc);
+  }, [ghost]);
 
   function onKey(e: React.KeyboardEvent, f: Field) {
     if (disabled) return;
@@ -256,6 +384,11 @@ export function FieldEditor({
     });
   }
 
+  applyRef.current = (cx, cy) => {
+    if (drag.current) applyFieldDrag(cx, cy);
+    else if (paletteDrag.current) setGhost(ghostFor(paletteDrag.current.type, cx, cy));
+  };
+
   const sel = fields.find((f) => f.id === selected) ?? null;
   const missingSignature = recipients.filter(
     (r) =>
@@ -291,7 +424,9 @@ export function FieldEditor({
           <p className="mt-4 text-sm font-medium text-heading" id="palette-label">
             Field type
           </p>
-          <p className="text-xs">Choose a type, then click on the page to place it.</p>
+          <p className="text-xs">
+            Drag a field onto the page, or choose a type and click where it should go.
+          </p>
           <div
             role="radiogroup"
             aria-labelledby="palette-label"
@@ -305,8 +440,13 @@ export function FieldEditor({
                 aria-checked={tool === p.type}
                 disabled={disabled}
                 onClick={() => setTool(p.type)}
+                onPointerDown={(e) => onPalettePointerDown(e, p.type)}
+                onPointerMove={onPalettePointerMove}
+                onPointerUp={onPalettePointerUp}
+                onPointerCancel={cancelPaletteDrag}
                 className={cn(
-                  'flex items-center gap-2 rounded-lg border px-2 py-2 text-left text-xs font-medium',
+                  'flex touch-none items-center gap-2 rounded-lg border px-2 py-2 text-left text-xs font-medium',
+                  !disabled && 'cursor-grab active:cursor-grabbing',
                   tool === p.type
                     ? 'border-primary bg-primary-surface text-primary'
                     : 'border-border bg-white text-heading hover:bg-blush',
@@ -378,7 +518,7 @@ export function FieldEditor({
                   <Copy className="size-4" aria-hidden /> Duplicate
                 </Button>
                 <Button type="button" size="sm" variant="danger" onClick={() => remove(sel.id)}>
-                  <Trash2 className="size-4" aria-hidden /> Remove
+                  <Trash2 className="size-4" aria-hidden /> Delete
                 </Button>
               </div>
             </fieldset>
@@ -444,7 +584,7 @@ export function FieldEditor({
                       onPointerDown={(e) => onPointerDown(e, f, 'move', size)}
                       onClick={(e) => e.stopPropagation()}
                       className={cn(
-                        'absolute flex select-none items-center gap-1 overflow-hidden rounded px-1 text-[11px] font-semibold touch-none',
+                        'absolute flex select-none items-center gap-1 rounded px-1 text-[11px] font-semibold touch-none',
                         disabled ? 'cursor-default' : 'cursor-move',
                         active && 'ring-2 ring-offset-1',
                       )}
@@ -460,8 +600,24 @@ export function FieldEditor({
                       }}
                     >
                       <m.Icon className="size-3 shrink-0" aria-hidden />
-                      <span className="truncate">{f.label || m.label}</span>
+                      <span className="min-w-0 truncate">{f.label || m.label}</span>
                       {f.required ? <span aria-hidden>*</span> : null}
+                      {active && !disabled ? (
+                        <button
+                          type="button"
+                          aria-label={`Delete ${m.label.toLowerCase()} field`}
+                          title="Delete field"
+                          onPointerDown={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            remove(f.id);
+                          }}
+                          className="absolute -right-2.5 -top-2.5 z-10 grid size-5 place-items-center rounded-full text-white shadow hover:opacity-80"
+                          style={{ background: c.border }}
+                        >
+                          <X className="size-3" aria-hidden />
+                        </button>
+                      ) : null}
                       {active && !disabled ? (
                         <span
                           onPointerDown={(e) => onPointerDown(e, f, 'resize', size)}
@@ -499,6 +655,28 @@ export function FieldEditor({
           </div>
         </div>
       </div>
+      {ghost ? (
+        <div
+          aria-hidden
+          className="pointer-events-none fixed z-50 flex items-center gap-1 overflow-hidden rounded px-1 text-[11px] font-semibold shadow-lg"
+          style={{
+            left: ghost.x,
+            top: ghost.y,
+            width: ghost.w,
+            height: ghost.h,
+            opacity: ghost.over ? 0.9 : 0.6,
+            background: colorFor(rIndex(recipientId)).bg,
+            border: `1.5px dashed ${colorFor(rIndex(recipientId)).border}`,
+            color: colorFor(rIndex(recipientId)).text,
+          }}
+        >
+          {(() => {
+            const GIcon = meta(ghost.type).Icon;
+            return <GIcon className="size-3 shrink-0" />;
+          })()}
+          <span className="truncate">{meta(ghost.type).label}</span>
+        </div>
+      ) : null}
     </div>
   );
 }
