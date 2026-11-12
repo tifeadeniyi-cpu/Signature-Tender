@@ -20,6 +20,7 @@ async function scan(page: Page, path: string) {
 const PUBLIC = [
   '/',
   '/pricing',
+  '/developers',
   '/sign-in',
   '/sign-up',
   '/forgot-password',
@@ -43,6 +44,7 @@ const APP = [
   '/app/settings/security',
   '/app/settings/branding',
   '/app/settings/retention',
+  '/app/settings/developers',
 ];
 
 test('public and app pages have no WCAG 2.2 AA violations found by axe', async ({ page }) => {

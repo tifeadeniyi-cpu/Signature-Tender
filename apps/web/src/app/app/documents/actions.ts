@@ -1,4 +1,5 @@
 'use server';
+import { kickWebhooks } from '@/lib/webhooks';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import {
@@ -139,6 +140,7 @@ export async function deleteDraftAction(documentId: string): Promise<ActionState
 export async function sendTestAction(
   documentId: string,
 ): Promise<{ ok: boolean; message?: string }> {
+  kickWebhooks();
   const user = await requireUser();
   const actor = { userId: user.id };
   try {
@@ -174,6 +176,7 @@ export async function sendTestAction(
 export async function sendLiveAction(
   documentId: string,
 ): Promise<{ ok: boolean; message?: string }> {
+  kickWebhooks();
   const user = await requireUser();
   const actor = { userId: user.id };
   try {
@@ -212,6 +215,7 @@ export async function sendWithCreditAction(
   requestId: string,
   _prev: ActionState,
 ): Promise<ActionState> {
+  kickWebhooks();
   const user = await requireUser();
   try {
     const sent = await sendPaidRequest(
@@ -242,6 +246,7 @@ export async function cancelRequestAction(
   _prev: ActionState,
   fd: FormData,
 ): Promise<ActionState> {
+  kickWebhooks();
   const meta = await requestMeta();
   return run(
     documentId,
@@ -254,6 +259,7 @@ export async function retryFinalizeAction(
   documentId: string,
   requestId: string,
 ): Promise<ActionState> {
+  kickWebhooks();
   const user = await requireUser();
   try {
     const res = await finalizeRequest(db(), storage(), { actor: { userId: user.id } }, requestId);

@@ -185,6 +185,32 @@ Stripe runs in **test mode only**: live keys are refused and live events ignored
 - Member listings still read the `user` table directly; a restricted view is still planned.
 - Logos are served publicly by workspace id so recipients can see them. They are not secret, but anyone with the id can fetch the logo.
 
-## Phases 7 to 9: Not started
+## Phase 7: API and integrations: Done (pending review)
+
+| Feature                    | Status      | Notes                                                                                                                                                                                                    |
+| -------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| API keys                   | Done        | Settings, Developers. Shown once, stored as SHA-256 only. Scopes, optional expiry, revoke, rotate (old key works 24 hours). A key acts as its creating member, inside its own workspace only             |
+| REST API `/api/v1`         | Done        | Upload, recipients, fields, settings, partner reference, send (test or live), status, evidence events, cancel, remind, embedded signing link, signed PDF, certificate, credits, usage                    |
+| API safeguards             | Done        | Per-key rate limit, JSON and upload size limits, `Idempotency-Key` replay for 24 hours, one JSON error shape with request id, `public_api` flag (off in production until the owner turns it on)          |
+| Webhooks                   | Done        | Events written by database triggers into an outbox; HMAC-SHA256 signed with timestamp; retries with backoff then marked failed; delivery log with manual retry; test event; secret rotation with overlap |
+| Embedded signing           | Done        | Short-lived signing link for the recipient whose turn it is; replaces the emailed link. Opened by redirect or new window (framing stays blocked)                                                         |
+| Embedded preparation       | Partial     | Returns a link to the field editor; the person must sign in as a workspace member                                                                                                                        |
+| Integrations page          | Done        | Metrics, Beam Artist and Jectstack as working API connections (key plus optional webhook), the rest listed as "Not available yet"                                                                        |
+| Developer docs and OpenAPI | Done        | `/developers` guide and `/api/v1/openapi.json`                                                                                                                                                           |
+| `request.delivery_failed`  | Not started | Needs email bounce tracking                                                                                                                                                                              |
+| Storage and app connectors | Not started | Google, Microsoft, Dropbox, Box, Slack, Salesforce, Jira, and customer Stripe accounts need OAuth apps and are not built                                                                                 |
+
+### Tests
+
+- `packages/core`: 19 new tests: key hashing, scopes, revocation, suspended creators, rotation, rate limit, idempotency states, workspace boundary for multi-workspace members, partner references, status and events, trigger-emitted events, embedded sessions replacing links, reminder throttle and permission, encryption, SSRF checks, signature verification and replay window, delivery, backoff, manual retry, rotation overlap, redirects not followed, partner connect and disconnect.
+- `apps/web`: Playwright: create a key and webhook in the UI, upload and send through the API, idempotent replay, missing scope refused, signed webhook received; Integrations page offers only working connectors. Accessibility scan covers the new pages.
+
+### Known gaps
+
+- Webhooks are sent right after the action that caused them, plus a daily Vercel Cron sweep (Hobby plans allow one run a day). On a Pro plan, change `apps/web/vercel.json` to every minute so retries run on schedule.
+- The destination address is checked before each delivery, but the HTTP client resolves DNS again, so a fast DNS rebinding could still reach a private address. An egress proxy would close this.
+- Production needs `CRON_SECRET` and a dedicated `WEBHOOK_SECRETS_KEY` in Vercel.
+
+## Phases 8 to 9: Not started
 
 See the plan doc for scope and order.

@@ -1,3 +1,4 @@
+import { kickWebhooks } from '@/lib/webhooks';
 import type Stripe from 'stripe';
 import {
   AppError,
@@ -108,6 +109,7 @@ async function handle(event: Stripe.Event) {
  * so Stripe retries, and every step is idempotent so a retry cannot double-grant.
  */
 export async function POST(req: Request) {
+  kickWebhooks();
   const signature = req.headers.get('stripe-signature');
   if (!signature) return new Response('Missing signature', { status: 400 });
   const body = await req.text();

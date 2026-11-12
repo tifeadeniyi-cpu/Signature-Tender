@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Building2, UserRound, ShieldCheck, Archive, Palette } from 'lucide-react';
+import { Building2, UserRound, ShieldCheck, Archive, Palette, Code2 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
 const ITEMS = [
@@ -10,6 +10,7 @@ const ITEMS = [
   { href: '/app/settings/security', label: 'Security', icon: ShieldCheck },
   { href: '/app/settings/branding', label: 'Branding', icon: Palette },
   { href: '/app/settings/retention', label: 'Retention', icon: Archive },
+  { href: '/app/settings/developers', label: 'Developers', icon: Code2 },
 ];
 
 export function SettingsNav() {
