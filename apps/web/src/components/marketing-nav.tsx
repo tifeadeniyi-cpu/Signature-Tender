@@ -68,8 +68,9 @@ function ResourcesMenu({ group, active }: { group: NavGroup; active: boolean }) 
         aria-controls="nav-resources"
         onClick={() => setOpen((o) => !o)}
         className={cn(
-          'inline-flex items-center gap-1 py-2 hover:text-rose-gold',
-          active && 'text-rose-gold',
+          'relative inline-flex items-center gap-1 py-2 text-primary hover:text-navy-royal',
+          active &&
+            'after:absolute after:inset-x-0 after:-bottom-0.5 after:h-0.5 after:rounded after:bg-gold',
         )}
       >
         {group.label}{' '}
@@ -102,7 +103,7 @@ function ResourcesMenu({ group, active }: { group: NavGroup; active: boolean }) 
 }
 
 /**
- * Sticky public header: burgundy with a deeper, shadowed background once the page scrolls,
+ * Sticky public header: light ivory with navy text, a subtle shadow once the page scrolls,
  * the current page marked (aria-current), and a full-screen menu on phones.
  */
 export function MarketingNav() {
@@ -128,18 +129,18 @@ export function MarketingNav() {
   return (
     <header
       className={cn(
-        'sticky top-0 z-40 text-white transition-[background-color,box-shadow] duration-300',
-        scrolled ? 'bg-primary-dark/95 shadow-lg backdrop-blur' : 'bg-primary',
+        'sticky top-0 z-40 border-b border-border text-primary transition-[background-color,box-shadow] duration-300',
+        scrolled ? 'bg-ivory/95 shadow-card backdrop-blur' : 'bg-ivory',
       )}
     >
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
         <Link href="/" aria-label="Signature Tender home" className="shrink-0">
           <Image
-            src="/brand/logo-reversed.png"
+            src="/brand/logo-horizontal.png"
             alt="Signature Tender"
-            width={327}
+            width={316}
             height={168}
-            className="h-auto w-32 rounded-lg sm:w-36"
+            className="h-auto w-32 sm:w-36"
             priority
           />
         </Link>
@@ -158,9 +159,9 @@ export function MarketingNav() {
                     href={item.href}
                     aria-current={activeLink(item) ? 'page' : undefined}
                     className={cn(
-                      'relative py-2 hover:text-rose-gold',
+                      'relative py-2 text-primary hover:text-navy-royal',
                       activeLink(item) &&
-                        'text-white after:absolute after:inset-x-0 after:-bottom-0.5 after:h-0.5 after:rounded after:bg-rose-gold',
+                        'font-semibold after:absolute after:inset-x-0 after:-bottom-0.5 after:h-0.5 after:rounded after:bg-gold',
                     )}
                   >
                     {item.label}
@@ -173,19 +174,19 @@ export function MarketingNav() {
         <div className="flex items-center gap-2">
           <Link
             href="/sign-in"
-            className="hidden h-10 items-center rounded-lg border border-white/40 px-4 text-sm font-semibold hover:bg-white/10 sm:inline-flex"
+            className="hidden h-10 items-center rounded-lg border border-primary/30 bg-white px-4 text-sm font-semibold text-primary hover:bg-cream sm:inline-flex"
           >
             Sign In
           </Link>
           <Link
             href="/sign-up"
-            className="inline-flex h-10 items-center rounded-lg bg-rose-gold px-4 text-sm font-semibold text-primary-dark hover:bg-blush"
+            className="inline-flex h-10 items-center rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-hover"
           >
             Get Started
           </Link>
           <button
             type="button"
-            className="inline-flex size-10 items-center justify-center rounded-lg hover:bg-white/10 lg:hidden"
+            className="inline-flex size-10 items-center justify-center rounded-lg text-primary hover:bg-cream lg:hidden"
             aria-label="Open menu"
             aria-expanded={drawer}
             aria-controls="mobile-menu"
@@ -210,7 +211,7 @@ export function MarketingNav() {
               alt="Signature Tender"
               width={327}
               height={168}
-              className="h-auto w-32 rounded-lg"
+              className="h-auto w-32"
             />
             <button
               type="button"
@@ -230,7 +231,7 @@ export function MarketingNav() {
                     href={l.href}
                     onClick={() => setDrawer(false)}
                     aria-current={activeLink(l) ? 'page' : undefined}
-                    className={cn('block py-4', activeLink(l) && 'text-rose-gold')}
+                    className={cn('block py-4', activeLink(l) && 'text-gold')}
                   >
                     {l.label}
                   </Link>
@@ -246,7 +247,7 @@ export function MarketingNav() {
               </Link>
               <Link
                 href="/sign-up"
-                className="inline-flex h-12 items-center justify-center rounded-lg bg-rose-gold font-semibold text-primary-dark"
+                className="inline-flex h-12 items-center justify-center rounded-lg bg-gold font-semibold text-primary-dark"
               >
                 Get Started
               </Link>

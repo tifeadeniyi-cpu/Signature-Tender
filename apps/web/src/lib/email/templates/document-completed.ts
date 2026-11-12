@@ -182,7 +182,7 @@ export function renderDocumentCompleted(input: CompletedEmailInput): RenderedEma
       ...(!canOpen
         ? [
             noticeBox(
-              `The sender has not turned on downloads for this document.${senderEmail ? ` For a copy, contact ${esc(senderName)} at <a href="mailto:${esc(senderEmail)}" style="color:#7F1D3A;">${esc(senderEmail)}</a>.` : ' Contact the sender for a copy.'}`,
+              `The sender has not turned on downloads for this document.${senderEmail ? ` For a copy, contact ${esc(senderName)} at <a href="mailto:${esc(senderEmail)}" style="color:#172D4D;">${esc(senderEmail)}</a>.` : ' Contact the sender for a copy.'}`,
             ),
           ]
         : []),

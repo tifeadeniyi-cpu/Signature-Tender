@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   icons: { icon: '/brand/app-icon.png', apple: '/brand/app-icon.png' },
 };
 
-export const viewport: Viewport = { themeColor: '#5B0A1C' };
+export const viewport: Viewport = { themeColor: '#0D1B33' };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   // Reading request headers makes every page render per request, which the CSP nonce needs.

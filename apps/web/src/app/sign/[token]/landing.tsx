@@ -66,7 +66,6 @@ export function roleCopy(role: RecipientRole) {
   }
 }
 
-
 export type LandingView = {
   title: string;
   senderName: string;
@@ -112,7 +111,7 @@ export function Landing({ token, view }: { token: string; view: LandingView }) {
 
       <section className="grid items-start gap-10 py-10 lg:grid-cols-[1fr_minmax(0,30rem)] lg:gap-14 lg:py-14">
         <div>
-          <span className="inline-block rounded-full bg-[#fbe3d6] px-4 py-1.5 text-sm font-semibold text-primary">
+          <span className="inline-block rounded-full bg-soft-gold/70 px-4 py-1.5 text-sm font-semibold text-primary">
             You&apos;ve Been Invited to Sign
           </span>
           <h1 className="mt-5 font-display text-4xl leading-[1.08] text-primary sm:text-5xl lg:text-6xl">
@@ -134,7 +133,7 @@ export function Landing({ token, view }: { token: string; view: LandingView }) {
           </ul>
         </div>
 
-        <div className="rounded-2xl border border-border bg-white p-6 shadow-[0_12px_40px_-16px_rgba(91,10,28,0.25)] sm:p-8">
+        <div className="rounded-2xl border border-border bg-white p-6 shadow-[0_12px_40px_-16px_rgba(13,27,51,0.22)] sm:p-8">
           <div className="flex items-start gap-4">
             <div
               className="flex size-14 shrink-0 items-center justify-center rounded-xl bg-blush text-primary"

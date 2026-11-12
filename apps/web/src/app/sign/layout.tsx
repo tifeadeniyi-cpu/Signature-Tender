@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 };
 
 /** Matches the background of the reversed logo so it sits seamlessly in the header. */
-const LOGO_BG = '#730a2a';
+const LOGO_BG = '#0d1b33';
 
 /** Recipient pages: branded header and footer only, no app navigation. Mobile-first. */
 export default async function SignLayout({ children }: { children: React.ReactNode }) {
@@ -68,7 +68,7 @@ export default async function SignLayout({ children }: { children: React.ReactNo
                   href="/legal/privacy"
                   target="_blank"
                   rel="noopener"
-                  className="underline underline-offset-4 hover:text-rose-gold"
+                  className="underline underline-offset-4 hover:text-gold"
                 >
                   Privacy Policy
                 </a>
@@ -78,7 +78,7 @@ export default async function SignLayout({ children }: { children: React.ReactNo
                   href="/legal/terms"
                   target="_blank"
                   rel="noopener"
-                  className="underline underline-offset-4 hover:text-rose-gold"
+                  className="underline underline-offset-4 hover:text-gold"
                 >
                   Terms of Service
                 </a>
@@ -86,7 +86,7 @@ export default async function SignLayout({ children }: { children: React.ReactNo
               <li>
                 <a
                   href={`mailto:${String(supportEmail)}`}
-                  className="underline underline-offset-4 hover:text-rose-gold"
+                  className="underline underline-offset-4 hover:text-gold"
                 >
                   Help &amp; Support
                 </a>
@@ -99,7 +99,7 @@ export default async function SignLayout({ children }: { children: React.ReactNo
   );
 }
 
-/** Soft blush and rose-gold curve between the burgundy bands and the ivory page. */
+/** Thin champagne-gold curve between the navy bands and the ivory page. */
 function Wave({ className, flip }: { className?: string; flip?: boolean }) {
   return (
     <svg
@@ -109,8 +109,8 @@ function Wave({ className, flip }: { className?: string; flip?: boolean }) {
       style={flip ? { transform: 'scaleY(-1)' } : undefined}
       aria-hidden
     >
-      <path d="M0 30 C 360 70, 900 -10, 1440 28 L1440 60 L0 60 Z" fill="#e6b8a7" opacity="0.55" />
-      <path d="M0 40 C 420 72, 960 8, 1440 40 L1440 60 L0 60 Z" fill="#fff9f7" />
+      <path d="M0 30 C 360 70, 900 -10, 1440 28 L1440 60 L0 60 Z" fill="#d8af68" />
+      <path d="M0 40 C 420 72, 960 8, 1440 40 L1440 60 L0 60 Z" fill="#fff9f2" />
     </svg>
   );
 }
