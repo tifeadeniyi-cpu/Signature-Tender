@@ -25,24 +25,20 @@ test('upload, add signers, place fields, set options and mark ready', async ({ p
   await expect(page.getByText('Only PDF files can be uploaded.')).toBeVisible();
 
   // A file named .pdf that is not a PDF is refused by the server.
-  await page
-    .getByLabel('PDF file')
-    .setInputFiles({
-      name: 'fake.pdf',
-      mimeType: 'application/pdf',
-      buffer: Buffer.from('not really a pdf'),
-    });
+  await page.getByLabel('PDF file').setInputFiles({
+    name: 'fake.pdf',
+    mimeType: 'application/pdf',
+    buffer: Buffer.from('not really a pdf'),
+  });
   await page.getByLabel('Document type').selectOption('agreement');
   await page.getByRole('button', { name: 'Upload and continue' }).click();
   await expect(page.getByText('Only PDF files are supported.')).toBeVisible();
 
-  await page
-    .getByLabel('PDF file')
-    .setInputFiles({
-      name: 'Studio Agreement.pdf',
-      mimeType: 'application/pdf',
-      buffer: await makePdf(2),
-    });
+  await page.getByLabel('PDF file').setInputFiles({
+    name: 'Studio Agreement.pdf',
+    mimeType: 'application/pdf',
+    buffer: await makePdf(2),
+  });
   await page.getByLabel('Document name').fill('Studio Agreement');
   await page.getByRole('button', { name: 'Upload and continue' }).click();
   await expect(page).toHaveURL(/\/prepare\/signers$/);
@@ -85,7 +81,7 @@ test('upload, add signers, place fields, set options and mark ready', async ({ p
 
   await expect(page.getByText('Everything needed is in place.')).toBeVisible();
   await expect(page.getByText('Please sign by Friday.')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Send for signature' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Send test request' })).toBeDisabled();
   await page.getByRole('button', { name: 'Mark ready to send' }).click();
   await expect(page.getByText('Marked ready to send.')).toBeVisible();
   await expect(page.getByText('Ready to send').first()).toBeVisible();

@@ -38,7 +38,7 @@ Architecture and phased plan approved in the project's planning doc. Summary in 
 - Feature flags and pricing can only be changed with the database owner role; an admin UI comes with the admin console.
 - `st_app` role must be created with a password in each hosted database (Neon) before deploy.
 
-## Phase 2: Documents and preparation: Done (pending review)
+## Phase 2: Documents and preparation: Done (merged in PR #2)
 
 | Feature                                            | Status      | Notes                                                                                                                                                            |
 | -------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -68,6 +68,39 @@ Architecture and phased plan approved in the project's planning doc. Summary in 
 - No virus scanning yet; planned with the worker in Phase 3.
 - R2 bucket and keys must be created and set as `S3_*` env vars before staging.
 
-## Phases 3 to 9: Not started
+## Phase 3: Signing and evidence: Done (pending review)
+
+Real sending stays off. The `test_signing` flag allows free requests marked TEST in development and test environments only. `production_signing` and `payments` remain off.
+
+| Feature                                          | Status      | Notes                                                                                                                                                                |
+| ------------------------------------------------ | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Signing requests and state machine               | Done        | Request states from Part 30; one open request per document; recipients and fields snapshotted on send                                                                |
+| Secure invitations                               | Done        | Hashed 256-bit link tokens, expiry, rotation, cancel. Sequential order notifies one group at a time                                                                  |
+| Recipient authentication                         | Done        | Optional one-time email code (expiry, single use, attempt and send limits); per-link browser session                                                                 |
+| Electronic consent                               | Done        | Disclosure text and version from `app_config` (currently a **draft pending attorney review**); consent recorded with a hash of the text                              |
+| Typed, drawn and uploaded signatures; initials   | Done        | Explicit "Adopt and use"; adopted marks reusable within the session; uploads converted to PNG and stripped of metadata                                               |
+| Signing workspace                                | Done        | Mobile-first, required-field counter, next required field, intent confirmation, decline with reason                                                                  |
+| Completion                                       | Done        | Atomic, refuses duplicates, re-verifies the source hash, records IP/browser/intent                                                                                   |
+| Finalization                                     | Done        | Signed copy stamped with values and signatures (TEST footer for test requests) plus a completion certificate; failures show as "Needs attention", never as completed |
+| Evidence log and integrity check                 | Done        | Hash-chained, append-only events; "Verify integrity" re-hashes files and the chain                                                                                   |
+| Sender status page                               | Done        | Recipient progress, history, downloads, cancel, retry finalization, edit and resend after decline/expiry/cancel                                                      |
+| Emails                                           | Done        | Invitation, code, completion (recipients and sender), decline notice to sender                                                                                       |
+| Reviewer and approver roles                      | Done        | They confirm with intent but have no signature fields; viewers and copy recipients get the completed copy                                                            |
+| Certificate-backed PDF digital signatures (12.7) | Not started | Needs a managed key provider; kept separate                                                                                                                          |
+| Signature stamps (12.6), request correction      | Not started | Phase 6                                                                                                                                                              |
+| Reminders                                        | Not started | Settings are stored; scheduled sending needs the worker (Phase 5)                                                                                                    |
+
+### Tests
+
+- `packages/core`: 47 tests (13 new for signing): PNG sanitizing, send refusals, sequential flow, email code limits and reuse, consent version, signer RLS scope, field validation, double completion, finalization, completed-copy downloads, file and evidence tamper detection, decline, cancel, expiry.
+- `apps/web`: 9 Playwright tests, including a full send → email code → consent → adopt → sign → download flow, and decline.
+
+### Known gaps
+
+- Field coordinates assume unrotated pages. Rotated PDFs need a rotation-aware stamp before production.
+- Finalization runs in the request that completes the last signature. A background worker with retries is planned.
+- The e-sign disclosure, certificate wording and excluded-document guidance need attorney review (release checklist).
+
+## Phases 4 to 9: Not started
 
 See the plan doc for scope and order.

@@ -5,7 +5,7 @@ import { Send } from 'lucide-react';
 import type { DocumentStatus } from '@st/core';
 import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/feedback';
-import { markReadyAction, deleteDraftAction } from '../../../actions';
+import { markReadyAction, deleteDraftAction, sendTestAction } from '../../../actions';
 
 export function ReviewActions({
   documentId,
@@ -44,17 +44,37 @@ export function ReviewActions({
           Mark ready to send
         </Button>
       ) : null}
-      <Button type="button" disabled aria-describedby="send-blocked">
-        <Send className="size-4" aria-hidden /> Send for signature
-      </Button>
       {sendBlockedReason ? (
-        <p id="send-blocked" className="text-xs">
-          {sendBlockedReason}
-        </p>
+        <>
+          <Button type="button" disabled aria-describedby="send-blocked">
+            <Send className="size-4" aria-hidden /> Send for signature
+          </Button>
+          <p id="send-blocked" className="text-xs">
+            {sendBlockedReason}
+          </p>
+        </>
       ) : (
-        <p id="send-blocked" className="text-xs">
-          Sending arrives in the next release.
-        </p>
+        <>
+          <Button
+            type="button"
+            disabled={status !== 'ready_to_send' || pending}
+            loading={pending}
+            aria-describedby="send-test-note"
+            onClick={() =>
+              start(async () => {
+                const r = await sendTestAction(documentId);
+                if (r && !r.ok) setMsg({ ok: false, text: r.message ?? 'Could not send.' });
+              })
+            }
+          >
+            <Send className="size-4" aria-hidden /> Send test request
+          </Button>
+          <p id="send-test-note" className="text-xs">
+            {status !== 'ready_to_send'
+              ? 'Mark the document ready to send first.'
+              : 'Test requests are free and marked TEST on every page and email. Real sending opens after security and legal review.'}
+          </p>
+        </>
       )}
       {msg ? <Alert tone={msg.ok ? 'success' : 'error'}>{msg.text}</Alert> : null}
       {canEdit ? (

@@ -6,3 +6,6 @@ export * from './profile';
 export * from './config';
 export * from './storage';
 export * from './documents';
+export * from './signing';
+export * from './signing-crypto';
+export * from './finalize-pdf';

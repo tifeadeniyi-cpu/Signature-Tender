@@ -9,10 +9,19 @@ import {
   markReadyToSend,
   deleteDraft,
   getConfigValue,
+  isFeatureEnabled,
+  sendForSignature,
+  cancelRequest,
+  finalizeRequest,
+  verifyRequestIntegrity,
+  getDocument,
   type ReadinessIssue,
 } from '@st/core';
+import { env } from '@/lib/env';
+import { storage } from '@/lib/storage';
+import { sendInvitations } from '@/lib/signing-mail';
 import { db } from '@/lib/db';
-import { requireUser, requestMeta } from '@/lib/session';
+import { requireUser, requireWorkspace, requestMeta } from '@/lib/session';
 import { toActionError, type ActionState } from '@/lib/action-result';
 
 type Recipients = Parameters<typeof saveRecipients>[3];
@@ -123,4 +132,89 @@ export async function deleteDraftAction(documentId: string): Promise<ActionState
   }
   revalidatePath('/app/documents');
   redirect('/app/documents');
+}
+
+export async function sendTestAction(
+  documentId: string,
+): Promise<{ ok: boolean; message?: string }> {
+  const user = await requireUser();
+  const actor = { userId: user.id };
+  try {
+    const testSigningEnabled = await isFeatureEnabled(db(), 'test_signing', env().APP_ENV);
+    const { invitations } = await sendForSignature(
+      db(),
+      storage(),
+      actor,
+      documentId,
+      { mode: 'test', testSigningEnabled },
+      await requestMeta(),
+    );
+    const d = await getDocument(db(), actor, documentId);
+    const { workspaces } = await requireWorkspace();
+    const ws = workspaces.find((w) => w.id === d.document.workspaceId);
+    await sendInvitations(invitations, {
+      title: d.document.title,
+      senderName: user.name,
+      workspaceName: ws?.name ?? '',
+      message: d.document.emailMessage,
+      isTest: true,
+    });
+  } catch (err) {
+    const r = toActionError(err);
+    return { ok: false, message: r?.message ?? 'Something went wrong.' };
+  }
+  revalidatePath('/app/documents');
+  redirect(`/app/documents/${documentId}`);
+}
+
+export async function cancelRequestAction(
+  documentId: string,
+  requestId: string,
+  _prev: ActionState,
+  fd: FormData,
+): Promise<ActionState> {
+  const meta = await requestMeta();
+  return run(
+    documentId,
+    (actor) => cancelRequest(db(), actor, requestId, String(fd.get('reason') ?? ''), meta),
+    'Request cancelled. The signing links no longer work.',
+  );
+}
+
+export async function retryFinalizeAction(
+  documentId: string,
+  requestId: string,
+): Promise<ActionState> {
+  const user = await requireUser();
+  try {
+    const res = await finalizeRequest(db(), storage(), { actor: { userId: user.id } }, requestId);
+    await sendInvitations(res.invitations, {
+      title: res.title,
+      senderName: user.name,
+      workspaceName: '',
+      message: null,
+      isTest: res.isTest,
+    });
+  } catch (err) {
+    const r = toActionError(err);
+    return { ok: false, message: r?.message ?? 'Finalizing failed again. Contact support.' };
+  }
+  revalidatePath(`/app/documents/${documentId}`);
+  return { ok: true, message: 'Finalized.' };
+}
+
+export type IntegrityReport = Awaited<ReturnType<typeof verifyRequestIntegrity>>;
+export async function verifyIntegrityAction(
+  requestId: string,
+): Promise<{ ok: boolean; report?: IntegrityReport; message?: string }> {
+  const user = await requireUser();
+  try {
+    return {
+      ok: true,
+      report: await verifyRequestIntegrity(db(), storage(), { userId: user.id }, requestId),
+    };
+  } catch (err) {
+    const r = toActionError(err);
+    return { ok: false, message: r?.message ?? 'Could not run the check.' };
+  }
 }

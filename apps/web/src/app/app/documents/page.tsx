@@ -49,7 +49,7 @@ export default async function DocumentsPage() {
           {docs.map((d) => (
             <li key={d.id}>
               <Link
-                href={`/app/documents/${d.id}/prepare/review`}
+                href={`/app/documents/${d.id}`}
                 className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-4 hover:bg-blush/50"
               >
                 <FileText className="size-5 shrink-0 text-primary" aria-hidden />
@@ -61,7 +61,11 @@ export default async function DocumentsPage() {
                     {d.recipientCount === 1 ? 'recipient' : 'recipients'}
                   </p>
                 </div>
-                <StatusBadge status={d.status} />
+                <StatusBadge
+                  status={d.status}
+                  requestStatus={d.requestStatus}
+                  isTest={d.requestIsTest}
+                />
                 <span className="w-full text-xs sm:w-auto">Updated {fmt.format(d.updatedAt)}</span>
               </Link>
             </li>
