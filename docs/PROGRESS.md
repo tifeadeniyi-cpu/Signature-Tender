@@ -215,17 +215,17 @@ Stripe runs in **test mode only**: live keys are refused and live events ignored
 
 Built on Phase 5's verified-email retrieval. Details in [email-notifications.md](email-notifications.md).
 
-| Feature                                  | Status      | Notes                                                                                                                                       |
-| ---------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| Completion email (approved design)       | Done        | Burgundy header with the approved reversed logo, curved waves, completion illustration, buttons, document card, assurances, support, footer |
-| Reusable email design system             | Done        | `apps/web/src/lib/email/design.ts`; table-based, 640 px, phone layout, inline images, escaping and URL checks                               |
-| Trigger                                  | Done        | Queued in the finalization transaction only after files are stored, hashed and the evidence chain is closed; enforced by an insert policy   |
-| Durable queue, retries, idempotency      | Done        | `notifications` outbox; SKIP LOCKED claims; backoff up to 6 attempts; Resend idempotency keys; scheduled sweep                              |
-| Secure links                             | Done        | Hashed HMAC tokens; one-time code to the original address on every new browser; expiry with renewal; sender revocation                      |
-| Recipient document and evidence pages    | Done        | `/retrieve/documents/<id>`: every page, signer progress, downloads; Evidence tab with fingerprints, events and certificate                  |
-| Delivery log and Activity                | Done        | Queued, sent, delivered, bounced, failed; provider message id; Resend webhook                                                               |
-| Preview and test sends                   | Done        | `/app/dev/emails`                                                                                                                           |
-| Other templates on the new design system | Not started | Invitation, reminder, declined, expired, cancelled, verification, reset and receipt still use the Phase 1 layout                            |
+| Feature                                  | Status | Notes                                                                                                                                                                                                                             |
+| ---------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Completion email (approved design)       | Done   | Burgundy header with the approved reversed logo, curved waves, completion illustration, buttons, document card, assurances, support, footer                                                                                       |
+| Reusable email design system             | Done   | `apps/web/src/lib/email/design.ts`; table-based, 640 px, phone layout, inline images, escaping and URL checks                                                                                                                     |
+| Trigger                                  | Done   | Queued in the finalization transaction only after files are stored, hashed and the evidence chain is closed; enforced by an insert policy                                                                                         |
+| Durable queue, retries, idempotency      | Done   | `notifications` outbox; SKIP LOCKED claims; backoff up to 6 attempts; Resend idempotency keys; scheduled sweep                                                                                                                    |
+| Secure links                             | Done   | Hashed HMAC tokens; one-time code to the original address on every new browser; expiry with renewal; sender revocation                                                                                                            |
+| Recipient document and evidence pages    | Done   | `/retrieve/documents/<id>`: every page, signer progress, downloads; Evidence tab with fingerprints, events and certificate                                                                                                        |
+| Delivery log and Activity                | Done   | Queued, sent, delivered, bounced, failed; provider message id; Resend webhook                                                                                                                                                     |
+| Preview and test sends                   | Done   | `/app/dev/emails`                                                                                                                                                                                                                 |
+| Other templates on the new design system | Done   | Invitation, reminder, completed-copy link, signing and access codes, declined notice, team invitation, email verification and password reset share the design, each with its own illustration; all previewable at /app/dev/emails |
 
 ### Tests
 
@@ -237,6 +237,7 @@ Built on Phase 5's verified-email retrieval. Details in [email-notifications.md]
 - Recipients have no time zone setting yet: dates use `EMAIL_TIMEZONE`, with the zone shown.
 - The daily cron is the slowest retry path; on Vercel Pro shorten the schedule.
 - Real-client rendering (Gmail, Outlook, Apple Mail) is checked by sending previews, not automated.
+- No expired, cancelled or payment-receipt email exists yet (Stripe sends payment receipts). Workspace accent colours are no longer applied to emails; the workspace brand name still shows as the sender.
 - The completed-copy signing links issued at finalization are no longer emailed (the completion email replaces that message); they still work for anyone who already has one.
 
 ## Phase 8: Connectors, analytics and reporting: Done (pending review)
