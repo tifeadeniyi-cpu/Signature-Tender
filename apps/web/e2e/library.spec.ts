@@ -163,7 +163,7 @@ test('search, filter, archive and set retention in the library', async ({ page }
   await sendTestRequest(page, 'Booking.pdf', 'Max Booker', email);
 
   await page.goto('/app/documents');
-  await expect(page.getByRole('link', { name: /^All/ })).toContainText('1');
+  await expect(page.getByRole('main').getByRole('link', { name: /^All/ })).toContainText('1');
   const table = page.getByRole('table');
   await expect(table.getByRole('link', { name: 'Booking', exact: true })).toBeVisible();
 

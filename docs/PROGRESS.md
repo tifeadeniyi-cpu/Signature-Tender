@@ -360,3 +360,29 @@ Adds the actions left out of the documents drawer. Each one appears in the drawe
 
 - Should correcting an email or replacing a recipient also notify the person being removed?
 - Should duplicating or saving as a template be free, or count toward any plan limit?
+
+## App sidebar: Midnight Navy and Champagne Gold: Done (pending review)
+
+The signed-in sidebar is redesigned: navy background with gold accents, a navy version of the approved logo, a gold Create Document card, and the same menu in the phone drawer. Page content is unchanged.
+
+| Feature         | Status | Notes                                                                                                                                                                                                                                                                                                        |
+| --------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Menu            | Done   | Dashboard, Documents, Templates, Contacts, Team, Billing & Credits, Integrations, Settings, from one shared config (`components/shell/nav.ts`) used by desktop and phone                                                                                                                                     |
+| Submenus        | Done   | Documents (All, In Progress, Completed, Archived), Billing (Overview, Buy Credits, Plans & Pricing, Invoices, Usage) and Settings (Workspace, Profile, Branding, Security, Data Retention, API Settings). They reuse the pages' own tabs; label navigates, chevron toggles; the current section opens itself |
+| Collapse        | Done   | 272px or 80px. Remembered in a cookie (no database writes) and read by the server, so there is no flash. Tooltips and flyout menus when collapsed, placed outside the scrolling menu                                                                                                                         |
+| Role visibility | Done   | Templates, Contacts, Team and API Settings hidden without their permission; Create Document hidden without `documents.create`. Pages still enforce access                                                                                                                                                    |
+| Create Document | Done   | "Get Started" until the person has sent a document, then "Ready to Send?". Opens the existing upload step; drafts are never charged                                                                                                                                                                          |
+| Phone drawer    | Done   | Slides in from the left with focus trap, Escape, backdrop click and focus return. Rendered at page level so the top bar's blur no longer clips it                                                                                                                                                            |
+| Logo            | Done   | `public/brand/logo-on-navy.png` and `icon-on-navy.png`, recoloured from the approved logo (gold nib, ivory wordmark); shapes unchanged                                                                                                                                                                       |
+
+### Tests
+
+- Unit: menu order, no duplicate entries, tab matching, role filtering.
+- Playwright `e2e/sidebar.spec.ts`: every link, active states, submenus, collapse and expand, content resizing without overlap, tooltips, flyouts, keyboard, preference after reload, short screens, phone drawer, axe scan. `teams.spec.ts` checks what a Viewer sees and that hidden pages still refuse.
+
+### Known gaps
+
+- Signature Studio is not in the menu: the app has no Signature Studio page yet (it exists only as a demo on the Product page).
+- Drafts is left out of the Documents submenu because the Drafts tab was deliberately hidden.
+- No notification badges: there is no inbox or notification centre to count from yet.
+- The navy logo is a recolour of the approved artwork; swap in an official dark-background logo when one exists.
