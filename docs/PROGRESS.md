@@ -68,7 +68,7 @@ Architecture and phased plan approved in the project's planning doc. Summary in 
 - No virus scanning yet; planned with the worker in Phase 3.
 - R2 bucket and keys must be created and set as `S3_*` env vars before staging.
 
-## Phase 3: Signing and evidence: Done (pending review)
+## Phase 3: Signing and evidence: Done (merged in PR #3)
 
 Real sending stays off. The `test_signing` flag allows free requests marked TEST in development and test environments only. `production_signing` and `payments` remain off.
 
@@ -101,6 +101,35 @@ Real sending stays off. The `test_signing` flag allows free requests marked TEST
 - Finalization runs in the request that completes the last signature. A background worker with retries is planned.
 - The e-sign disclosure, certificate wording and excluded-document guidance need attorney review (release checklist).
 
-## Phases 4 to 9: Not started
+## Phase 4: Payments and credits: Done (pending review)
+
+Stripe runs in **test mode only**: live keys are refused and live events ignored. The `payments` flag stays off until Stripe test keys are set and reviewed, and real sending also still needs `production_signing`, which stays off until the release gates pass.
+
+| Feature                                | Status      | Notes                                                                                                                                                                     |
+| -------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Prices and plans from the database     | Done        | Single $2.99 and 5/10/25/100 packs; Starter, Business, Team, Enterprise (contact). Checkout uses inline Stripe prices built from these rows, so no code change to reprice |
+| Credit ledger                          | Done        | Append-only, idempotency keys, per-workspace lock. Holds per request: reserved, consumed, restored. Allowance spent before purchased credits                              |
+| Stripe Checkout: packs and one request | Done        | Pending payment fixed before checkout; webhook verifies signature, amount and currency; receipts via Stripe invoices                                                      |
+| Request payment states                 | Done        | Live send with no credit → awaiting payment (nobody emailed) → payment processing → sent as the original sender once Stripe confirms. "Use a credit and send" too         |
+| Subscriptions                          | Done        | Subscribe through Checkout; change plan (upgrade prorated now, downgrade from next bill); cancel, reactivate, payment method and invoices through the Stripe portal       |
+| Monthly allowance                      | Done        | Granted per paid period invoice, expires at the next period or when the plan ends; upgrades top up                                                                        |
+| Refunds and disputes                   | Done        | Unused credits from that purchase are reversed, never below zero                                                                                                          |
+| Cancellation policy                    | Done        | `billing.cancel_credit_policy` in `app_config`: default restores the credit if no recipient opened the request                                                            |
+| Billing & Credits page                 | Done        | Overview, Plans & Pricing, Credits, Invoices (search, status, date filters), Payment History with credit activity and reconciliation, Usage                               |
+| Tax                                    | Not started | Stripe Tax is not enabled; prices are charged as listed in USD. Needs a decision on tax registration before launch                                                        |
+| Promotional and admin credit grants    | Not started | Ledger supports them; the admin console arrives in Phase 8                                                                                                                |
+
+### Tests
+
+- `packages/core`: 15 new billing tests: live send gating, awaiting payment, database pricing, permission checks, idempotent grants, amount and currency mismatch, unpaid sessions, racing sends, pay-then-dispatch, expired checkout, cancellation policy, subscription allowance cycle with upgrade and expiry, refunds, disputes, RLS rules, event replay.
+- `apps/web`: Stripe event mapping unit tests; Playwright: pay for one request through a local Stripe stand-in that sends signed webhooks, buy a 5-credit pack, history and reconciliation; forged webhook rejected.
+
+### Known gaps
+
+- Stripe's API is not reachable from the build container, so nothing has run against real Stripe test mode yet. That needs your test keys (see `.env.example`).
+- Refunds of subscription invoices are recorded by Stripe but not mapped back to a payment row yet.
+- If a credit reserved from a monthly allowance is restored after that period ends, it returns to the allowance and expires at the next cycle.
+
+## Phases 5 to 9: Not started
 
 See the plan doc for scope and order.

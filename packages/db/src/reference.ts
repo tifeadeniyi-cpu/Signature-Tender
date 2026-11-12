@@ -207,6 +207,12 @@ export const APP_CONFIG = [
     description: 'How long a recipient link stays valid when the request has no expiration date',
   },
   {
+    key: 'billing.cancel_credit_policy',
+    value: 'restore_if_unopened',
+    description:
+      'What happens to the credit when a sent request is cancelled: restore_if_unopened gives it back if no recipient has opened the request yet; never keeps it used',
+  },
+  {
     key: 'support.email',
     value: 'support@signaturetender.com',
     description: 'Support contact shown in the app',

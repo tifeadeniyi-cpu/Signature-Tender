@@ -7,6 +7,8 @@ import {
   hasPermission,
   RECIPIENT_ROLES,
   AppError,
+  getRequestBilling,
+  formatMoney,
 } from '@st/core';
 import { db } from '@/lib/db';
 import { requireWorkspace } from '@/lib/session';
@@ -17,6 +19,8 @@ import { buttonClass } from '@/components/ui/button';
 import { StatusBadge } from '@/components/documents/status-badge';
 import { colorFor } from '@/components/documents/colors';
 import { RequestActions } from './request-actions';
+import { PaymentCard } from './payment-card';
+import { liveSendingEnabled, paymentsAvailable } from '@/lib/billing';
 
 export const metadata = { title: 'Document' };
 
@@ -28,6 +32,8 @@ const fmt = new Intl.DateTimeFormat('en-US', {
 const when = (d: Date | null) => (d ? `${fmt.format(d)} UTC` : null);
 
 const EVENT_LABELS: Record<string, string> = {
+  'request.created': 'Request prepared',
+  'request.awaiting_payment': 'Waiting for payment',
   'request.sent': 'Request sent',
   'recipient.notified': 'Invitation emailed',
   'recipient.viewed': 'Opened the link',
@@ -59,8 +65,15 @@ const RECIPIENT_STATUS: Record<
   declined: { label: 'Declined', tone: 'error' },
 };
 
-export default async function DocumentPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function DocumentPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ checkout?: string }>;
+}) {
   const { id } = await params;
+  const { checkout } = await searchParams;
   const { user, membership } = await requireWorkspace();
   const actor = { userId: user.id };
   let doc;
@@ -77,12 +90,21 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
   const canSend = doc.canEdit && hasPermission(membership.permissions, 'documents.send');
   const open = !['completed', 'declined', 'expired', 'cancelled'].includes(r.status);
   const nameOf = new Map(recipients.map((x) => [x.id, x.name]));
+  const needsPayment = r.status === 'awaiting_payment' || r.status === 'payment_processing';
+  const billing = needsPayment ? await getRequestBilling(db(), actor, r.id) : null;
+  const [paymentsOn, liveOn] = needsPayment
+    ? await Promise.all([paymentsAvailable(), liveSendingEnabled()])
+    : [false, false];
 
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader
         title={doc.document.title}
-        description={`Sent ${when(r.sentAt) ?? ''} by ${r.senderName}`}
+        description={
+          r.sentAt
+            ? `Sent ${when(r.sentAt)} by ${r.senderName}`
+            : `Prepared by ${r.senderName}. Not sent yet.`
+        }
         actions={
           <StatusBadge status={doc.document.status} requestStatus={r.status} isTest={r.isTest} />
         }
@@ -92,6 +114,21 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
           This is a test request. It is free, marked TEST on every page and email, and is not for
           real agreements.
         </Alert>
+      ) : null}
+      {needsPayment && billing ? (
+        <PaymentCard
+          documentId={id}
+          requestId={r.id}
+          status={r.status as 'awaiting_payment' | 'payment_processing'}
+          price={
+            billing.price ? formatMoney(billing.price.amountCents, billing.price.currency) : ''
+          }
+          available={billing.balances?.available ?? 0}
+          canPay={billing.canManage && canSend}
+          paymentsOn={paymentsOn}
+          liveOn={liveOn}
+          cancelled={checkout === 'cancelled'}
+        />
       ) : null}
       {r.status === 'finalization_failed' ? (
         <Alert tone="error" className="mb-4">

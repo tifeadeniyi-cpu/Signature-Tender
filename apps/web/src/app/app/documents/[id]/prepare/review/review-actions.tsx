@@ -5,7 +5,12 @@ import { Send } from 'lucide-react';
 import type { DocumentStatus } from '@st/core';
 import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/feedback';
-import { markReadyAction, deleteDraftAction, sendTestAction } from '../../../actions';
+import {
+  markReadyAction,
+  deleteDraftAction,
+  sendTestAction,
+  sendLiveAction,
+} from '../../../actions';
 
 export function ReviewActions({
   documentId,
@@ -13,12 +18,17 @@ export function ReviewActions({
   ready,
   status,
   sendBlockedReason,
+  testEnabled,
+  liveNote,
 }: {
   documentId: string;
   canEdit: boolean;
   ready: boolean;
   status: DocumentStatus;
   sendBlockedReason: string | null;
+  testEnabled: boolean;
+  /** Present only when real sending is switched on; explains the credit or price. */
+  liveNote: string | null;
 }) {
   const router = useRouter();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -55,25 +65,53 @@ export function ReviewActions({
         </>
       ) : (
         <>
-          <Button
-            type="button"
-            disabled={status !== 'ready_to_send' || pending}
-            loading={pending}
-            aria-describedby="send-test-note"
-            onClick={() =>
-              start(async () => {
-                const r = await sendTestAction(documentId);
-                if (r && !r.ok) setMsg({ ok: false, text: r.message ?? 'Could not send.' });
-              })
-            }
-          >
-            <Send className="size-4" aria-hidden /> Send test request
-          </Button>
-          <p id="send-test-note" className="text-xs">
-            {status !== 'ready_to_send'
-              ? 'Mark the document ready to send first.'
-              : 'Test requests are free and marked TEST on every page and email. Real sending opens after security and legal review.'}
-          </p>
+          {liveNote !== null ? (
+            <>
+              <Button
+                type="button"
+                disabled={status !== 'ready_to_send' || pending}
+                loading={pending}
+                aria-describedby="send-live-note"
+                onClick={() =>
+                  start(async () => {
+                    const r = await sendLiveAction(documentId);
+                    if (r && !r.ok) setMsg({ ok: false, text: r.message ?? 'Could not send.' });
+                  })
+                }
+              >
+                <Send className="size-4" aria-hidden /> Send for signature
+              </Button>
+              <p id="send-live-note" className="text-xs">
+                {status !== 'ready_to_send' ? 'Mark the document ready to send first.' : liveNote}
+              </p>
+            </>
+          ) : null}
+          {testEnabled ? (
+            <>
+              <Button
+                type="button"
+                variant={liveNote !== null ? 'secondary' : 'primary'}
+                disabled={status !== 'ready_to_send' || pending}
+                loading={pending}
+                aria-describedby="send-test-note"
+                onClick={() =>
+                  start(async () => {
+                    const r = await sendTestAction(documentId);
+                    if (r && !r.ok) setMsg({ ok: false, text: r.message ?? 'Could not send.' });
+                  })
+                }
+              >
+                <Send className="size-4" aria-hidden /> Send test request
+              </Button>
+              <p id="send-test-note" className="text-xs">
+                {status !== 'ready_to_send'
+                  ? 'Mark the document ready to send first.'
+                  : liveNote !== null
+                    ? 'Test requests are free and marked TEST on every page and email.'
+                    : 'Test requests are free and marked TEST on every page and email. Real sending opens after security and legal review.'}
+              </p>
+            </>
+          ) : null}
         </>
       )}
       {msg ? <Alert tone={msg.ok ? 'success' : 'error'}>{msg.text}</Alert> : null}

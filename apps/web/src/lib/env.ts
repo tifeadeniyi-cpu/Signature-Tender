@@ -16,6 +16,13 @@ const schema = z.object({
   S3_BUCKET: z.string().optional(),
   S3_ACCESS_KEY_ID: z.string().optional(),
   S3_SECRET_ACCESS_KEY: z.string().optional(),
+  // Stripe, test mode only in this phase. Leave empty to keep payments unavailable.
+  STRIPE_SECRET_KEY: z.string().optional().default(''),
+  STRIPE_WEBHOOK_SECRET: z.string().optional().default(''),
+  // Development and test only: point the Stripe client at a local stand-in (used by e2e tests).
+  STRIPE_API_HOST: z.string().optional(),
+  STRIPE_API_PORT: z.coerce.number().optional(),
+  STRIPE_API_PROTOCOL: z.enum(['http', 'https']).optional(),
 });
 
 let cached: z.infer<typeof schema> | undefined;

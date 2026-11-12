@@ -26,6 +26,7 @@ import {
   verifyChain,
 } from './signing-crypto';
 import { buildCertificate, buildSignedPdf } from './finalize-pdf';
+import { consumeHold, reserveCredit, restoreOnCancel } from './billing';
 
 type Meta = { ipAddress?: string | null; userAgent?: string | null };
 type RequestRow = typeof schema.signingRequests.$inferSelect;
@@ -93,9 +94,73 @@ async function appendEvent(
 // Sending
 
 export interface SendOptions {
-  /** Phase 3 supports test requests only; live sending needs payments (Phase 4) and release gates. */
+  /** Test requests are free and marked as tests. Live requests cost one credit. */
   mode: 'test' | 'live';
   testSigningEnabled: boolean;
+  /** True only when both the production_signing and payments flags are on. */
+  liveSendingEnabled?: boolean;
+}
+
+export interface SendResult {
+  requestId: string;
+  invitations: Invitation[];
+  /** `awaiting_payment` when a live request had no credit to use; nothing was emailed. */
+  status: 'sent' | 'awaiting_payment';
+}
+
+const PAYABLE_STATUSES: RequestStatus[] = ['awaiting_payment', 'payment_processing'];
+
+/**
+ * Moves a request to sent: logs the send, issues link tokens to the first group and returns the
+ * invitations to email. Runs inside the transaction that created the request or spent its credit.
+ */
+async function dispatch(tx: Tx, req: RequestRow, actorUserId: string, meta: Meta) {
+  if (req.expiresAt && req.expiresAt.getTime() < Date.now())
+    throw new AppError(
+      'conflict',
+      'The expiration date for this request has passed. Cancel it and send the document again.',
+    );
+  const recipients = await tx
+    .select()
+    .from(schema.requestRecipients)
+    .where(eq(schema.requestRecipients.requestId, req.id))
+    .orderBy(asc(schema.requestRecipients.signingOrder), asc(schema.requestRecipients.createdAt));
+  const [{ n: fieldCount } = { n: 0 }] = await tx
+    .select({ n: sql<number>`count(*)::int` })
+    .from(schema.requestFields)
+    .where(eq(schema.requestFields.requestId, req.id));
+  await tx
+    .update(schema.signingRequests)
+    .set({ status: 'sent', sentAt: new Date(), updatedAt: new Date() })
+    .where(eq(schema.signingRequests.id, req.id));
+  await appendEvent(tx, {
+    requestId: req.id,
+    workspaceId: req.workspaceId,
+    actorUserId,
+    type: 'request.sent',
+    data: {
+      test: req.isTest,
+      sourceSha256: req.sourceSha256,
+      recipients: recipients.length,
+      fields: fieldCount,
+      disclosureVersion: req.disclosureVersion,
+    },
+    ...meta,
+  });
+  const settings = documentSettingsSchema.parse(req.settings);
+  const group = nextGroup(recipients, req.signingOrderEnabled);
+  const invitations = await assignTokens(tx, group, await linkExpiry(tx, settings), 'sign');
+  for (const inv of invitations) {
+    await appendEvent(tx, {
+      requestId: req.id,
+      workspaceId: req.workspaceId,
+      actorUserId,
+      recipientId: inv.recipientId,
+      type: 'recipient.notified',
+      ...meta,
+    });
+  }
+  return invitations;
 }
 
 function endOfDayUtc(date: string) {
@@ -147,10 +212,14 @@ export async function sendForSignature(
   documentId: string,
   opts: SendOptions,
   meta: Meta = {},
-): Promise<{ requestId: string; invitations: Invitation[] }> {
-  if (opts.mode === 'live')
-    throw new AppError('forbidden', 'Sending real signing requests is not available yet.');
-  if (!opts.testSigningEnabled)
+): Promise<SendResult> {
+  const live = opts.mode === 'live';
+  if (live && !opts.liveSendingEnabled)
+    throw new AppError(
+      'forbidden',
+      'Sending real signing requests is switched off until security and legal reviews are complete.',
+    );
+  if (!live && !opts.testSigningEnabled)
     throw new AppError('forbidden', 'Test signing is not available in this environment.');
   if (!z.string().uuid().safeParse(documentId).success)
     throw new AppError('not_found', 'Document not found');
@@ -243,8 +312,8 @@ export async function sendForSignature(
       .values({
         workspaceId: doc.workspace_id,
         documentId,
-        status: 'sent',
-        isTest: true,
+        status: 'awaiting_payment',
+        isTest: !live,
         title: doc.title,
         sentBy: actor.userId,
         senderName: sender?.name ?? 'Signature Tender user',
@@ -258,7 +327,6 @@ export async function sendForSignature(
         disclosureVersion: disclosure.version,
         disclosureText: disclosure.text,
         expiresAt,
-        sentAt: new Date(),
       })
       .returning();
     const requestId = req!.id;
@@ -304,42 +372,122 @@ export async function sendForSignature(
         })),
       );
     }
-    await appendEvent(tx, {
-      requestId,
-      workspaceId: doc.workspace_id,
-      actorUserId: actor.userId,
-      type: 'request.sent',
-      data: {
-        test: true,
-        sourceSha256: file!.sha256,
-        recipients: inserted.length,
-        fields: fields.length,
-        disclosureVersion: disclosure.version,
-      },
-      ...meta,
-    });
-    const group = nextGroup(inserted, doc.signing_order_enabled);
-    const invitations = await assignTokens(tx, group, await linkExpiry(tx, settings), 'sign');
-    for (const inv of invitations) {
+    let invitations: Invitation[] = [];
+    let status: SendResult['status'] = 'sent';
+    if (!live) {
+      invitations = await dispatch(tx, req!, actor.userId, meta);
+    } else {
       await appendEvent(tx, {
         requestId,
         workspaceId: doc.workspace_id,
         actorUserId: actor.userId,
-        recipientId: inv.recipientId,
-        type: 'recipient.notified',
+        type: 'request.created',
+        data: { sourceSha256: file!.sha256, recipients: inserted.length, fields: fields.length },
         ...meta,
       });
+      const bucket = await reserveCredit(tx, {
+        workspaceId: doc.workspace_id,
+        requestId,
+        userId: actor.userId,
+      });
+      if (bucket) {
+        invitations = await dispatch(tx, req!, actor.userId, meta);
+        await consumeHold(tx, requestId);
+      } else {
+        status = 'awaiting_payment';
+        await appendEvent(tx, {
+          requestId,
+          workspaceId: doc.workspace_id,
+          actorUserId: actor.userId,
+          type: 'request.awaiting_payment',
+          ...meta,
+        });
+      }
     }
     await recordAudit(tx, {
       workspaceId: doc.workspace_id,
       actorUserId: actor.userId,
-      action: 'document.sent',
+      action: status === 'sent' ? 'document.sent' : 'document.awaiting_payment',
       targetType: 'document',
       targetId: documentId,
-      metadata: { requestId, test: true },
+      metadata: { requestId, test: !live },
       ...meta,
     });
-    return { requestId, invitations };
+    return { requestId, invitations, status };
+  });
+}
+
+/**
+ * Sends a request that was waiting for payment, spending one credit. Used after Stripe confirms a
+ * payment (acting as the request's sender) and by "Use a credit and send". If no credit is
+ * available nothing changes and the request keeps waiting.
+ */
+export async function sendPaidRequest(
+  db: Database,
+  actor: ActorContext,
+  requestId: string,
+  opts: { liveSendingEnabled: boolean },
+  meta: Meta = {},
+): Promise<{
+  requestId: string;
+  documentId: string;
+  title: string;
+  senderName: string;
+  workspaceName: string;
+  emailMessage: string | null;
+  invitations: Invitation[];
+}> {
+  if (!opts.liveSendingEnabled)
+    throw new AppError(
+      'forbidden',
+      'Sending real signing requests is switched off until security and legal reviews are complete.',
+    );
+  if (!z.string().uuid().safeParse(requestId).success)
+    throw new AppError('not_found', 'Request not found');
+  return withActor(db, actor, async (tx) => {
+    const [req] = await tx
+      .select()
+      .from(schema.signingRequests)
+      .where(eq(schema.signingRequests.id, requestId))
+      .for('update');
+    if (!req) throw new AppError('not_found', 'Request not found');
+    if (!PAYABLE_STATUSES.includes(req.status))
+      throw new AppError('conflict', 'This request is not waiting for payment.');
+    const [canSend] = (await tx.execute(
+      sql`select st_can_send_request(${requestId}::uuid) as ok`,
+    )) as unknown as { ok: boolean }[];
+    if (!canSend?.ok)
+      throw new AppError('forbidden', 'Your role does not allow sending this document.');
+    const bucket = await reserveCredit(tx, {
+      workspaceId: req.workspaceId,
+      requestId,
+      userId: actor.userId,
+    });
+    if (!bucket)
+      throw new AppError(
+        'conflict',
+        'There are no credits available. Buy credits or pay for this request.',
+      );
+    const invitations = await dispatch(tx, req, actor.userId, meta);
+    await consumeHold(tx, requestId);
+    await recordAudit(tx, {
+      workspaceId: req.workspaceId,
+      actorUserId: actor.userId,
+      action: 'document.sent',
+      targetType: 'document',
+      targetId: req.documentId,
+      metadata: { requestId, test: false, credit: bucket },
+      ...meta,
+    });
+    return {
+      requestId,
+      documentId: req.documentId,
+      title: req.title,
+      senderName: req.senderName,
+      workspaceName: req.workspaceName,
+      emailMessage: req.emailMessage,
+      invitations,
+    };
   });
 }
 
@@ -376,12 +524,13 @@ export async function cancelRequest(
       .update(schema.requestRecipients)
       .set({ tokenHash: null, sessionHash: null })
       .where(eq(schema.requestRecipients.requestId, requestId));
+    const creditRestored = req.isTest ? false : await restoreOnCancel(tx, requestId, actor.userId);
     await appendEvent(tx, {
       requestId,
       workspaceId: req.workspaceId,
       actorUserId: actor.userId,
       type: 'request.cancelled',
-      data: { reason: why || null },
+      data: { reason: why || null, creditRestored },
       ...meta,
     });
     await recordAudit(tx, {

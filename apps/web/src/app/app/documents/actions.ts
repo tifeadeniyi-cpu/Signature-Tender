@@ -11,6 +11,7 @@ import {
   getConfigValue,
   isFeatureEnabled,
   sendForSignature,
+  sendPaidRequest,
   cancelRequest,
   finalizeRequest,
   verifyRequestIntegrity,
@@ -21,6 +22,7 @@ import { env } from '@/lib/env';
 import { storage } from '@/lib/storage';
 import { sendInvitations } from '@/lib/signing-mail';
 import { db } from '@/lib/db';
+import { liveSendingEnabled } from '@/lib/billing';
 import { requireUser, requireWorkspace, requestMeta } from '@/lib/session';
 import { toActionError, type ActionState } from '@/lib/action-result';
 
@@ -165,6 +167,70 @@ export async function sendTestAction(
   }
   revalidatePath('/app/documents');
   redirect(`/app/documents/${documentId}`);
+}
+
+/** Sends for real. Spends a credit if there is one; otherwise the request waits for payment. */
+export async function sendLiveAction(
+  documentId: string,
+): Promise<{ ok: boolean; message?: string }> {
+  const user = await requireUser();
+  const actor = { userId: user.id };
+  try {
+    const res = await sendForSignature(
+      db(),
+      storage(),
+      actor,
+      documentId,
+      { mode: 'live', testSigningEnabled: false, liveSendingEnabled: await liveSendingEnabled() },
+      await requestMeta(),
+    );
+    if (res.status === 'sent') {
+      const d = await getDocument(db(), actor, documentId);
+      const { workspaces } = await requireWorkspace();
+      const ws = workspaces.find((w) => w.id === d.document.workspaceId);
+      await sendInvitations(res.invitations, {
+        title: d.document.title,
+        senderName: user.name,
+        workspaceName: ws?.name ?? '',
+        message: d.document.emailMessage,
+        isTest: false,
+      });
+    }
+  } catch (err) {
+    const r = toActionError(err);
+    return { ok: false, message: r?.message ?? 'Something went wrong.' };
+  }
+  revalidatePath('/app/documents');
+  redirect(`/app/documents/${documentId}`);
+}
+
+/** Sends a request that is waiting for payment, using a credit the workspace already has. */
+export async function sendWithCreditAction(
+  documentId: string,
+  requestId: string,
+  _prev: ActionState,
+): Promise<ActionState> {
+  const user = await requireUser();
+  try {
+    const sent = await sendPaidRequest(
+      db(),
+      { userId: user.id },
+      requestId,
+      { liveSendingEnabled: await liveSendingEnabled() },
+      await requestMeta(),
+    );
+    await sendInvitations(sent.invitations, {
+      title: sent.title,
+      senderName: sent.senderName,
+      workspaceName: sent.workspaceName,
+      message: sent.emailMessage,
+      isTest: false,
+    });
+  } catch (err) {
+    return toActionError(err);
+  }
+  revalidatePath(`/app/documents/${documentId}`);
+  return { ok: true, message: 'Sent. Recipients have been emailed their links.' };
 }
 
 export async function cancelRequestAction(

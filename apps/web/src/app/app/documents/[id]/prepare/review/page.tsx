@@ -4,11 +4,14 @@ import {
   checkReadiness,
   isFeatureEnabled,
   hasPermission,
+  getSendQuote,
+  formatMoney,
   DOCUMENT_TYPES,
   RECIPIENT_ROLES,
 } from '@st/core';
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
+import { liveSendingEnabled } from '@/lib/billing';
 import { loadPreparation } from '@/lib/documents';
 import { PrepareHeader } from '@/components/documents/prepare-header';
 import { Card } from '@/components/ui/card';
@@ -27,12 +30,22 @@ export default async function ReviewStep({ params }: { params: Promise<{ id: str
   const issues = checkReadiness({ file, recipients, fields, settings: s });
   const appEnv = env().APP_ENV;
   const testSending = await isFeatureEnabled(db(), 'test_signing', appEnv);
+  const liveSending = await liveSendingEnabled();
   const canSend = data.canEdit && hasPermission(data.membership.permissions, 'documents.send');
   const sendBlockedReason = !canSend
     ? 'Your role does not allow sending documents.'
-    : !testSending
+    : !testSending && !liveSending
       ? 'Sending real signing requests opens after security and legal review, and once checkout is switched on.'
       : null;
+  const quote =
+    canSend && liveSending
+      ? await getSendQuote(db(), { userId: data.user.id }, doc.workspaceId)
+      : null;
+  const liveNote = quote
+    ? quote.balances.available > 0
+      ? `Uses 1 credit. Your workspace has ${quote.balances.available} available.`
+      : `You have no credits. After you press send you can pay ${formatMoney(quote.price.amountCents, quote.price.currency)} for this request${quote.canBuy ? '' : ' (a workspace owner or admin must pay)'}. Nothing is emailed until payment is confirmed.`
+    : null;
 
   const edit = (step: string) => (
     <Link
@@ -166,6 +179,8 @@ export default async function ReviewStep({ params }: { params: Promise<{ id: str
               ready={issues.length === 0}
               status={doc.status}
               sendBlockedReason={sendBlockedReason}
+              testEnabled={testSending}
+              liveNote={liveNote}
             />
             {data.previousRequest ? (
               <p className="mt-3 text-xs">
