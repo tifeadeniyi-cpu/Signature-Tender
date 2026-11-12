@@ -1,77 +1,79 @@
 import Image from 'next/image';
 import Link from 'next/link';
+import { MarketingNav } from './marketing-nav';
 
 export function MarketingHeader() {
+  return <MarketingNav />;
+}
+
+/** Footer columns. Only pages and sections that exist are linked. */
+const FOOTER: { title: string; links: [string, string][] }[] = [
+  {
+    title: 'Product',
+    links: [
+      ['Features', '/product#features'],
+      ['Signature Studio', '/product#signature-studio'],
+      ['Templates', '/product#templates'],
+      ['Integrations', '/product#integrations'],
+      ['Pricing', '/pricing'],
+    ],
+  },
+  {
+    title: 'Resources',
+    links: [
+      ['API documentation', '/developers'],
+      ['FAQ', '/product#faq'],
+      ['Get your documents', '/retrieve'],
+    ],
+  },
+  {
+    title: 'Legal',
+    links: [
+      ['Terms', '/legal/terms'],
+      ['Privacy', '/legal/privacy'],
+      ['Electronic Signature Disclosure', '/legal/esign-disclosure'],
+    ],
+  },
+];
+
+export function MarketingFooter() {
   return (
-    <header className="bg-primary text-white">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6">
-        <Link href="/" aria-label="Signature Tender home">
+    <footer className="border-t border-border bg-white">
+      <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-[1.4fr_repeat(3,1fr)]">
+        <div>
           <Image
             src="/brand/logo-reversed.png"
             alt="Signature Tender"
             width={327}
             height={168}
-            className="h-auto w-36 rounded-lg"
-            priority
+            className="h-auto w-32 rounded-lg"
           />
-        </Link>
-        <nav aria-label="Main" className="order-3 w-full sm:order-none sm:w-auto">
-          <ul className="flex gap-6 text-sm">
-            <li>
-              <Link href="/#how-it-works" className="hover:text-rose-gold">
-                How It Works
-              </Link>
-            </li>
-            <li>
-              <Link href="/pricing" className="hover:text-rose-gold">
-                Pricing
-              </Link>
-            </li>
-          </ul>
-        </nav>
-        <div className="flex gap-2">
-          <Link
-            href="/sign-in"
-            className="inline-flex h-10 items-center rounded-lg border border-white/40 px-4 text-sm font-semibold hover:bg-white/10"
-          >
-            Sign In
-          </Link>
-          <Link
-            href="/sign-up"
-            className="inline-flex h-10 items-center rounded-lg bg-rose-gold px-4 text-sm font-semibold text-primary-dark hover:bg-blush"
-          >
-            Get Started
-          </Link>
+          <p className="mt-4 font-display text-lg text-heading">Send. Sign. Pay Once.</p>
+          <p className="mt-2 max-w-xs text-sm">
+            Electronic signatures without a subscription. Pay only when you send a document.
+          </p>
         </div>
+        {FOOTER.map((col) => (
+          <nav key={col.title} aria-label={col.title}>
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-heading">
+              {col.title}
+            </h2>
+            <ul className="mt-3 flex flex-col gap-2 text-sm">
+              {col.links.map(([label, href]) => (
+                <li key={href}>
+                  <Link href={href} className="hover:text-primary hover:underline">
+                    {label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        ))}
       </div>
-    </header>
-  );
-}
-
-export function MarketingFooter() {
-  return (
-    <footer className="border-t border-border bg-white">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-8 text-sm sm:px-6">
-        <p>© {new Date().getFullYear()} Signature Tender. Send. Sign. Pay Once.</p>
-        <nav aria-label="Legal">
-          <ul className="flex gap-4">
-            <li>
-              <Link href="/legal/terms" className="hover:underline">
-                Terms
-              </Link>
-            </li>
-            <li>
-              <Link href="/legal/privacy" className="hover:underline">
-                Privacy
-              </Link>
-            </li>
-            <li>
-              <Link href="/legal/esign-disclosure" className="hover:underline">
-                Electronic Signature Disclosure
-              </Link>
-            </li>
-          </ul>
-        </nav>
+      <div className="border-t border-border">
+        <p className="mx-auto max-w-7xl px-4 py-5 text-xs sm:px-6">
+          © {new Date().getFullYear()} Signature Tender. All rights reserved.
+        </p>
       </div>
     </footer>
   );

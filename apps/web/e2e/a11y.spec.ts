@@ -20,6 +20,7 @@ async function scan(page: Page, path: string) {
 
 const PUBLIC = [
   '/',
+  '/product',
   '/pricing',
   '/developers',
   '/sign-in',
