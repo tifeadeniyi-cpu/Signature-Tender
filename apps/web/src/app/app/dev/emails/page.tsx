@@ -2,13 +2,7 @@ import Link from 'next/link';
 import { requireUser } from '@/lib/session';
 import { emailConfig } from '@/lib/email/config';
 import { previewImageSrc } from '@/lib/email/design';
-import { renderDocumentCompleted } from '@/lib/email/templates/document-completed';
-import {
-  SAMPLE_VARIANTS,
-  VARIANT_LABEL,
-  samplePayload,
-  type SampleVariant,
-} from '@/lib/email/samples';
+import { PREVIEWS, PREVIEW_KEYS, renderPreview, type PreviewKey } from '@/lib/email/previews';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/cn';
@@ -28,21 +22,13 @@ export default async function EmailPreviewPage({
 }) {
   await requireUser();
   const sp = await searchParams;
-  const variant: SampleVariant = SAMPLE_VARIANTS.includes(sp.variant as SampleVariant)
-    ? (sp.variant as SampleVariant)
+  const variant: PreviewKey = PREVIEW_KEYS.includes(sp.variant as PreviewKey)
+    ? (sp.variant as PreviewKey)
     : 'recipient';
   const mobile = sp.width === 'mobile';
   const cfg = await emailConfig();
-  const sample = `${cfg.appUrl}/retrieve`;
-  const r = renderDocumentCompleted({
-    payload: samplePayload(variant),
-    audience: variant === 'sender' ? 'sender' : 'recipient',
-    links: { download: sample, view: sample, evidence: sample },
-    linkExpiresAt: new Date('2026-12-09T00:00:00Z'),
-    config: cfg,
-    imageSrc: previewImageSrc,
-  });
-  const href = (v: SampleVariant, w: 'desktop' | 'mobile') =>
+  const r = renderPreview(variant, cfg, { imageSrc: previewImageSrc });
+  const href = (v: PreviewKey, w: 'desktop' | 'mobile') =>
     `/app/dev/emails?variant=${v}&width=${w}`;
   const pill = (active: boolean) =>
     cn(
@@ -54,17 +40,18 @@ export default async function EmailPreviewPage({
     <div className="flex flex-col gap-4">
       <PageHeader
         title="Email previews"
-        description="Document Successfully Completed email, with sample data only."
+        description="Every transactional email, with sample data only."
       />
       <Card className="flex flex-col gap-3">
         <div className="flex flex-wrap gap-2" aria-label="Version">
-          {SAMPLE_VARIANTS.map((v) => (
+          {PREVIEWS.map(([v, label]) => (
             <Link
               key={v}
               href={href(v, mobile ? 'mobile' : 'desktop')}
               className={pill(v === variant)}
+              aria-current={v === variant ? 'page' : undefined}
             >
-              {VARIANT_LABEL[v]}
+              {label}
             </Link>
           ))}
         </div>

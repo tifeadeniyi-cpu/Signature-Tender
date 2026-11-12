@@ -18,6 +18,7 @@ export const POST = apiRoute<{ id: string }>(
       message: r.emailMessage,
       isTest: r.isTest,
       workspaceId: r.workspaceId,
+      reminder: true,
     });
     return {
       status: 200,

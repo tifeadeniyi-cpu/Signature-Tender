@@ -2,25 +2,17 @@
 import { requireUser } from '@/lib/session';
 import { sendEmail } from '@/lib/email';
 import { emailConfig } from '@/lib/email/config';
-import { renderDocumentCompleted } from '@/lib/email/templates/document-completed';
-import { SAMPLE_VARIANTS, samplePayload, type SampleVariant } from '@/lib/email/samples';
+import { PREVIEW_KEYS, renderPreview, type PreviewKey } from '@/lib/email/previews';
 
 /** Sends the preview to the signed-in user's own address, for checking real inbox rendering. */
 export async function sendTestEmailAction(
-  variant: SampleVariant,
+  variant: PreviewKey,
   _prev: { ok: boolean; message: string } | null,
 ): Promise<{ ok: boolean; message: string }> {
   const user = await requireUser();
-  if (!SAMPLE_VARIANTS.includes(variant)) return { ok: false, message: 'Unknown preview.' };
+  if (!PREVIEW_KEYS.includes(variant)) return { ok: false, message: 'Unknown preview.' };
   const cfg = await emailConfig();
-  const sample = `${cfg.appUrl}/retrieve`;
-  const r = renderDocumentCompleted({
-    payload: samplePayload(variant),
-    audience: variant === 'sender' ? 'sender' : 'recipient',
-    links: { download: sample, view: sample, evidence: sample },
-    linkExpiresAt: new Date(Date.now() + 30 * 86_400_000),
-    config: cfg,
-  });
+  const r = renderPreview(variant, cfg, { linkExpiresAt: new Date(Date.now() + 30 * 86_400_000) });
   try {
     await sendEmail({
       to: user.email,
