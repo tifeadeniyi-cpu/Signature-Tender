@@ -298,6 +298,7 @@ export default async function DashboardPage({
           <h2 className="font-display text-lg">Quick Links</h2>
           <ul className="mt-3 flex flex-col">
             {[
+              { href: '/app/settings', label: 'Workspace settings' },
               { href: '/app/templates', label: 'Templates' },
               { href: '/app/contacts', label: 'Contacts' },
               { href: '/app/team?tab=roles', label: 'Team permissions' },
