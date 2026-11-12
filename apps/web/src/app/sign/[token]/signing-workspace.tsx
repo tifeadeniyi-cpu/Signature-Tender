@@ -996,7 +996,7 @@ export function SigningWorkspace({
           <div className="relative min-h-0 flex-1">
             <div
               ref={setScroller}
-              className="absolute inset-0 overflow-auto bg-[#f3ecea]"
+              className="absolute inset-0 overflow-auto bg-[#ebe6de]"
               tabIndex={-1}
             >
               {pdfError ? (

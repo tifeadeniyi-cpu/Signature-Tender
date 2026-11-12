@@ -41,7 +41,7 @@ export function ProductHero({
         <path
           d="M0 72C260 110 520 22 780 52s460 44 660-12"
           fill="none"
-          stroke="#E6B8A7"
+          stroke="#D8AF68"
           strokeOpacity="0.55"
           strokeWidth="2"
         />
@@ -56,7 +56,7 @@ export function ProductHero({
             className="mt-5 font-display text-4xl leading-[1.08] text-white sm:text-5xl xl:text-6xl"
           >
             Everything You Need to{' '}
-            <span className="bg-gradient-to-r from-[#F3D2C5] via-rose-gold to-[#D9967E] bg-clip-text italic text-transparent">
+            <span className="bg-gradient-to-r from-soft-gold via-gold to-[#c99a4e] bg-clip-text italic text-transparent">
               Sign, Send &amp; Manage
             </span>{' '}
             Documents.

@@ -48,7 +48,7 @@ export function LandingActions({
         disabled={pending}
         aria-busy={pending && which === 'sign'}
         className={cn(
-          'flex h-14 w-full items-center justify-center gap-3 rounded-xl bg-gradient-to-b from-[#8b1a3c] to-primary px-6 font-display text-xl text-white shadow-md transition',
+          'flex h-14 w-full items-center justify-center gap-3 rounded-xl bg-gradient-to-b from-navy-royal to-primary px-6 font-display text-xl text-white shadow-md transition',
           'hover:from-primary-hover hover:to-primary-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
           'disabled:cursor-not-allowed disabled:opacity-70',
         )}

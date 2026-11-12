@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 import { HelpMenu } from './help-menu';
 
 /** Matches the background of the reversed logo so it sits seamlessly in the header. */
-const LOGO_BG = '#730a2a';
+const LOGO_BG = '#0d1b33';
 
 /**
  * Branded header and footer for recipient pages outside the signing workspace (landing,
@@ -62,7 +62,7 @@ export async function SignChrome({ children }: { children: React.ReactNode }) {
                   href="/legal/privacy"
                   target="_blank"
                   rel="noopener"
-                  className="underline underline-offset-4 hover:text-rose-gold"
+                  className="underline underline-offset-4 hover:text-gold"
                 >
                   Privacy Policy
                 </a>
@@ -72,7 +72,7 @@ export async function SignChrome({ children }: { children: React.ReactNode }) {
                   href="/legal/terms"
                   target="_blank"
                   rel="noopener"
-                  className="underline underline-offset-4 hover:text-rose-gold"
+                  className="underline underline-offset-4 hover:text-gold"
                 >
                   Terms of Service
                 </a>
@@ -80,7 +80,7 @@ export async function SignChrome({ children }: { children: React.ReactNode }) {
               <li>
                 <a
                   href={`mailto:${String(supportEmail)}`}
-                  className="underline underline-offset-4 hover:text-rose-gold"
+                  className="underline underline-offset-4 hover:text-gold"
                 >
                   Help &amp; Support
                 </a>
@@ -93,7 +93,7 @@ export async function SignChrome({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Soft blush and rose-gold curve between the burgundy bands and the ivory page. */
+/** Thin champagne-gold curve between the navy bands and the ivory page. */
 function Wave({ className, flip }: { className?: string; flip?: boolean }) {
   return (
     <svg
@@ -103,8 +103,8 @@ function Wave({ className, flip }: { className?: string; flip?: boolean }) {
       style={flip ? { transform: 'scaleY(-1)' } : undefined}
       aria-hidden
     >
-      <path d="M0 30 C 360 70, 900 -10, 1440 28 L1440 60 L0 60 Z" fill="#e6b8a7" opacity="0.55" />
-      <path d="M0 40 C 420 72, 960 8, 1440 40 L1440 60 L0 60 Z" fill="#fff9f7" />
+      <path d="M0 30 C 360 70, 900 -10, 1440 28 L1440 60 L0 60 Z" fill="#d8af68" />
+      <path d="M0 40 C 420 72, 960 8, 1440 40 L1440 60 L0 60 Z" fill="#fff9f2" />
     </svg>
   );
 }

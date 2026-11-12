@@ -20,10 +20,10 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
               onClick={onNavigate}
               aria-current={active ? 'page' : undefined}
               className={cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                'relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
                 active
-                  ? 'bg-rose-gold text-primary-dark'
-                  : 'text-white/85 hover:bg-white/10 hover:text-white',
+                  ? 'bg-navy-royal text-white before:absolute before:inset-y-2 before:left-0 before:w-1 before:rounded-full before:bg-gold [&>svg]:text-gold'
+                  : 'text-slate-300 hover:bg-white/5 hover:text-white',
               )}
             >
               <Icon className="size-5 shrink-0" aria-hidden />
