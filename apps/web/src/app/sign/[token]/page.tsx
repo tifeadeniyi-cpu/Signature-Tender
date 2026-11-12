@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { CircleCheck, CircleX, Clock, Ban, Download, Mail, Hourglass } from 'lucide-react';
+import { CircleCheck, CircleX, Clock, Ban, Download, Mail, Eye, Hourglass } from 'lucide-react';
 import {
   getSignerView,
   getSigningWorkspace,
@@ -14,9 +14,11 @@ import { readSignSession } from '@/lib/sign-session';
 import { buttonClass } from '@/components/ui/button';
 import { Alert } from '@/components/ui/feedback';
 import { SIGNATURE_FONTS } from '../fonts';
-import { StartCard, VerifyCard, ConsentCard } from './stages';
+import { VerifyCard, ConsentCard } from './stages';
 import { SigningWorkspace } from './signing-workspace';
-import { SignHeader, type SignStep } from './sign-header';
+import { Landing } from './landing';
+import { PreviewModal } from './preview-modal';
+import { SignChrome } from '../sign-chrome';
 
 export const dynamic = 'force-dynamic';
 
@@ -70,8 +72,15 @@ function Status({
   );
 }
 
-export default async function SignPage({ params }: { params: Promise<{ token: string }> }) {
+export default async function SignPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ token: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { token } = await params;
+  const preview = (await searchParams).preview === '1';
   const session = await readSignSession(token);
   let view: SignerView;
   try {
@@ -79,31 +88,24 @@ export default async function SignPage({ params }: { params: Promise<{ token: st
   } catch (err) {
     if (err instanceof AppError && err.code === 'not_found') {
       return (
-        <>
-          <SignHeader step={1} />
+        <SignChrome>
           <Status icon={<Ban className="size-5" />} title="This link is not available">
             It may have expired, been replaced by a newer email, or the request was cancelled. Ask
             the sender for a new link.
           </Status>
-        </>
+        </SignChrome>
       );
     }
     throw err;
   }
   const brand = await getBrand(db(), view.workspaceId).catch(() => null);
-  if (view.stage === 'sign') return stage(view, token, session);
+  if (view.stage === 'sign') return stage(view, token, session, preview);
   return (
-    <>
-      <SignHeader step={stepFor(view.stage)} />
+    <SignChrome>
       {brand ? <BrandBar brand={brand} workspaceId={view.workspaceId} /> : null}
-      {await stage(view, token, session)}
-    </>
+      {await stage(view, token, session, preview)}
+    </SignChrome>
   );
-}
-
-function stepFor(stage: SignerView['stage']): SignStep {
-  if (stage === 'signed_waiting' || stage === 'completed') return 4;
-  return 1;
 }
 
 /**
@@ -134,19 +136,17 @@ function BrandBar({ brand, workspaceId }: { brand: Brand; workspaceId: string })
   );
 }
 
-async function stage(view: SignerView, token: string, session: string | undefined) {
+async function stage(
+  view: SignerView,
+  token: string,
+  session: string | undefined,
+  preview: boolean,
+) {
   const t = view.isTest;
 
   switch (view.stage) {
     case 'start':
-      return (
-        <Shell test={t}>
-          <StartCard
-            token={token}
-            view={{ ...view, expiresLabel: view.expiresAt ? fmt.format(view.expiresAt) : null }}
-          />
-        </Shell>
-      );
+      return <Landing token={token} view={view} />;
     case 'verify':
       return (
         <Shell test={t}>
@@ -155,9 +155,21 @@ async function stage(view: SignerView, token: string, session: string | undefine
       );
     case 'consent':
       return (
-        <Shell test={t}>
-          <ConsentCard token={token} title={view.title} disclosure={view.disclosure} />
-        </Shell>
+        <>
+          <Shell test={t}>
+            <Link
+              href={`/sign/${token}?preview=1`}
+              replace
+              className={buttonClass('secondary', 'md', 'mb-5 w-full')}
+            >
+              <Eye className="size-4" aria-hidden /> Preview document (read-only)
+            </Link>
+            <ConsentCard token={token} title={view.title} disclosure={view.disclosure} />
+          </Shell>
+          {preview ? (
+            <PreviewModal token={token} title={view.title} pageCount={view.pageCount} />
+          ) : null}
+        </>
       );
     case 'sign': {
       const data = await getSigningWorkspace(db(), token, session, await requestMeta());
@@ -192,8 +204,19 @@ async function stage(view: SignerView, token: string, session: string | undefine
       );
     case 'expired':
       return (
-        <Status icon={<Clock className="size-5" />} title="This request has expired" test={t}>
-          Ask {view.senderName} to send it again if you still need to sign.
+        <Status
+          icon={<Clock className="size-5" />}
+          title="This Signing Invitation Has Expired"
+          test={t}
+        >
+          <p>
+            The time to respond to &ldquo;{view.title}&rdquo; has passed
+            {view.expiresAt ? ` (it expired ${fmt.format(view.expiresAt)})` : ''}, so it can no
+            longer be signed from this link.
+          </p>
+          <p className="mt-2">
+            Ask {view.senderName} ({view.senderEmail}) to send it again if you still need to sign.
+          </p>
         </Status>
       );
     case 'cancelled':
@@ -203,6 +226,13 @@ async function stage(view: SignerView, token: string, session: string | undefine
         </Status>
       );
     default:
+      if (view.recipient.role === 'cc' || view.recipient.role === 'viewer')
+        return (
+          <Status icon={<Mail className="size-5" />} title="You're receiving a copy" test={t}>
+            {view.senderName} shared &ldquo;{view.title}&rdquo; with you for your records. There is
+            nothing for you to sign. You&apos;ll get an email when everyone has finished.
+          </Status>
+        );
       return (
         <Status icon={<Mail className="size-5" />} title="Nothing to sign yet" test={t}>
           You&apos;ll receive an email when the document is ready for you.

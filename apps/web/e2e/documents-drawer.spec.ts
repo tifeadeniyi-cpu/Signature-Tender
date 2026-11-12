@@ -47,7 +47,7 @@ async function sendTestRequest(page: Page, filename: string, signerName: string,
 
 async function sign(page: Page, link: string) {
   await page.goto(link);
-  await page.getByRole('button', { name: 'Start review' }).click();
+  await page.getByRole('button', { name: /^Review/ }).click();
   await page.getByLabel('I agree to use electronic records').check();
   await page.getByRole('button', { name: 'Continue' }).click();
   await page.getByRole('button', { name: /^Sign here/ }).click();

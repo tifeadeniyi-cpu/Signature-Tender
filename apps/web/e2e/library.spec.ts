@@ -86,10 +86,10 @@ test('a recipient without an account gets a new link, signs, and downloads the c
   // The old link stops working; the new one signs.
   const old = await (await browser.newContext()).newPage();
   await old.goto(firstLink);
-  await expect(old.getByRole('button', { name: 'Start review' })).toHaveCount(0);
+  await expect(old.getByRole('button', { name: /^Review/ })).toHaveCount(0);
   const signer = await (await browser.newContext()).newPage();
   await signer.goto(newLink);
-  await signer.getByRole('button', { name: 'Start review' }).click();
+  await signer.getByRole('button', { name: /^Review/ }).click();
   await signer.getByLabel('I agree to use electronic records').check();
   await signer.getByRole('button', { name: 'Continue' }).click();
   await signer.getByRole('button', { name: /^Sign here/ }).click();

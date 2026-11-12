@@ -55,7 +55,7 @@ async function sendRequest(browser: Browser, signerEmail: string) {
 
 async function enter(page: Page, link: string, consent: boolean) {
   await page.goto(link);
-  await page.getByRole('button', { name: 'Start review' }).click();
+  await page.getByRole('button', { name: /^Review/ }).click();
   if (consent) {
     await expect(page.getByRole('heading', { name: 'Sign electronically' })).toBeVisible();
     await page.getByLabel('I agree to use electronic records').check();

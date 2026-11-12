@@ -23,6 +23,7 @@ export async function remindAction(documentId: string, requestId: string): Promi
       message: r.emailMessage,
       isTest: r.isTest,
       workspaceId: r.workspaceId,
+      reminder: true,
     });
     revalidatePath(`/app/documents/${documentId}`);
     const n = r.invitations.length;

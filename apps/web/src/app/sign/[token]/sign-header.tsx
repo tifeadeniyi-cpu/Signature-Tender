@@ -11,11 +11,14 @@ const STEPS = ['Review', 'Sign', 'Complete'] as const;
  */
 export function SignHeader({ step, actions }: { step: SignStep; actions?: React.ReactNode }) {
   return (
-    <header className="relative z-40 flex h-14 shrink-0 items-center gap-3 bg-primary px-3 text-white sm:h-16 sm:px-5">
+    <header
+      style={{ backgroundColor: '#730a2a' }}
+      className="relative z-40 flex h-14 shrink-0 items-center gap-3 px-3 text-white sm:h-16 sm:px-5"
+    >
       <Image
         src="/brand/logo-reversed.png"
         alt="Signature Tender"
-        width={316}
+        width={327}
         height={168}
         className="h-9 w-auto sm:h-11"
         priority

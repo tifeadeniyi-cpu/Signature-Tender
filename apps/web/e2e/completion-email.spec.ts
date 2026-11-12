@@ -37,7 +37,7 @@ async function sendAndSign(page: Page, browser: import('@playwright/test').Brows
 
   const signer = await (await browser.newContext()).newPage();
   await signer.goto(await latestLinkFor(email, 'Please sign'));
-  await signer.getByRole('button', { name: 'Start review' }).click();
+  await signer.getByRole('button', { name: /^Review/ }).click();
   await signer.getByLabel('I agree to use electronic records').check();
   await signer.getByRole('button', { name: 'Continue' }).click();
   await signer.getByRole('button', { name: /^Sign here/ }).click();

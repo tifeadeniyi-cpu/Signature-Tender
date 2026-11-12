@@ -796,7 +796,11 @@ export interface SignerView {
   workspaceId: string;
   title: string;
   senderName: string;
+  senderEmail: string;
   workspaceName: string;
+  sentAt: Date | null;
+  /** Pages in the document as sent. */
+  pageCount: number | null;
   recipient: { id: string; name: string; email: string; role: RecipientRole; authMethod: string };
   isTest: boolean;
   expiresAt: Date | null;
@@ -831,6 +835,7 @@ function toView(
   request: RequestRow,
   r: RecipientRow,
   stage: SignerStage,
+  pageCount: number | null = null,
   allPartiesDone = false,
 ): SignerView {
   const settings = documentSettingsSchema.parse(request.settings);
@@ -839,7 +844,10 @@ function toView(
     workspaceId: request.workspaceId,
     title: request.title,
     senderName: request.senderName,
+    senderEmail: request.senderEmail,
     workspaceName: request.workspaceName,
+    sentAt: request.sentAt,
+    pageCount,
     recipient: { id: r.id, name: r.name, email: r.email, role: r.role, authMethod: r.authMethod },
     isTest: request.isTest,
     expiresAt: request.expiresAt,
@@ -885,6 +893,10 @@ export async function getSignerView(
           .set({ status: 'in_progress', updatedAt: new Date() })
           .where(eq(schema.signingRequests.id, request.id));
     }
+    const [file] = await tx
+      .select({ pageCount: schema.documentFiles.pageCount })
+      .from(schema.documentFiles)
+      .where(eq(schema.documentFiles.id, request.sourceFileId));
     const stage = stageFor(request, recipient, session);
     let allDone = false;
     if (stage === 'signed_waiting') {
@@ -896,7 +908,7 @@ export async function getSignerView(
         .filter((x) => ACTING_ROLES.includes(x.role))
         .every((x) => x.status === 'signed');
     }
-    return toView(request, recipient, stage, allDone);
+    return toView(request, recipient, stage, file?.pageCount, allDone);
   });
 }
 
