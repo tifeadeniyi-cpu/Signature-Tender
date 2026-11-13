@@ -48,7 +48,8 @@ test('sign up, verify, create workspace, edit settings, sign out and back in', a
       .getByRole('link', { name: 'Billing & Credits' }),
   ).toBeVisible();
 
-  await page.getByRole('link', { name: 'Workspace settings' }).click();
+  await page.locator('header summary').click();
+  await page.getByRole('link', { name: 'Workspace', exact: true }).click();
   await expect(page.getByText('Your role: Owner')).toBeVisible();
   await page.getByLabel('Website').fill('not a url');
   await page.getByRole('button', { name: 'Save Changes' }).click();
