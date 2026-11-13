@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { Download, FileCheck2, Pencil, Archive as ArchiveIcon } from 'lucide-react';
 import {
+  getSignatureSeals,
   getDocument,
   getRequestsForDocument,
   hasPermission,
@@ -25,6 +26,7 @@ import { buttonClass } from '@/components/ui/button';
 import { StatusBadge } from '@/components/documents/status-badge';
 import { colorFor } from '@/components/documents/colors';
 import { RequestActions } from './request-actions';
+import { verifyIntegrityAction } from '../actions';
 import { EVENT_LABELS } from '@/components/documents/event-labels';
 import { PaymentCard } from './payment-card';
 import { liveSendingEnabled, paymentsAvailable } from '@/lib/billing';
@@ -92,6 +94,10 @@ export default async function DocumentPage({
   const [current, ...older] = requests;
   const { request: r, recipients } = current!;
   const record = await getDocumentRecord(db(), actor, id);
+  const seals =
+    r.status === 'completed'
+      ? await getSignatureSeals(db(), actor, id, r.id).catch(() => null)
+      : null;
   // Picks up any completion email still queued or waiting for a retry (no-op when none are due).
   if (r.status === 'completed') dispatchAfterResponse(r.id);
   const archived = Boolean(record.document.archivedAt);
@@ -247,6 +253,8 @@ export default async function DocumentPage({
                   <PreviewOnDemand
                     src={`/api/documents/${id}/versions/${previewFile.id}?view=1`}
                     label={previewFile.kind === 'signed' ? 'signed copy' : 'document'}
+                    seals={previewFile.kind === 'signed' ? seals : null}
+                    checkIntegrity={verifyIntegrityAction}
                   />
                 ) : null}
               </Card>
