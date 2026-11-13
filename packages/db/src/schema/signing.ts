@@ -144,6 +144,9 @@ export const requestRecipients = pgTable(
     consentedAt: timestamp('consented_at', { withTimezone: true }),
     signedAt: timestamp('signed_at', { withTimezone: true }),
     declinedAt: timestamp('declined_at', { withTimezone: true }),
+    /** The signer's time zone when they signed (device setting, else IP); stamps use it. */
+    timeZone: text('time_zone'),
+    timeZoneSource: text('time_zone_source').$type<'device' | 'ip'>(),
     declineReason: text('decline_reason'),
     signedIp: text('signed_ip'),
     signedUserAgent: text('signed_user_agent'),

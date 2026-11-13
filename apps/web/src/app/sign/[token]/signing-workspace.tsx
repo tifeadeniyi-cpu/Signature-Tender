@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -28,7 +28,12 @@ import { Button, buttonClass } from '@/components/ui/button';
 import { Alert, Skeleton } from '@/components/ui/feedback';
 import { roleLabel, type SignatureDisplayFormat } from '@st/core/signature-block/layout';
 import { cn } from '@/lib/cn';
-import { adoptAction, adoptStudioDesignAction, completeAction, saveProgressAction } from './actions';
+import {
+  adoptAction,
+  adoptStudioDesignAction,
+  completeAction,
+  saveProgressAction,
+} from './actions';
 import { DeclineForm } from './stages';
 import { SignHeader } from './sign-header';
 import { usePdf, PdfPageView } from './workspace/pdf';
@@ -73,6 +78,16 @@ const ZOOMS = [50, 75, 100, 125, 150, 200];
 type Zoom = { mode: 'width' | 'page' } | { mode: 'custom'; pct: number };
 type SaveState = 'saved' | 'saving' | 'error' | 'idle';
 
+const noSubscribe = () => () => {};
+/** The signer's device time zone, e.g. "America/Chicago" (empty if the browser will not say). */
+function deviceTimeZone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+  } catch {
+    return '';
+  }
+}
+
 const dateFmt = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeZone: 'UTC' });
 
 const ACTION_COPY: Record<string, { title: string; body: string }> = {
@@ -115,9 +130,20 @@ export function SigningWorkspace({
 }) {
   const router = useRouter();
   const { pdf, sizes, error: pdfError, retry: retryPdf } = usePdf(`/api/sign/${token}/file`);
+  // The stamp shows the signer's own time zone: the device's, once the page runs in the browser.
+  const zone = useSyncExternalStore(
+    noSubscribe,
+    deviceTimeZone,
+    () => data.signatureBlock.timeZone,
+  );
   const block: BlockSettings = useMemo(
-    () => ({ ...data.signatureBlock, name: data.name, role: roleLabel(data.role) }),
-    [data.signatureBlock, data.name, data.role],
+    () => ({
+      ...data.signatureBlock,
+      timeZone: zone || data.signatureBlock.timeZone,
+      name: data.name,
+      role: roleLabel(data.role),
+    }),
+    [data.signatureBlock, zone, data.name, data.role],
   );
   const sigById = useMemo(
     () => new Map(data.signatures.map((s) => [s.id, { id: s.id, dataUrl: s.dataUrl }])),
@@ -480,9 +506,10 @@ export function SigningWorkspace({
     const applyTo = data.fields
       .filter((f) => f.type === kind && (applied[f.id] || (scope === 'field' && f.id === activeId)))
       .map((f) => f.id);
-    const r = await ('designId' in a
-      ? adoptStudioDesignAction(token, { kind, designId: a.designId, applyTo })
-      : adoptAction(token, { kind, ...a, applyTo })
+    const r = await (
+      'designId' in a
+        ? adoptStudioDesignAction(token, { kind, designId: a.designId, applyTo })
+        : adoptAction(token, { kind, ...a, applyTo })
     ).catch(() => ({
       ok: false as const,
       message: 'Connection problem. Your signature was not saved. Please try again.',
@@ -547,6 +574,7 @@ export function SigningWorkspace({
     const r = await completeAction(token, {
       intent: true,
       documentVersion: data.documentVersion,
+      timeZone: deviceTimeZone() || undefined,
       values: data.fields
         .filter((f) => f.type !== 'date_signed')
         .map((f) =>
