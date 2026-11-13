@@ -83,13 +83,13 @@ export function sealLayers(variant: SealVariant): SealLayer[] {
 export const CALENDAR_ICON: SealLayer[] = [
   {
     d: 'M 3.5 2.5 L 12.5 2.5 Q 14 2.5 14 4 L 14 13 Q 14 14.5 12.5 14.5 L 3.5 14.5 Q 2 14.5 2 13 L 2 4 Q 2 2.5 3.5 2.5 Z',
-    stroke: '#7F1D3A',
+    stroke: SEAL_COLORS.royal,
     strokeWidth: 1.3,
   },
-  { d: 'M 2 6 L 14 6', stroke: '#7F1D3A', strokeWidth: 1.3 },
-  { d: 'M 5 1 L 5 4', stroke: '#7F1D3A', strokeWidth: 1.3 },
-  { d: 'M 11 1 L 11 4', stroke: '#7F1D3A', strokeWidth: 1.3 },
-  { d: 'M 5.6 10.2 L 7.3 11.9 L 10.6 8.6', stroke: '#7F1D3A', strokeWidth: 1.3 },
+  { d: 'M 2 6 L 14 6', stroke: SEAL_COLORS.royal, strokeWidth: 1.3 },
+  { d: 'M 5 1 L 5 4', stroke: SEAL_COLORS.royal, strokeWidth: 1.3 },
+  { d: 'M 11 1 L 11 4', stroke: SEAL_COLORS.royal, strokeWidth: 1.3 },
+  { d: 'M 5.6 10.2 L 7.3 11.9 L 10.6 8.6', stroke: SEAL_COLORS.royal, strokeWidth: 1.3 },
 ];
 
 /** Smallest seal size (points) that still uses the detailed artwork. */

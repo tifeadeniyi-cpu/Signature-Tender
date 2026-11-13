@@ -35,12 +35,12 @@ export const SIGNATURE_DISPLAY_LABELS: Record<SignatureDisplayFormat, string> = 
 export const BLOCK_COLORS = {
   ink: '#111111',
   name: '#0D1B33',
-  role: '#4B5563',
+  role: '#475569',
   divider: '#172D4D',
   line: '#1F1F1F',
   strip: '#F3DEB4',
   stripText: '#262626',
-  pendingText: '#4B5563',
+  pendingText: '#475569',
   separator: '#D8AF68',
 } as const;
 
