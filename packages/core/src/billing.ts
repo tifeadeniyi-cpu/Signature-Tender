@@ -23,6 +23,15 @@ import { getConfigValue } from './config';
 
 type Meta = { ipAddress?: string | null; userAgent?: string | null };
 export type CreditBucket = 'purchased' | 'allowance';
+/** How a send was paid for. `complimentary` spends nothing (see isComplimentary). */
+export type SendCredit = CreditBucket | 'complimentary';
+
+/**
+ * app_config key listing workspaces that sign for free with no limit (the founder workspace). The
+ * value is a JSON array of workspace ids. Only the database owner can change app_config, so no
+ * customer can put their own workspace on the list. Removing an id turns normal billing back on.
+ */
+export const COMPLIMENTARY_WORKSPACES_KEY = 'billing.complimentary_workspaces';
 
 const uuid = z.string().uuid();
 const ACTIVE_SUB = ['active', 'trialing', 'past_due'];
@@ -54,6 +63,18 @@ export interface Balances {
   purchased: number;
   available: number;
   reserved: number;
+  /** True for a complimentary workspace: sends never need a credit. */
+  unlimited: boolean;
+}
+
+/** Whether this workspace signs for free, without credits or payment. */
+export async function isComplimentary(tx: Tx, workspaceId: string): Promise<boolean> {
+  const ids = await getConfigValue<unknown>(
+    tx as unknown as Database,
+    COMPLIMENTARY_WORKSPACES_KEY,
+    [],
+  );
+  return Array.isArray(ids) && ids.includes(workspaceId);
 }
 
 export async function getBalances(tx: Tx, workspaceId: string): Promise<Balances> {
@@ -76,17 +97,24 @@ export async function getBalances(tx: Tx, workspaceId: string): Promise<Balances
     );
   const allowance = Math.max(0, rows.find((r) => r.bucket === 'allowance')?.total ?? 0);
   const purchased = Math.max(0, rows.find((r) => r.bucket === 'purchased')?.total ?? 0);
-  return { allowance, purchased, available: allowance + purchased, reserved: held?.n ?? 0 };
+  return {
+    allowance,
+    purchased,
+    available: allowance + purchased,
+    reserved: held?.n ?? 0,
+    unlimited: await isComplimentary(tx, workspaceId),
+  };
 }
 
 /**
  * Sets one credit aside for a request, spending the expiring allowance before purchased credits.
- * Returns the bucket used, or null when the workspace has no credit available.
+ * Returns the bucket used, `complimentary` for a workspace that signs for free (nothing is
+ * spent or held), or null when the workspace has no credit available.
  */
 export async function reserveCredit(
   tx: Tx,
   input: { workspaceId: string; requestId: string; userId: string },
-): Promise<CreditBucket | null> {
+): Promise<SendCredit | null> {
   await lockCredits(tx, input.workspaceId);
   const [existing] = await tx
     .select()
@@ -94,6 +122,7 @@ export async function reserveCredit(
     .where(eq(schema.creditHolds.requestId, input.requestId));
   if (existing && existing.status !== 'restored') return existing.bucket;
   const b = await getBalances(tx, input.workspaceId);
+  if (b.unlimited) return 'complimentary';
   const bucket: CreditBucket | null =
     b.allowance > 0 ? 'allowance' : b.purchased > 0 ? 'purchased' : null;
   if (!bucket) return null;
@@ -348,6 +377,7 @@ export async function getBillingOverview(db: Database, actor: ActorContext, work
 
     return {
       canManage,
+      complimentary: balances.unlimited,
       account: acct
         ? {
             planCode: acct.planCode,
@@ -441,6 +471,8 @@ export async function beginCheckout(
   const input = checkoutInput.parse(raw);
   return withActor(db, actor, async (tx) => {
     await requireBillingManager(tx, workspaceId);
+    if (await isComplimentary(tx, workspaceId))
+      throw new AppError('conflict', 'This workspace signs for free, so there is nothing to pay.');
     const acct = await accountRow(tx, workspaceId);
     const [ws] = await tx
       .select({ name: schema.workspaces.name })

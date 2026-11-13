@@ -44,9 +44,11 @@ export default async function ReviewStep({ params }: { params: Promise<{ id: str
       ? await getSendQuote(db(), { userId: data.user.id }, doc.workspaceId)
       : null;
   const liveNote = quote
-    ? quote.balances.available > 0
-      ? `Uses 1 credit. Your workspace has ${quote.balances.available} available.`
-      : `You have no credits. After you press send you can pay ${formatMoney(quote.price.amountCents, quote.price.currency)} for this request${quote.canBuy ? '' : ' (a workspace owner or admin must pay)'}. Nothing is emailed until payment is confirmed.`
+    ? quote.balances.unlimited
+      ? 'Free to send. This workspace has unlimited signing.'
+      : quote.balances.available > 0
+        ? `Uses 1 credit. Your workspace has ${quote.balances.available} available.`
+        : `You have no credits. After you press send you can pay ${formatMoney(quote.price.amountCents, quote.price.currency)} for this request${quote.canBuy ? '' : ' (a workspace owner or admin must pay)'}. Nothing is emailed until payment is confirmed.`
     : null;
 
   const edit = (step: string) => (

@@ -264,8 +264,12 @@ export default async function DashboardPage({
       <aside className="flex flex-col gap-6" aria-label="Account overview">
         <Card>
           <h2 className="font-display text-lg">Your Plan</h2>
-          <p className="mt-1 text-sm font-semibold text-heading">{payg?.name ?? 'Pay As You Go'}</p>
-          {single ? (
+          <p className="mt-1 text-sm font-semibold text-heading">
+            {quote?.balances.unlimited ? 'Founder workspace' : (payg?.name ?? 'Pay As You Go')}
+          </p>
+          {quote?.balances.unlimited ? (
+            <p className="mt-3 text-sm">Unlimited signing requests at no charge.</p>
+          ) : single ? (
             <p className="mt-3 text-sm">
               {formatMoney(single.amountCents)} per signing request. No subscription required.
             </p>
@@ -274,7 +278,9 @@ export default async function DashboardPage({
             <dl className="mt-4 flex flex-col gap-1 rounded-lg bg-blush px-3 py-2 text-sm">
               <div className="flex items-center justify-between">
                 <dt>Available credits</dt>
-                <dd className="font-semibold text-heading">{quote.balances.available}</dd>
+                <dd className="font-semibold text-heading">
+                  {quote.balances.unlimited ? 'Unlimited' : quote.balances.available}
+                </dd>
               </div>
               {month ? (
                 <div className="flex items-center justify-between">
@@ -285,9 +291,11 @@ export default async function DashboardPage({
             </dl>
           ) : null}
           <div className="mt-3 flex flex-wrap gap-2">
-            <Link href="/app/billing" className={buttonClass('secondary', 'sm')}>
-              Buy Credits
-            </Link>
+            {quote?.balances.unlimited ? null : (
+              <Link href="/app/billing" className={buttonClass('secondary', 'sm')}>
+                Buy Credits
+              </Link>
+            )}
             <Link href="/app/billing" className={buttonClass('ghost', 'sm')}>
               Manage Plan
             </Link>
