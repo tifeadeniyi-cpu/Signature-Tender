@@ -8,6 +8,7 @@ import {
   verifySigningCode,
   giveConsent,
   adoptSignature,
+  saveSigningProgress,
   completeSigning,
   finalizeRequest,
   declineSigning,
@@ -121,7 +122,9 @@ export async function consentAction(
 export async function adoptAction(
   token: string,
   input: Parameters<typeof adoptSignature>[3],
-): Promise<{ ok: true; id: string; dataUrl: string } | { ok: false; message: string }> {
+): Promise<
+  { ok: true; id: string; dataUrl: string; applied: string[] } | { ok: false; message: string }
+> {
   try {
     const r = await adoptSignature(
       db(),
@@ -133,6 +136,31 @@ export async function adoptAction(
     return { ok: true, ...r };
   } catch (err) {
     return fail(err);
+  }
+}
+
+/**
+ * Saves drafts (and, for Save & Exit, ends this browser session). Nothing is signed here.
+ */
+export async function saveProgressAction(
+  token: string,
+  input: Parameters<typeof saveSigningProgress>[3],
+): Promise<{ ok: true; savedAt: string } | { ok: false; message: string; ended?: boolean }> {
+  try {
+    const r = await saveSigningProgress(
+      db(),
+      token,
+      await readSession(token),
+      input,
+      await requestMeta(),
+    );
+    // On exit the session is revoked in the database (its hash is cleared), so the cookie is
+    // already worthless. It is left in place on purpose: changing cookies in a server action
+    // re-renders the route, which would replace the "progress saved" confirmation.
+    return { ok: true, savedAt: r.savedAt.toISOString() };
+  } catch (err) {
+    const f = fail(err);
+    return { ...f, ended: err instanceof AppError && err.code === 'unauthenticated' };
   }
 }
 
@@ -148,6 +176,15 @@ export async function completeAction(
     ctx = await context(token);
     result = await completeSigning(db(), storage(), token, await readSession(token), input, meta);
   } catch (err) {
+    // A repeated submission (double click, retry after a lost response) is not an error if the
+    // first one was recorded: the server refuses to sign twice, and the page shows the result.
+    if (err instanceof AppError && err.code === 'conflict') {
+      const v = await getSignerView(db(), token, undefined).catch(() => null);
+      if (v && (v.stage === 'signed_waiting' || v.stage === 'completed')) {
+        revalidatePath(`/sign/${token}`);
+        return { ok: true };
+      }
+    }
     return fail(err);
   }
   // The session cookie stays until it expires so the completed document opens without a new code.

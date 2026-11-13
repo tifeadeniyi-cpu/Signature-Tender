@@ -50,12 +50,15 @@ async function sign(page: Page, link: string) {
   await page.getByRole('button', { name: /^Review/ }).click();
   await page.getByLabel('I agree to use electronic records').check();
   await page.getByRole('button', { name: 'Continue' }).click();
-  await page.getByRole('button', { name: /Add your signature/ }).click();
-  await page.getByRole('button', { name: 'Adopt and use signature' }).click();
-  await page.getByRole('button', { name: 'Finish signing' }).click();
+  await page.getByRole('button', { name: /^Sign here/ }).click();
+  await page.getByRole('button', { name: 'Use This Signature' }).click();
+  await page
+    .getByRole('navigation', { name: 'Field navigation' })
+    .getByRole('button', { name: 'Finish Signing' })
+    .click();
   await page.getByLabel(/intend to sign it electronically/).check();
-  await page.getByRole('button', { name: 'Sign document' }).click();
-  await expect(page.getByRole('heading', { name: 'This document is complete' })).toBeVisible({
+  await page.getByRole('button', { name: 'Complete Signing' }).click();
+  await expect(page.getByRole('heading', { name: "You've Completed Your Signing" })).toBeVisible({
     timeout: 20_000,
   });
 }

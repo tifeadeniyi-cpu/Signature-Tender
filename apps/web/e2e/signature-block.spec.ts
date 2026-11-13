@@ -80,14 +80,21 @@ test('sender picks the signature block, small fields are flagged, and the seal o
   await start.click();
   await signer.getByLabel('I agree to use electronic records').check();
   await signer.getByRole('button', { name: 'Continue' }).click();
-  await signer.getByRole('button', { name: /Add your signature/ }).click();
-  const dialog = signer.getByRole('dialog', { name: 'Adopt your signature' });
-  await dialog.getByRole('button', { name: 'Adopt and use signature' }).click();
-  await expect(dialog).toBeHidden();
-  await signer.getByRole('button', { name: /Finish signing/ }).click();
-  await signer.getByLabel(/intend to sign it electronically/).check();
-  await signer.getByRole('button', { name: 'Sign document' }).click();
-  await expect(signer.getByRole('heading', { name: 'This document is complete' })).toBeVisible({
+  await signer.getByRole('button', { name: 'Next Field' }).click();
+  await expect(signer.getByRole('button', { name: /^Sign here/ })).toBeFocused();
+  const studio = signer.getByRole('complementary', { name: 'Signing tools' });
+  await studio.getByRole('button', { name: 'Use This Signature' }).click();
+  // While signing, the field already shows the chosen block, with the time still pending.
+  const block = signer.locator('[data-signature-block="full"]');
+  await expect(block).toHaveAttribute('data-state', 'pending');
+  await signer
+    .getByRole('navigation', { name: 'Field navigation' })
+    .getByRole('button', { name: 'Finish Signing' })
+    .click();
+  const confirm = signer.getByRole('dialog', { name: 'Confirm Your Electronic Signature' });
+  await confirm.getByLabel(/intend to sign it electronically/).check();
+  await confirm.getByRole('button', { name: 'Complete Signing' }).click();
+  await expect(signer.getByRole('heading', { name: "You've Completed Your Signing" })).toBeVisible({
     timeout: 20_000,
   });
 

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { CircleCheck, CircleX, Clock, Ban, Download, Mail, Eye } from 'lucide-react';
+import { CircleCheck, CircleX, Clock, Ban, Download, Mail, Eye, Hourglass } from 'lucide-react';
 import {
   getSignerView,
   getSigningWorkspace,
@@ -18,10 +18,17 @@ import { VerifyCard, ConsentCard } from './stages';
 import { SigningWorkspace } from './signing-workspace';
 import { Landing } from './landing';
 import { PreviewModal } from './preview-modal';
+import { SignChrome } from '../sign-chrome';
 
 export const dynamic = 'force-dynamic';
 
 const fmt = new Intl.DateTimeFormat('en-US', { dateStyle: 'long', timeZone: 'UTC' });
+const fmtShort = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeZone: 'UTC' });
+const fmtTime = new Intl.DateTimeFormat('en-US', {
+  dateStyle: 'long',
+  timeStyle: 'short',
+  timeZone: 'UTC',
+});
 
 function Shell({ children, test }: { children: React.ReactNode; test?: boolean }) {
   return (
@@ -81,20 +88,23 @@ export default async function SignPage({
   } catch (err) {
     if (err instanceof AppError && err.code === 'not_found') {
       return (
-        <Status icon={<Ban className="size-5" />} title="This link is not available">
-          It may have expired, been replaced by a newer email, or the request was cancelled. Ask the
-          sender for a new link.
-        </Status>
+        <SignChrome>
+          <Status icon={<Ban className="size-5" />} title="This link is not available">
+            It may have expired, been replaced by a newer email, or the request was cancelled. Ask
+            the sender for a new link.
+          </Status>
+        </SignChrome>
       );
     }
     throw err;
   }
   const brand = await getBrand(db(), view.workspaceId).catch(() => null);
+  if (view.stage === 'sign') return stage(view, token, session, preview);
   return (
-    <>
+    <SignChrome>
       {brand ? <BrandBar brand={brand} workspaceId={view.workspaceId} /> : null}
       {await stage(view, token, session, preview)}
-    </>
+    </SignChrome>
   );
 }
 
@@ -162,48 +172,30 @@ async function stage(
         </>
       );
     case 'sign': {
-      const data = await getSigningWorkspace(db(), token, session);
+      const data = await getSigningWorkspace(db(), token, session, await requestMeta());
       return (
         <SigningWorkspace
           token={token}
           title={view.title}
           senderName={view.senderName}
           isTest={t}
+          authMethod={view.recipient.authMethod}
+          today={fmtShort.format(new Date())}
           data={data}
-          fonts={SIGNATURE_FONTS.map((f) => ({
-            id: f.id,
-            family: f.family,
-            className: f.className,
-          }))}
+          fonts={SIGNATURE_FONTS.map((f) => ({ id: f.id, family: f.family }))}
         />
       );
     }
+    case 'waiting_turn':
+      return (
+        <Status icon={<Hourglass className="size-5" />} title="It's Not Your Turn Yet" test={t}>
+          Others need to sign &ldquo;{view.title}&rdquo; before you. We&apos;ll email you when
+          it&apos;s ready for you.
+        </Status>
+      );
     case 'signed_waiting':
-      return (
-        <Status icon={<CircleCheck className="size-5" />} title="You're done" test={t}>
-          Your part of &ldquo;{view.title}&rdquo; is recorded. We&apos;ll email you when everyone
-          has finished.
-        </Status>
-      );
     case 'completed':
-      return (
-        <Status
-          icon={<CircleCheck className="size-5" />}
-          title="This document is complete"
-          test={t}
-        >
-          <p>Everyone has finished &ldquo;{view.title}&rdquo;.</p>
-          {view.canDownloadSigned ? (
-            <a href={`/api/sign/${token}/signed`} className={buttonClass('primary', 'md', 'mt-4')}>
-              <Download className="size-4" aria-hidden /> Download signed copy
-            </a>
-          ) : (
-            <p className="mt-2">
-              The sender has not enabled downloads. Contact {view.senderName} for a copy.
-            </p>
-          )}
-        </Status>
-      );
+      return <Success view={view} token={token} />;
     case 'declined':
       return (
         <Status icon={<CircleX className="size-5" />} title="Signing was declined" test={t}>
@@ -247,4 +239,80 @@ async function stage(
         </Status>
       );
   }
+}
+
+/**
+ * Shown after this recipient submits, and to anyone opening the link later. It separates "your
+ * signing is complete" from "all parties have completed", and never offers the signed copy before
+ * it has been generated and stored.
+ */
+function Success({ view, token }: { view: SignerView; token: string }) {
+  const done = view.stage === 'completed';
+  const ready = view.canDownloadSigned;
+  const status = done
+    ? 'All parties have completed the document'
+    : view.allPartiesDone
+      ? 'All parties have signed. The final signed copy is being prepared.'
+      : 'Waiting for other parties to finish';
+  return (
+    <Shell test={view.isTest}>
+      <div className="flex flex-col items-center gap-3 text-center">
+        <div
+          className="flex size-14 items-center justify-center rounded-full bg-success-bg text-success"
+          aria-hidden
+        >
+          <CircleCheck className="size-7" />
+        </div>
+        <h1 className="font-display text-3xl">
+          {done && !view.signedAt ? 'This document is complete' : "You've Completed Your Signing"}
+        </h1>
+        <p className="text-sm">
+          {view.signedAt
+            ? 'Your signature has been submitted successfully.'
+            : `Everyone has finished "${view.title}".`}
+        </p>
+      </div>
+      <dl className="mt-6 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 rounded-xl bg-ivory p-4 text-sm">
+        <dt>Document</dt>
+        <dd className="font-semibold text-heading">{view.title}</dd>
+        <dt>Recipient</dt>
+        <dd className="text-heading">{view.recipient.name}</dd>
+        {view.signedAt ? (
+          <>
+            <dt>Completed</dt>
+            <dd className="text-heading">{fmtTime.format(view.signedAt)} UTC</dd>
+          </>
+        ) : null}
+        <dt>Status</dt>
+        <dd className="text-heading">
+          <span className="font-semibold">
+            {done || view.allPartiesDone ? '' : 'Your signing is complete. '}
+          </span>
+          {status}
+        </dd>
+      </dl>
+      {done ? null : (
+        <p className="mt-4 text-sm">
+          {view.allPartiesDone
+            ? "We'll email you when the signed copy is ready."
+            : `${view.senderName} and the other recipients will be notified when the entire agreement is complete.`}
+        </p>
+      )}
+      <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
+        {ready ? (
+          <a href={`/api/sign/${token}/signed`} className={buttonClass('primary', 'md')}>
+            <Download className="size-4" aria-hidden /> Download signed copy
+          </a>
+        ) : done ? (
+          <p className="text-sm">
+            The sender has not enabled downloads. Contact {view.senderName} for a copy.
+          </p>
+        ) : null}
+        <Link href="/" className={buttonClass('secondary', 'md')}>
+          Return to Signature Tender homepage
+        </Link>
+      </div>
+      <p className="mt-4 text-center text-xs">You can close this window.</p>
+    </Shell>
+  );
 }
