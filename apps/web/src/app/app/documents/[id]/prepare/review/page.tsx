@@ -52,7 +52,7 @@ export default async function ReviewStep({ params }: { params: Promise<{ id: str
     quote && selfSign
       ? quote.balances.unlimited
         ? 'Free: this workspace has unlimited signing. You sign straight away.'
-        : `${selfPrice} for this document, paid at checkout. You sign straight after. No credit is used.${quote.canBuy ? '' : ' A workspace owner or admin must pay.'}`
+        : `${selfPrice} for this document, paid at checkout. You sign straight after. No credit is used.`
       : quote
         ? quote.balances.unlimited
           ? 'Free to send. This workspace has unlimited signing.'

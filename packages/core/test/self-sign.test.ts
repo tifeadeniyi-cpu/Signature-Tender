@@ -36,8 +36,8 @@ const LIVE = {
 let me: string, myEmail: string, teammate: string, ws: string;
 let seq = 0;
 
-async function readyDoc(recipients: { name: string; email: string }[]) {
-  const actor = { userId: me };
+async function readyDoc(recipients: { name: string; email: string }[], who = me) {
+  const actor = { userId: who };
   const { id } = await createDocumentFromUpload(
     db,
     storage,
@@ -85,10 +85,10 @@ async function readyDoc(recipients: { name: string; email: string }[]) {
   return id;
 }
 
-async function pay(requestId: string) {
-  const plan = await beginCheckout(db, { userId: me }, ws, { kind: 'request', requestId });
+async function pay(requestId: string, who = me) {
+  const plan = await beginCheckout(db, { userId: who }, ws, { kind: 'request', requestId });
   const sid = `cs_test_self_${++seq}_${Date.now()}`;
-  await attachCheckoutSession(db, { userId: me }, plan.paymentId, sid);
+  await attachCheckoutSession(db, { userId: who }, plan.paymentId, sid);
   const out = await applyCheckoutCompleted(db, {
     sessionId: sid,
     mode: 'payment',
@@ -188,5 +188,38 @@ describe('sign it yourself', () => {
     const id = await readyDoc([{ name: 'Ann', email: 'ann.only@example.test' }]);
     const res = await sendForSignature(db, storage, { userId: me }, id, LIVE);
     expect(res.selfSign).toBe(false);
+  });
+
+  it('a teammate without billing access pays for their own self-signing, and nothing else', async () => {
+    const mateEmail = `${teammate}@example.test`;
+    const id = await readyDoc([{ name: 'Mate', email: mateEmail }], teammate);
+    const res = await sendForSignature(db, storage, { userId: teammate }, id, LIVE);
+    expect(res).toMatchObject({ status: 'awaiting_payment', selfSign: true });
+    expect(await getRequestBilling(db, { userId: teammate }, res.requestId)).toMatchObject({
+      canManage: true,
+      selfSign: true,
+    });
+    const { plan, out } = await pay(res.requestId, teammate);
+    expect(plan.lineItem.amountCents).toBe(99);
+    expect(out).toMatchObject({ action: 'dispatch' });
+    const sent = await sendPaidRequest(db, { userId: teammate }, res.requestId, {
+      liveSendingEnabled: true,
+    });
+    expect(sent.selfSign).toBe(true);
+    expect(await openSelfSigning(db, { userId: teammate }, res.requestId)).toMatchObject({
+      token: expect.any(String),
+    });
+
+    // A normal request still needs an owner or admin to pay.
+    const other = await readyDoc([{ name: 'Zed', email: 'zed.other@example.test' }], teammate);
+    const r2 = await sendForSignature(db, storage, { userId: teammate }, other, LIVE);
+    if (r2.status === 'awaiting_payment')
+      await expect(
+        beginCheckout(db, { userId: teammate }, ws, { kind: 'request', requestId: r2.requestId }),
+      ).rejects.toMatchObject({ code: 'forbidden' });
+    // And the owner's own self-sign payment is not the teammate's to touch.
+    await expect(
+      beginCheckout(db, { userId: teammate }, ws, { kind: 'credits', priceCode: 'pack_5' }),
+    ).rejects.toMatchObject({ code: 'forbidden' });
   });
 });

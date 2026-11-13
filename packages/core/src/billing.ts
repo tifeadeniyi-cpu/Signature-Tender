@@ -315,6 +315,16 @@ export async function isSelfSignRequest(tx: Tx, requestId: string) {
   return isSelfSignRecipients(recips, req.senderEmail);
 }
 
+/** The signed-in person sent this self-signing request (so they may pay for it). */
+async function isOwnSelfSign(tx: Tx, requestId: string, userId: string) {
+  if (!uuid.safeParse(requestId).success) return false;
+  const [req] = await tx
+    .select({ sentBy: schema.signingRequests.sentBy })
+    .from(schema.signingRequests)
+    .where(eq(schema.signingRequests.id, requestId));
+  return req?.sentBy === userId && (await isSelfSignRequest(tx, requestId));
+}
+
 export async function selfSignPrice(tx: Tx): Promise<RequestPrice> {
   const [row] = await tx
     .select()
@@ -517,6 +527,8 @@ export interface CheckoutPlan {
   planCode: string | null;
   requestId: string | null;
   documentId: string | null;
+  /** Paid by the person signing it themselves, who may not manage the workspace's billing. */
+  canLinkCustomer: boolean;
 }
 
 /**
@@ -532,7 +544,10 @@ export async function beginCheckout(
   if (!uuid.safeParse(workspaceId).success) throw new AppError('not_found', 'Workspace not found');
   const input = checkoutInput.parse(raw);
   return withActor(db, actor, async (tx) => {
-    await requireBillingManager(tx, workspaceId);
+    // Billing managers pay for anything. Anyone may pay $0.99 for a document they sign themselves.
+    const ownSelfSign =
+      input.kind === 'request' && (await isOwnSelfSign(tx, input.requestId, actor.userId));
+    if (!ownSelfSign) await requireBillingManager(tx, workspaceId);
     if (await isComplimentary(tx, workspaceId))
       throw new AppError('conflict', 'This workspace signs for free, so there is nothing to pay.');
     const acct = await accountRow(tx, workspaceId);
@@ -669,6 +684,7 @@ export async function beginCheckout(
       planCode: values.planCode ?? null,
       requestId: values.requestId ?? null,
       documentId,
+      canLinkCustomer: !ownSelfSign || (await permitted(tx, workspaceId, 'billing.manage')),
     };
   });
 }
@@ -892,7 +908,7 @@ export async function applyCheckoutCompleted(
       .for('update');
     if (!p) return { action: 'none', reason: 'unknown_session' };
 
-    if (f.customerId) {
+    if (f.customerId && p.priceCode !== SELF_SIGN_PRICE_CODE) {
       await tx
         .insert(schema.billingAccounts)
         .values({ workspaceId: p.workspaceId, stripeCustomerId: f.customerId })
@@ -1290,7 +1306,9 @@ export async function getRequestBilling(db: Database, actor: ActorContext, reque
       .from(schema.signingRequests)
       .where(eq(schema.signingRequests.id, requestId));
     if (!req) return null;
-    const canManage = await permitted(tx, req.workspaceId, 'billing.manage');
+    const selfSignOwn = await isOwnSelfSign(tx, requestId, actor.userId);
+    // The sender of a self-signing request can pay its $0.99 even without billing access.
+    const canManage = selfSignOwn || (await permitted(tx, req.workspaceId, 'billing.manage'));
     const canSee = canManage || (await permitted(tx, req.workspaceId, 'documents.send'));
     const [hold] = canSee
       ? await tx

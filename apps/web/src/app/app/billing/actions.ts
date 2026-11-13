@@ -36,7 +36,9 @@ async function checkout(input: CheckoutInput, returnPath: string): Promise<Billi
     const plan = await beginCheckout(db(), actor, workspaceId, input);
     try {
       let customer = plan.customerId;
-      if (!customer) {
+      // Someone paying for their own self-signing without billing access: no workspace customer
+      // is created for them; Stripe takes their email for the receipt.
+      if (!customer && plan.canLinkCustomer) {
         const c = await stripe().customers.create(
           {
             name: plan.workspaceName,
@@ -53,7 +55,7 @@ async function checkout(input: CheckoutInput, returnPath: string): Promise<Billi
       const session = await stripe().checkout.sessions.create(
         {
           mode: plan.mode,
-          customer,
+          ...(customer ? { customer } : { customer_email: plan.customerEmail || undefined }),
           client_reference_id: plan.paymentId,
           line_items: [
             {
