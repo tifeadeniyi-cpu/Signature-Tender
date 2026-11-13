@@ -27,6 +27,7 @@ import { db } from '@/lib/db';
 import { liveSendingEnabled } from '@/lib/billing';
 import { requireUser, requireWorkspace, requestMeta } from '@/lib/session';
 import { toActionError, type ActionState } from '@/lib/action-result';
+import { startRequestCheckout } from '@/app/app/billing/actions';
 
 type Recipients = Parameters<typeof saveRecipients>[3];
 type Fields = Parameters<typeof saveFields>[3];
@@ -145,9 +146,10 @@ export async function sendTestAction(
   kickWebhooks();
   const user = await requireUser();
   const actor = { userId: user.id };
+  let signNow = false;
   try {
     const testSigningEnabled = await isFeatureEnabled(db(), 'test_signing', env().APP_ENV);
-    const { invitations } = await sendForSignature(
+    const { invitations, selfSign } = await sendForSignature(
       db(),
       storage(),
       actor,
@@ -159,23 +161,25 @@ export async function sendTestAction(
       },
       await requestMeta(),
     );
+    if (selfSign) signNow = true;
     const d = await getDocument(db(), actor, documentId);
     const { workspaces } = await requireWorkspace();
     const ws = workspaces.find((w) => w.id === d.document.workspaceId);
-    await sendInvitations(invitations, {
-      title: d.document.title,
-      senderName: user.name,
-      workspaceName: ws?.name ?? '',
-      message: d.document.emailMessage,
-      isTest: true,
-      workspaceId: d.document.workspaceId,
-    });
+    if (!selfSign)
+      await sendInvitations(invitations, {
+        title: d.document.title,
+        senderName: user.name,
+        workspaceName: ws?.name ?? '',
+        message: d.document.emailMessage,
+        isTest: true,
+        workspaceId: d.document.workspaceId,
+      });
   } catch (err) {
     const r = toActionError(err);
     return { ok: false, message: r?.message ?? 'Something went wrong.' };
   }
   revalidatePath('/app/documents');
-  redirect(`/app/documents/${documentId}`);
+  redirect(signNow ? `/app/documents/${documentId}/sign-now` : `/app/documents/${documentId}`);
 }
 
 /** Sends for real. Spends a credit if there is one; otherwise the request waits for payment. */
@@ -186,6 +190,8 @@ export async function sendLiveAction(
   kickWebhooks();
   const user = await requireUser();
   const actor = { userId: user.id };
+  let signNow = false;
+  let checkoutFor: string | null = null;
   try {
     const res = await sendForSignature(
       db(),
@@ -200,7 +206,11 @@ export async function sendLiveAction(
       },
       await requestMeta(),
     );
-    if (res.status === 'sent') {
+    if (res.selfSign) {
+      // Sign it yourself: go straight to signing, or to the $0.99 checkout first.
+      if (res.status === 'sent') signNow = true;
+      else checkoutFor = res.requestId;
+    } else if (res.status === 'sent') {
       const d = await getDocument(db(), actor, documentId);
       const { workspaces } = await requireWorkspace();
       const ws = workspaces.find((w) => w.id === d.document.workspaceId);
@@ -217,8 +227,13 @@ export async function sendLiveAction(
     const r = toActionError(err);
     return { ok: false, message: r?.message ?? 'Something went wrong.' };
   }
+  // Outside the try: opening checkout ends in a redirect to Stripe.
+  if (checkoutFor) {
+    const r = await startRequestCheckout(checkoutFor);
+    return { ok: false, message: r?.message ?? 'We could not open checkout.' };
+  }
   revalidatePath('/app/documents');
-  redirect(`/app/documents/${documentId}`);
+  redirect(signNow ? `/app/documents/${documentId}/sign-now` : `/app/documents/${documentId}`);
 }
 
 /** Sends a request that is waiting for payment, using a credit the workspace already has. */

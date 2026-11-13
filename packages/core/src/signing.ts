@@ -49,7 +49,15 @@ export function signingEventRef(
   );
   return e ? `EV-${e.seq}-${e.hash.slice(0, 12).toUpperCase()}` : null;
 }
-import { consumeHold, reserveCredit, restoreOnCancel } from './billing';
+import {
+  consumeHold,
+  getBalances,
+  hasPaidSelfSign,
+  isSelfSignRecipients,
+  isSelfSignRequest,
+  reserveCredit,
+  restoreOnCancel,
+} from './billing';
 import { enqueueCompletionNotifications } from './notifications';
 
 type Meta = { ipAddress?: string | null; userAgent?: string | null };
@@ -146,6 +154,8 @@ export interface SendResult {
   invitations: Invitation[];
   /** `awaiting_payment` when a live request had no credit to use; nothing was emailed. */
   status: 'sent' | 'awaiting_payment';
+  /** The sender is the only recipient ("sign it yourself"): open signing, do not email. */
+  selfSign: boolean;
 }
 
 const PAYABLE_STATUSES: RequestStatus[] = ['awaiting_payment', 'payment_processing'];
@@ -229,6 +239,50 @@ async function assignTokens(
     out.push({ recipientId: r.id, name: r.name, email: r.email, token, kind });
   }
   return out;
+}
+
+/**
+ * "Sign it yourself": gives the sender a fresh signing link to their own request, so they go
+ * straight to signing instead of waiting for an email. Only for a sent request whose one
+ * recipient is the signed-in person (same verified email), and only until they have signed.
+ */
+export async function openSelfSigning(
+  db: Database,
+  actor: ActorContext,
+  requestId: string,
+): Promise<{ token: string }> {
+  if (!z.string().uuid().safeParse(requestId).success)
+    throw new AppError('not_found', 'Request not found');
+  return withActor(db, actor, async (tx) => {
+    const [req] = await tx
+      .select()
+      .from(schema.signingRequests)
+      .where(eq(schema.signingRequests.id, requestId))
+      .for('update');
+    if (!req || req.sentBy !== actor.userId) throw new AppError('not_found', 'Request not found');
+    const [me] = await tx
+      .select({ email: schema.user.email, verified: schema.user.emailVerified })
+      .from(schema.user)
+      .where(eq(schema.user.id, actor.userId));
+    const recips = await tx
+      .select()
+      .from(schema.requestRecipients)
+      .where(eq(schema.requestRecipients.requestId, requestId));
+    if (!me?.verified || !isSelfSignRecipients(recips, me.email))
+      throw new AppError('forbidden', 'Only documents you sign yourself open here.');
+    if (!SIGNABLE_STATUSES.includes(req.status))
+      throw new AppError(
+        'conflict',
+        PAYABLE_STATUSES.includes(req.status)
+          ? 'Pay for this document to sign it.'
+          : 'This document can no longer be signed.',
+      );
+    if (recips[0]!.status === 'signed')
+      throw new AppError('conflict', 'You have already signed this document.');
+    const settings = documentSettingsSchema.parse(req.settings);
+    const [inv] = await assignTokens(tx, recips, await linkExpiry(tx, settings), 'sign');
+    return { token: inv!.token };
+  });
 }
 
 /** The next group that must act: everyone acting (any order) or the lowest unfinished order group. */
@@ -445,6 +499,7 @@ export async function sendForSignature(
       });
     let invitations: Invitation[] = [];
     let status: SendResult['status'] = 'sent';
+    const selfSign = isSelfSignRecipients(inserted, sender?.email);
     if (!live) {
       invitations = await dispatch(tx, req!, actor.userId, meta);
     } else {
@@ -453,17 +508,28 @@ export async function sendForSignature(
         workspaceId: doc.workspace_id,
         actorUserId: actor.userId,
         type: 'request.created',
-        data: { sourceSha256: file!.sha256, recipients: inserted.length, fields: fields.length },
+        data: {
+          sourceSha256: file!.sha256,
+          recipients: inserted.length,
+          fields: fields.length,
+          ...(selfSign ? { selfSign: true } : {}),
+        },
         ...meta,
       });
-      const bucket = await reserveCredit(tx, {
-        workspaceId: doc.workspace_id,
-        requestId,
-        userId: actor.userId,
-      });
+      // Signing your own document is a flat fee paid per document; it never spends a credit.
+      // Workspaces that sign for free still skip payment.
+      const bucket = selfSign
+        ? (await getBalances(tx, doc.workspace_id)).unlimited
+          ? 'complimentary'
+          : null
+        : await reserveCredit(tx, {
+            workspaceId: doc.workspace_id,
+            requestId,
+            userId: actor.userId,
+          });
       if (bucket) {
         invitations = await dispatch(tx, req!, actor.userId, meta);
-        await consumeHold(tx, requestId);
+        if (!selfSign) await consumeHold(tx, requestId);
       } else {
         status = 'awaiting_payment';
         await appendEvent(tx, {
@@ -471,6 +537,7 @@ export async function sendForSignature(
           workspaceId: doc.workspace_id,
           actorUserId: actor.userId,
           type: 'request.awaiting_payment',
+          ...(selfSign ? { data: { selfSign: true } } : {}),
           ...meta,
         });
       }
@@ -484,7 +551,7 @@ export async function sendForSignature(
       metadata: { requestId, test: !live },
       ...meta,
     });
-    return { requestId, invitations, status };
+    return { requestId, invitations, status, selfSign };
   });
 }
 
@@ -508,6 +575,8 @@ export async function sendPaidRequest(
   workspaceName: string;
   emailMessage: string | null;
   invitations: Invitation[];
+  /** Sign it yourself: the sender opens signing straight away, so no email is needed. */
+  selfSign: boolean;
 }> {
   if (!opts.liveSendingEnabled)
     throw new AppError(
@@ -530,25 +599,35 @@ export async function sendPaidRequest(
     )) as unknown as { ok: boolean }[];
     if (!canSend?.ok)
       throw new AppError('forbidden', 'Your role does not allow sending this document.');
-    const bucket = await reserveCredit(tx, {
-      workspaceId: req.workspaceId,
-      requestId,
-      userId: actor.userId,
-    });
+    // Sign it yourself: sent once its own flat-fee payment is confirmed; no credit involved.
+    const selfSign = await isSelfSignRequest(tx, requestId);
+    const bucket = selfSign
+      ? (await hasPaidSelfSign(tx, requestId))
+        ? 'self_sign'
+        : (await getBalances(tx, req.workspaceId)).unlimited
+          ? 'complimentary'
+          : null
+      : await reserveCredit(tx, {
+          workspaceId: req.workspaceId,
+          requestId,
+          userId: actor.userId,
+        });
     if (!bucket)
       throw new AppError(
         'conflict',
-        'There are no credits available. Buy credits or pay for this request.',
+        selfSign
+          ? 'Pay for this document to sign it.'
+          : 'There are no credits available. Buy credits or pay for this request.',
       );
     const invitations = await dispatch(tx, req, actor.userId, meta);
-    await consumeHold(tx, requestId);
+    if (!selfSign) await consumeHold(tx, requestId);
     await recordAudit(tx, {
       workspaceId: req.workspaceId,
       actorUserId: actor.userId,
       action: 'document.sent',
       targetType: 'document',
       targetId: req.documentId,
-      metadata: { requestId, test: false, credit: bucket },
+      metadata: { requestId, test: false, credit: bucket, ...(selfSign ? { selfSign: true } : {}) },
       ...meta,
     });
     return {
@@ -560,6 +639,7 @@ export async function sendPaidRequest(
       workspaceName: req.workspaceName,
       emailMessage: req.emailMessage,
       invitations,
+      selfSign,
     };
   });
 }

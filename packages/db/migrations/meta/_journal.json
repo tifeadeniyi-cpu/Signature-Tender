@@ -169,6 +169,13 @@
       "when": 1794540403297,
       "tag": "0023_certificates",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1794575927368,
+      "tag": "0025_self_sign_payments",
+      "breakpoints": true
     }
   ]
 }

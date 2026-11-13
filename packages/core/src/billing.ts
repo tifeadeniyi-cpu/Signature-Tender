@@ -283,6 +283,78 @@ export async function priceForOneRequest(tx: Tx, workspaceId: string): Promise<R
 }
 
 // ---------------------------------------------------------------------------------------------
+// Sign it yourself: a request whose only recipient is its sender
+
+/** The flat price for signing your own document. Set `billing.self_sign_price` to change it. */
+export const SELF_SIGN_DEFAULT_PRICE = { amountCents: 99, currency: 'USD' };
+export const SELF_SIGN_PRICE_CODE = 'self_sign';
+
+/** True when the sender is the one and only recipient, and they sign. */
+export function isSelfSignRecipients(
+  recipients: { email: string; role: string }[],
+  senderEmail: string | null | undefined,
+) {
+  return (
+    recipients.length === 1 &&
+    recipients[0]!.role === 'signer' &&
+    Boolean(senderEmail) &&
+    recipients[0]!.email.trim().toLowerCase() === senderEmail!.trim().toLowerCase()
+  );
+}
+
+export async function isSelfSignRequest(tx: Tx, requestId: string) {
+  const [req] = await tx
+    .select({ senderEmail: schema.signingRequests.senderEmail })
+    .from(schema.signingRequests)
+    .where(eq(schema.signingRequests.id, requestId));
+  if (!req) return false;
+  const recips = await tx
+    .select({ email: schema.requestRecipients.email, role: schema.requestRecipients.role })
+    .from(schema.requestRecipients)
+    .where(eq(schema.requestRecipients.requestId, requestId));
+  return isSelfSignRecipients(recips, req.senderEmail);
+}
+
+/** The signed-in person sent this self-signing request (so they may pay for it). */
+async function isOwnSelfSign(tx: Tx, requestId: string, userId: string) {
+  if (!uuid.safeParse(requestId).success) return false;
+  const [req] = await tx
+    .select({ sentBy: schema.signingRequests.sentBy })
+    .from(schema.signingRequests)
+    .where(eq(schema.signingRequests.id, requestId));
+  return req?.sentBy === userId && (await isSelfSignRequest(tx, requestId));
+}
+
+export async function selfSignPrice(tx: Tx): Promise<RequestPrice> {
+  const [row] = await tx
+    .select()
+    .from(schema.appConfig)
+    .where(eq(schema.appConfig.key, 'billing.self_sign_price'));
+  const v = (row?.value ?? {}) as { amountCents?: unknown; currency?: unknown };
+  const amountCents =
+    Number.isInteger(v.amountCents) && (v.amountCents as number) >= 50
+      ? (v.amountCents as number)
+      : SELF_SIGN_DEFAULT_PRICE.amountCents;
+  const currency = typeof v.currency === 'string' ? v.currency : SELF_SIGN_DEFAULT_PRICE.currency;
+  return { amountCents, currency, source: 'single', planCode: SELF_SIGN_PRICE_CODE };
+}
+
+/** A self-signing request is paid for once its own $0.99 payment has been confirmed by Stripe. */
+export async function hasPaidSelfSign(tx: Tx, requestId: string) {
+  const [p] = await tx
+    .select({ id: schema.payments.id })
+    .from(schema.payments)
+    .where(
+      and(
+        eq(schema.payments.requestId, requestId),
+        eq(schema.payments.priceCode, SELF_SIGN_PRICE_CODE),
+        eq(schema.payments.status, 'paid'),
+      ),
+    );
+  return Boolean(p);
+}
+
+// ---------------------------------------------------------------------------------------------
 // Overview for the Billing & Credits page
 
 export async function getBillingOverview(db: Database, actor: ActorContext, workspaceId: string) {
@@ -455,6 +527,8 @@ export interface CheckoutPlan {
   planCode: string | null;
   requestId: string | null;
   documentId: string | null;
+  /** Paid by the person signing it themselves, who may not manage the workspace's billing. */
+  canLinkCustomer: boolean;
 }
 
 /**
@@ -470,7 +544,10 @@ export async function beginCheckout(
   if (!uuid.safeParse(workspaceId).success) throw new AppError('not_found', 'Workspace not found');
   const input = checkoutInput.parse(raw);
   return withActor(db, actor, async (tx) => {
-    await requireBillingManager(tx, workspaceId);
+    // Billing managers pay for anything. Anyone may pay $0.99 for a document they sign themselves.
+    const ownSelfSign =
+      input.kind === 'request' && (await isOwnSelfSign(tx, input.requestId, actor.userId));
+    if (!ownSelfSign) await requireBillingManager(tx, workspaceId);
     if (await isComplimentary(tx, workspaceId))
       throw new AppError('conflict', 'This workspace signs for free, so there is nothing to pay.');
     const acct = await accountRow(tx, workspaceId);
@@ -525,20 +602,35 @@ export async function beginCheckout(
       )) as unknown as { ok: boolean }[];
       if (!canSend?.ok)
         throw new AppError('forbidden', 'Your role does not allow sending this document.');
-      const price = await priceForOneRequest(tx, workspaceId);
+      // Signing your own document is a flat fee that never buys or uses a credit.
+      const self = await isSelfSignRequest(tx, req.id);
+      const price = self ? await selfSignPrice(tx) : await priceForOneRequest(tx, workspaceId);
       documentId = req.documentId;
-      plan = {
-        name: `Signature Tender: signing request`,
-        description: `Send "${req.title.slice(0, 120)}" for signature. Includes up to five signers.`,
-        amountCents: price.amountCents,
-        currency: price.currency,
-      };
+      plan = self
+        ? {
+            name: 'Signature Tender: sign it yourself',
+            description: `Sign "${req.title.slice(0, 120)}" yourself, with a Certificate of Completion.`,
+            amountCents: price.amountCents,
+            currency: price.currency,
+          }
+        : {
+            name: `Signature Tender: signing request`,
+            description: `Send "${req.title.slice(0, 120)}" for signature. Includes up to five signers.`,
+            amountCents: price.amountCents,
+            currency: price.currency,
+          };
       values = {
         workspaceId,
         kind: 'request',
-        description: `Signing request: ${req.title.slice(0, 120)}`,
-        priceCode: price.source === 'single' ? 'single_request' : `overage:${price.planCode}`,
-        credits: 1,
+        description: self
+          ? `Sign it yourself: ${req.title.slice(0, 120)}`
+          : `Signing request: ${req.title.slice(0, 120)}`,
+        priceCode: self
+          ? SELF_SIGN_PRICE_CODE
+          : price.source === 'single'
+            ? 'single_request'
+            : `overage:${price.planCode}`,
+        credits: self ? 0 : 1,
         amountCents: price.amountCents,
         currency: price.currency,
         requestId: req.id,
@@ -592,6 +684,7 @@ export async function beginCheckout(
       planCode: values.planCode ?? null,
       requestId: values.requestId ?? null,
       documentId,
+      canLinkCustomer: !ownSelfSign || (await permitted(tx, workspaceId, 'billing.manage')),
     };
   });
 }
@@ -815,7 +908,7 @@ export async function applyCheckoutCompleted(
       .for('update');
     if (!p) return { action: 'none', reason: 'unknown_session' };
 
-    if (f.customerId) {
+    if (f.customerId && p.priceCode !== SELF_SIGN_PRICE_CODE) {
       await tx
         .insert(schema.billingAccounts)
         .values({ workspaceId: p.workspaceId, stripeCustomerId: f.customerId })
@@ -1213,7 +1306,9 @@ export async function getRequestBilling(db: Database, actor: ActorContext, reque
       .from(schema.signingRequests)
       .where(eq(schema.signingRequests.id, requestId));
     if (!req) return null;
-    const canManage = await permitted(tx, req.workspaceId, 'billing.manage');
+    const selfSignOwn = await isOwnSelfSign(tx, requestId, actor.userId);
+    // The sender of a self-signing request can pay its $0.99 even without billing access.
+    const canManage = selfSignOwn || (await permitted(tx, req.workspaceId, 'billing.manage'));
     const canSee = canManage || (await permitted(tx, req.workspaceId, 'documents.send'));
     const [hold] = canSee
       ? await tx
@@ -1221,10 +1316,16 @@ export async function getRequestBilling(db: Database, actor: ActorContext, reque
           .from(schema.creditHolds)
           .where(eq(schema.creditHolds.requestId, requestId))
       : [];
+    const selfSign = await isSelfSignRequest(tx, requestId);
     return {
       canManage,
+      selfSign,
       balances: canSee ? await getBalances(tx, req.workspaceId) : null,
-      price: canSee ? await priceForOneRequest(tx, req.workspaceId) : null,
+      price: canSee
+        ? selfSign
+          ? await selfSignPrice(tx)
+          : await priceForOneRequest(tx, req.workspaceId)
+        : null,
       hold: hold ? { bucket: hold.bucket, status: hold.status } : null,
     };
   });
@@ -1261,6 +1362,7 @@ export async function getCheckoutStatus(db: Database, actor: ActorContext, sessi
       currency: p.currency,
       documentId,
       requestStatus,
+      selfSign: p.priceCode === SELF_SIGN_PRICE_CODE,
     };
   });
 }

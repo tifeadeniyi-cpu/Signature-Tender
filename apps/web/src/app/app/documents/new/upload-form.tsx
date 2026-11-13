@@ -11,9 +11,12 @@ import { cn } from '@/lib/cn';
 export function UploadForm({
   maxMb,
   types,
+  selfSign = false,
 }: {
   maxMb: number;
   types: { value: string; label: string }[];
+  /** "Sign it yourself": adds you as the only signer and goes straight to placing fields. */
+  selfSign?: boolean;
 }) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
@@ -46,10 +49,11 @@ export function UploadForm({
     fd.set('title', title);
     fd.set('documentType', documentType);
     try {
+      if (selfSign) fd.append('selfSign', '1');
       const res = await fetch('/api/documents', { method: 'POST', body: fd });
       const body = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
       if (!res.ok || !body.id) throw new Error(body.error ?? 'Upload failed. Please try again.');
-      router.push(`/app/documents/${body.id}/prepare/signers`);
+      router.push(`/app/documents/${body.id}/prepare/${selfSign ? 'fields' : 'signers'}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed. Please try again.');
       setBusy(false);
