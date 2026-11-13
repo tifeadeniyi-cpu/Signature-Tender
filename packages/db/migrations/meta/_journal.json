@@ -148,6 +148,20 @@
       "when": 1794520225905,
       "tag": "0020_document_claims_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1794535913231,
+      "tag": "0021_signature_studio",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1794535914065,
+      "tag": "0022_signature_studio_rls",
+      "breakpoints": true
     }
   ]
 }

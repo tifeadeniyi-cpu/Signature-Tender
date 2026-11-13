@@ -15,5 +15,11 @@ export default async function SignUpPage({
 }) {
   const next = safeNextPath((await searchParams).next);
   const email = next?.startsWith('/claim/') ? await readClaimEmail() : null;
-  return <SignUpForm defaultEmail={email} claim={Boolean(next?.startsWith('/claim/'))} />;
+  return (
+    <SignUpForm
+      defaultEmail={email}
+      claim={Boolean(next?.startsWith('/claim/'))}
+      studio={next === '/signature-studio/continue'}
+    />
+  );
 }

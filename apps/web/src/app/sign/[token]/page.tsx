@@ -11,6 +11,7 @@ import {
 import { db } from '@/lib/db';
 import { requestMeta } from '@/lib/session';
 import { readSignSession } from '@/lib/sign-session';
+import { purchasedForSigner } from '@/lib/studio';
 import { buttonClass } from '@/components/ui/button';
 import { Alert } from '@/components/ui/feedback';
 import { SIGNATURE_FONTS } from '../fonts';
@@ -172,7 +173,10 @@ async function stage(
         </>
       );
     case 'sign': {
-      const data = await getSigningWorkspace(db(), token, session, await requestMeta());
+      const [data, purchased] = await Promise.all([
+        getSigningWorkspace(db(), token, session, await requestMeta()),
+        purchasedForSigner(view.recipient.email),
+      ]);
       return (
         <SigningWorkspace
           token={token}
@@ -183,6 +187,7 @@ async function stage(
           today={fmtShort.format(new Date())}
           data={data}
           fonts={SIGNATURE_FONTS.map((f) => ({ id: f.id, family: f.family }))}
+          purchased={purchased}
         />
       );
     }

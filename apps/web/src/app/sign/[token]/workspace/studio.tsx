@@ -34,6 +34,8 @@ export type Adopted = {
   style?: { family: string; variation: number; params: Record<string, number | string> };
 };
 export type Mark = { id: string; dataUrl: string };
+/** A Signature Studio design the signer bought (server-rendered preview). */
+export type PurchasedDesign = { id: string; name: string; svg: string };
 
 const PAD_W = 1200;
 const PAD_H = 400;
@@ -80,6 +82,7 @@ export function SignatureStudio({
   activeField,
   unappliedCount,
   onAdopt,
+  purchased = [],
   onApply,
   busy,
   error,
@@ -90,11 +93,13 @@ export function SignatureStudio({
   name: string;
   fonts: Font[];
   adopted: Mark | undefined;
+  /** The signer's purchased Studio designs of this kind. */
+  purchased?: PurchasedDesign[];
   /** The selected field of this kind, if any, and whether the adopted mark is already on it. */
   activeField: { id: string; applied: boolean } | null;
   /** This recipient's fields of this kind that do not have the adopted mark yet. */
   unappliedCount: number;
-  onAdopt: (a: Adopted, scope: 'field' | 'none') => void;
+  onAdopt: (a: Adopted | { designId: string }, scope: 'field' | 'none') => void;
   onApply: (scope: 'field' | 'all') => void;
   busy: boolean;
   error: string | null;
@@ -199,6 +204,7 @@ export function SignatureStudio({
       hasActiveField={Boolean(activeField)}
       onCancel={adopted ? () => setWantCreate(false) : undefined}
       onAdopt={(a) => onAdopt(a, activeField ? 'field' : 'none')}
+      purchased={purchased}
       autoAdvance={autoAdvance}
       onAutoAdvance={onAutoAdvance}
     />
@@ -241,6 +247,7 @@ function Creator({
   hasActiveField,
   onCancel,
   onAdopt,
+  purchased,
   autoAdvance,
   onAutoAdvance,
 }: {
@@ -253,13 +260,16 @@ function Creator({
   error: string | null;
   hasActiveField: boolean;
   onCancel?: () => void;
-  onAdopt: (a: Adopted) => void;
+  onAdopt: (a: Adopted | { designId: string }) => void;
+  purchased: PurchasedDesign[];
   autoAdvance: boolean;
   onAutoAdvance: (v: boolean) => void;
 }) {
-  const [tab, setTab] = useState<Method>('typed');
+  const [tab, setTab] = useState<Method | 'library'>(purchased.length ? 'library' : 'typed');
   const [localError, setLocalError] = useState<string | null>(null);
-  const tabs: { id: Method; label: string }[] = [
+  const [chosen, setChosen] = useState<string | null>(purchased[0]?.id ?? null);
+  const tabs: { id: Method | 'library'; label: string }[] = [
+    ...(purchased.length ? [{ id: 'library' as const, label: 'Mine' }] : []),
     { id: 'typed', label: 'Type' },
     { id: 'drawn', label: 'Draw' },
     { id: 'uploaded', label: 'Upload' },
@@ -270,6 +280,10 @@ function Creator({
 
   function adopt() {
     setLocalError(null);
+    if (tab === 'library') {
+      if (!chosen) return setLocalError(`Choose one of your ${label}s.`);
+      return onAdopt({ designId: chosen });
+    }
     const get = tab === 'typed' ? typed : tab === 'drawn' ? drawn : uploaded;
     try {
       const r = get.current();
@@ -296,7 +310,7 @@ function Creator({
       <div
         role="tablist"
         aria-label={`How to create your ${label}`}
-        className="grid grid-cols-3 gap-1 rounded-full bg-blush/60 p-1"
+        className={cn('grid gap-1 rounded-full bg-blush/60 p-1', tabs.length === 4 ? 'grid-cols-4' : 'grid-cols-3')}
         onKeyDown={onKeyTabs}
       >
         {tabs.map((t) => (
@@ -325,7 +339,37 @@ function Creator({
         aria-labelledby={`studio-tab-${tab}`}
         className="flex flex-col gap-3"
       >
-        {tab === 'typed' ? (
+        {tab === 'library' ? (
+          <fieldset className="flex flex-col gap-2">
+            <legend className="mb-1 text-sm text-heading">
+              My Signatures from Signature Studio. Using one adds no fee.
+            </legend>
+            {purchased.map((d) => (
+              <label
+                key={d.id}
+                className={cn(
+                  'flex cursor-pointer items-center gap-3 rounded-xl border bg-white p-2',
+                  chosen === d.id ? 'border-primary ring-2 ring-primary/20' : 'border-border',
+                )}
+              >
+                <input
+                  type="radio"
+                  name="studio-design"
+                  value={d.id}
+                  checked={chosen === d.id}
+                  onChange={() => setChosen(d.id)}
+                  className="size-4 accent-primary"
+                />
+                <span
+                  aria-hidden
+                  className="flex h-14 flex-1 items-center justify-center [&>svg]:h-auto [&>svg]:max-h-14 [&>svg]:w-full"
+                  dangerouslySetInnerHTML={{ __html: d.svg }}
+                />
+                <span className="sr-only">{d.name}</span>
+              </label>
+            ))}
+          </fieldset>
+        ) : tab === 'typed' ? (
           <TypePanel kind={kind} label={label} name={name} fonts={fonts} getterRef={typed} />
         ) : tab === 'drawn' ? (
           <DrawPanel label={label} getterRef={drawn} />

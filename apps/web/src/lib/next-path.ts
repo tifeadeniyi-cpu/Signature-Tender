@@ -1,12 +1,13 @@
 /**
- * Where to go after signing in or verifying an email. Only invitation links and document-claim
- * links are accepted, so the `next` parameter can never be used to send people to another site
+ * Where to go after signing in or verifying an email. Only invitation links, document-claim
+ * links and the Signature Studio hand-off are accepted, so the `next` parameter can never be used to send people to another site
  * or an arbitrary page.
  */
 export function safeNextPath(next: string | null | undefined): string | null {
   if (!next) return null;
   if (/^\/invite\/[A-Za-z0-9_-]{43}$/.test(next)) return next;
   if (/^\/claim\/[A-Za-z0-9_-]{20,400}\.[A-Za-z0-9_-]{43}$/.test(next)) return next;
+  if (next === '/signature-studio/continue') return next;
   return null;
 }
 

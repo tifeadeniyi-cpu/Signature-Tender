@@ -28,7 +28,7 @@ import { Button, buttonClass } from '@/components/ui/button';
 import { Alert, Skeleton } from '@/components/ui/feedback';
 import { roleLabel, type SignatureDisplayFormat } from '@st/core/signature-block/layout';
 import { cn } from '@/lib/cn';
-import { adoptAction, completeAction, saveProgressAction } from './actions';
+import { adoptAction, adoptStudioDesignAction, completeAction, saveProgressAction } from './actions';
 import { DeclineForm } from './stages';
 import { SignHeader } from './sign-header';
 import { usePdf, PdfPageView } from './workspace/pdf';
@@ -41,7 +41,13 @@ import {
   type Field,
   type OtherField,
 } from './workspace/fields';
-import { SignatureStudio, type Adopted, type Font, type Mark } from './workspace/studio';
+import {
+  SignatureStudio,
+  type Adopted,
+  type Font,
+  type Mark,
+  type PurchasedDesign,
+} from './workspace/studio';
 import { FinishDialog, HelpPanel, RetryDialog } from './workspace/dialogs';
 
 type Data = {
@@ -93,6 +99,7 @@ export function SigningWorkspace({
   today,
   data,
   fonts,
+  purchased,
 }: {
   token: string;
   title: string;
@@ -103,6 +110,8 @@ export function SigningWorkspace({
   today: string;
   data: Data;
   fonts: Font[];
+  /** The signer's own purchased Signature Studio designs (only when signed in as this recipient). */
+  purchased?: Record<'signature' | 'initials', PurchasedDesign[]>;
 }) {
   const router = useRouter();
   const { pdf, sizes, error: pdfError, retry: retryPdf } = usePdf(`/api/sign/${token}/file`);
@@ -462,7 +471,7 @@ export function SigningWorkspace({
     if (n) setTimeout(() => goToField(n), 150);
   }
 
-  async function adopt(a: Adopted, scope: 'field' | 'none') {
+  async function adopt(a: Adopted | { designId: string }, scope: 'field' | 'none') {
     if (!studioKind) return;
     const kind = studioKind;
     setBusy(true);
@@ -471,7 +480,10 @@ export function SigningWorkspace({
     const applyTo = data.fields
       .filter((f) => f.type === kind && (applied[f.id] || (scope === 'field' && f.id === activeId)))
       .map((f) => f.id);
-    const r = await adoptAction(token, { kind, ...a, applyTo }).catch(() => ({
+    const r = await ('designId' in a
+      ? adoptStudioDesignAction(token, { kind, designId: a.designId, applyTo })
+      : adoptAction(token, { kind, ...a, applyTo })
+    ).catch(() => ({
       ok: false as const,
       message: 'Connection problem. Your signature was not saved. Please try again.',
     }));
@@ -779,6 +791,7 @@ export function SigningWorkspace({
               ).length
             }
             onAdopt={adopt}
+            purchased={purchased?.[studioKind] ?? []}
             onApply={applyExisting}
             busy={busy}
             error={studioError}

@@ -14,6 +14,7 @@ type NavItem = NavLink | NavGroup;
 /** Main navigation. Every link goes to a page or section that exists. */
 export const NAV: NavItem[] = [
   { label: 'Product', href: '/product', match: '/product' },
+  { label: 'Signature Studio', href: '/signature-studio', match: '/signature-studio' },
   { label: 'How It Works', href: '/product#how-it-works' },
   { label: 'Pricing', href: '/pricing', match: '/pricing' },
   { label: 'Integrations', href: '/product#integrations' },

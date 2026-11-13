@@ -6,6 +6,7 @@ const ITEMS = [
   { href: '/admin', label: 'Overview' },
   { href: '/admin/workspaces', label: 'Workspaces' },
   { href: '/admin/operations', label: 'Operations' },
+  { href: '/admin/signature-studio', label: 'Signature Studio' },
 ];
 
 export function AdminNav() {
