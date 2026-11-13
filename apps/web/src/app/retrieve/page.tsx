@@ -88,10 +88,10 @@ export default async function RetrievePage() {
                       {r.canDownload ? (
                         <>
                           <a
-                            href={`/api/retrieve/${r.requestId}/file?kind=signed`}
+                            href={`/api/retrieve/${r.requestId}/file?kind=package`}
                             className={buttonClass('primary', 'sm')}
                           >
-                            <Download className="size-4" aria-hidden /> Signed copy
+                            <Download className="size-4" aria-hidden /> Signed copy + certificate
                           </a>
                           <a
                             href={`/api/retrieve/${r.requestId}/file?kind=certificate`}

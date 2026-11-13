@@ -28,6 +28,8 @@ const PUBLIC = [
   '/forgot-password',
   '/retrieve',
   '/sign/not-a-real-token',
+  '/verify',
+  '/verify?ref=STV-0000-0000',
 ];
 const APP = [
   '/app',

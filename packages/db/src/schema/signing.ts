@@ -88,6 +88,13 @@ export const signingRequests = pgTable(
     closedReason: text('closed_reason'),
     signedFileId: uuid('signed_file_id').references(() => documentFiles.id),
     certificateFileId: uuid('certificate_file_id').references(() => documentFiles.id),
+    /** CERT-YYYY-NNNNNN, assigned when a certificate is issued. */
+    certificateNumber: text('certificate_number'),
+    /** Public, non-secret reference printed on the certificate and used on /verify. */
+    verificationRef: text('verification_ref'),
+    certificateIssuedAt: timestamp('certificate_issued_at', { withTimezone: true }),
+    /** SHA-256 of the combined package (signed agreement + certificate). */
+    packageSha256: text('package_sha256'),
     finalizationError: text('finalization_error'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

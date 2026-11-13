@@ -109,14 +109,18 @@ test('completed page: view, download, evidence, dismiss the offer, then create a
   await expect(signer.getByRole('heading', { name: 'Signers (1)' })).toBeVisible();
   await expect(signer.getByText('Alex Morgan(you)')).toBeVisible();
   await expect(signer.getByText(/Document ID: ST-/)).toBeVisible();
-  await expect(signer.getByRole('img', { name: 'Page 1 of 2' })).toBeVisible({ timeout: 15_000 });
+  await expect(signer.getByRole('img', { name: /^Page 1 of \d+$/ })).toBeVisible({
+    timeout: 15_000,
+  });
   await expectNoAxeViolations(signer);
 
   // The real finalized PDF renders, with working page navigation and zoom.
-  await expect(signer.getByRole('img', { name: 'Page 1 of 2' })).toBeVisible({ timeout: 15_000 });
-  await expect(signer.getByText('Page 1 of 2', { exact: true })).toBeVisible();
+  await expect(signer.getByRole('img', { name: /^Page 1 of \d+$/ })).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(signer.getByText(/^Page 1 of \d+$/)).toBeVisible();
   await signer.getByRole('button', { name: 'Next page' }).click();
-  await expect(signer.getByText('Page 2 of 2', { exact: true })).toBeVisible();
+  await expect(signer.getByText(/^Page 2 of \d+$/)).toBeVisible();
   await signer.getByRole('button', { name: 'Fit page' }).click();
   await expect(signer.getByRole('button', { name: 'Fit page' })).toHaveAttribute(
     'aria-pressed',
@@ -189,7 +193,9 @@ test('completed page: view, download, evidence, dismiss the offer, then create a
   await expect(signer.getByRole('heading', { name: 'This Document Is Completed' })).toBeVisible();
   await expect(signer.getByRole('heading', { name: 'Manage Your Agreements' })).toBeVisible();
   await expect(signer.getByRole('button', { name: 'Create Free Account' })).toHaveCount(0);
-  await expect(signer.getByRole('img', { name: 'Page 1 of 2' })).toBeVisible({ timeout: 15_000 });
+  await expect(signer.getByRole('img', { name: /^Page 1 of \d+$/ })).toBeVisible({
+    timeout: 15_000,
+  });
 
   // The claim gave access to this one request only, and not to the sender's workspace.
   await signer.goto('/app/documents');
@@ -211,7 +217,9 @@ test('an email-code signer opens the completed document without a second code; a
   // The code they entered to sign still counts in the same browser.
   await signer.goto(`/sign/completed/${token}`);
   await expect(signer.getByRole('heading', { name: 'This Document Is Completed' })).toBeVisible();
-  await expect(signer.getByRole('img', { name: 'Page 1 of 2' })).toBeVisible({ timeout: 15_000 });
+  await expect(signer.getByRole('img', { name: /^Page 1 of \d+$/ })).toBeVisible({
+    timeout: 15_000,
+  });
 
   // Another browser with only the link is asked for a code sent to that address.
   const other = await (await browser.newContext()).newPage();
@@ -225,5 +233,7 @@ test('an email-code signer opens the completed document without a second code; a
   await other.getByRole('button', { name: 'Verify and open the document' }).click();
   await expect(other.getByRole('heading', { name: 'This Document Is Completed' })).toBeVisible();
   await expect(other.getByRole('button', { name: 'Create Free Account' })).toBeVisible();
-  await expect(other.getByRole('img', { name: 'Page 1 of 2' })).toBeVisible({ timeout: 15_000 });
+  await expect(other.getByRole('img', { name: /^Page 1 of \d+$/ })).toBeVisible({
+    timeout: 15_000,
+  });
 });

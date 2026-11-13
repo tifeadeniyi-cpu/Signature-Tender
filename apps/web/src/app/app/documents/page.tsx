@@ -384,9 +384,9 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
                         </Link>
                         {d.canDownload && d.requestId ? (
                           <a
-                            href={`/api/requests/${d.requestId}/file?kind=signed`}
+                            href={`/api/requests/${d.requestId}/file?kind=package`}
                             className={buttonClass('ghost', 'sm')}
-                            aria-label={`Download signed copy of ${d.title}`}
+                            aria-label={`Download ${d.title} with its certificate`}
                           >
                             <Download className="size-4" aria-hidden /> Download
                           </a>

@@ -114,9 +114,18 @@ function QuickActions({ d, h }: { d: DocumentSummary; h: ActionHandlers }) {
   return (
     <SectionCard title="Quick actions">
       <div className="flex flex-col gap-2">
-        {has('download_signed') && d.urls.signedDownload ? (
-          <a href={d.urls.signedDownload} className={buttonClass('primary', 'md', full)}>
-            <Download className="size-4" aria-hidden /> Download Signed Document
+        {has('download_signed') && (d.urls.packageDownload ?? d.urls.signedDownload) ? (
+          <a
+            href={(d.urls.packageDownload ?? d.urls.signedDownload)!}
+            className={buttonClass('primary', 'md', full)}
+          >
+            <Download className="size-4" aria-hidden />{' '}
+            {d.urls.packageDownload ? 'Download Complete Package' : 'Download Signed Document'}
+          </a>
+        ) : null}
+        {has('download_signed') && d.urls.packageDownload && d.urls.signedDownload ? (
+          <a href={d.urls.signedDownload} className={buttonClass('secondary', 'md', full)}>
+            <Download className="size-4" aria-hidden /> Download Signed Agreement Only
           </a>
         ) : null}
         {has('continue_editing') && d.urls.edit ? (
@@ -655,6 +664,24 @@ export function EvidencePanel({ d, go }: { d: DocumentSummary; go: (t: DrawerTab
       </span>,
     ],
   ];
+  if (e.certificateNumber)
+    rows.push([
+      'Certificate ID',
+      <span key="c" className="font-mono text-xs">
+        {e.certificateNumber}
+      </span>,
+    ]);
+  if (e.verificationRef)
+    rows.push([
+      'Verification reference',
+      <a
+        key="v"
+        href={`/verify?ref=${e.verificationRef}`}
+        className="font-mono text-xs font-semibold text-primary underline"
+      >
+        {e.verificationRef}
+      </a>,
+    ]);
   return (
     <div className="flex flex-col gap-4">
       <SectionCard title="Evidence summary">

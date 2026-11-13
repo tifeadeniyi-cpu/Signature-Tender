@@ -436,10 +436,31 @@ export default async function DocumentPage({
                 <FileCheck2 className="size-5 text-success" aria-hidden /> Completed
               </h2>
               <p className="mt-1 text-sm">{when(r.completedAt)}</p>
+              {r.certificateNumber && r.verificationRef ? (
+                <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+                  <dt className="text-slate-text">Certificate</dt>
+                  <dd className="font-mono text-xs text-heading">{r.certificateNumber}</dd>
+                  <dt className="text-slate-text">Verify</dt>
+                  <dd>
+                    <a
+                      href={`/verify?ref=${r.verificationRef}`}
+                      className="font-mono text-xs font-semibold text-primary underline"
+                    >
+                      {r.verificationRef}
+                    </a>
+                  </dd>
+                </dl>
+              ) : null}
               <div className="mt-4 flex flex-col gap-2">
                 <a
-                  href={`/api/requests/${r.id}/file?kind=signed`}
+                  href={`/api/requests/${r.id}/file?kind=package`}
                   className={buttonClass('primary')}
+                >
+                  <Download className="size-4" aria-hidden /> Download complete package
+                </a>
+                <a
+                  href={`/api/requests/${r.id}/file?kind=signed`}
+                  className={buttonClass('secondary')}
                 >
                   <Download className="size-4" aria-hidden /> Download signed copy
                 </a>
@@ -449,6 +470,10 @@ export default async function DocumentPage({
                 >
                   <Download className="size-4" aria-hidden /> Download certificate
                 </a>
+                <p className="text-xs">
+                  The complete package is the signed agreement followed by its Certificate of
+                  Completion.
+                </p>
               </div>
             </Card>
           ) : null}

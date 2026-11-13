@@ -1,6 +1,7 @@
 import 'server-only';
 import {
   AppError,
+  documentReferenceOf,
   DOCUMENT_TYPES,
   getDocument,
   getDocumentRecord,
@@ -24,7 +25,7 @@ import type {
 const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null);
 
 /** Short, human reference for a document. Library search accepts it too. */
-export const documentReference = (id: string) => `ST-${id.slice(0, 8).toUpperCase()}`;
+export const documentReference = documentReferenceOf;
 
 const ROLE_LABEL: Record<string, string> = {
   signer: 'Signer',
@@ -280,6 +281,8 @@ export async function loadDocumentSummary(
     files,
     evidence: {
       available: Boolean(fileReady && certFile),
+      certificateNumber: r?.certificateNumber ?? null,
+      verificationRef: r?.verificationRef ?? null,
       eventCount: events.length,
       consentCount: actionable.filter((x) => x.consentedAt).length,
       signedCount: actionable.filter((x) => x.status === 'signed').length,
@@ -299,6 +302,8 @@ export async function loadDocumentSummary(
             ? `/app/documents/${id}/prepare/review`
             : null,
       signedDownload: fileReady && signedFile ? `/api/requests/${r!.id}/file?kind=signed` : null,
+      packageDownload:
+        fileReady && signedFile && certFile ? `/api/requests/${r!.id}/file?kind=package` : null,
       documentView: purged
         ? null
         : fileReady && signedFile

@@ -106,6 +106,8 @@ export interface DocumentSummary {
   files: DrawerFile[];
   evidence: {
     available: boolean;
+    certificateNumber: string | null;
+    verificationRef: string | null;
     eventCount: number;
     consentCount: number;
     signedCount: number;
@@ -118,6 +120,8 @@ export interface DocumentSummary {
     page: string;
     edit: string | null;
     signedDownload: string | null;
+    /** Signed agreement + Certificate of Completion. */
+    packageDownload: string | null;
     documentView: string | null;
   };
   actions: DrawerAction[];

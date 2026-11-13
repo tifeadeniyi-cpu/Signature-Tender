@@ -58,7 +58,7 @@ export default async function RetrievedDocumentPage({
   const session = await getSession();
   const signedIn = Boolean(session?.user.emailVerified);
   const source = { kind: 'retrieval' as const, requestId: rid };
-  const fileUrl = (kind: 'signed' | 'certificate', inline = false) =>
+  const fileUrl = (kind: 'package' | 'signed' | 'certificate', inline = false) =>
     `/api/retrieve/${rid}/file?kind=${kind}${inline ? '&view=1' : ''}`;
 
   return (

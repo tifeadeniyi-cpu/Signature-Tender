@@ -36,11 +36,14 @@ export function CompletedPdfViewer({
   downloadHref,
   allowPrint,
   title,
+  certificateFromPage,
 }: {
   src: string;
   downloadHref: string | null;
   allowPrint: boolean;
   title: string;
+  /** First page of the appended Certificate of Completion, when the file includes one. */
+  certificateFromPage?: number | null;
 }) {
   const shell = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
@@ -222,6 +225,15 @@ export function CompletedPdfViewer({
             <ChevronRight className="size-4" aria-hidden />
           </button>
         </div>
+        {certificateFromPage && total >= certificateFromPage ? (
+          <button
+            type="button"
+            className="rounded-lg border border-border px-2.5 py-1.5 text-sm font-semibold text-primary hover:bg-primary-surface"
+            onClick={() => goTo(certificateFromPage)}
+          >
+            View Certificate of Completion
+          </button>
+        ) : null}
         <span className="hidden h-6 w-px bg-border sm:block" aria-hidden />
         <div className="flex items-center gap-1">
           <button

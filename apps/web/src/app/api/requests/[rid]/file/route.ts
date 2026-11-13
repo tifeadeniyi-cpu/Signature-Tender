@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { storage } from '@/lib/storage';
 import { apiError } from '@/lib/api';
+import { completionKind, readCompletion } from '@/lib/completion-files';
 import { requestMeta } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
@@ -15,15 +16,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ rid: str
     if (!session || !session.user.emailVerified)
       throw new AppError('unauthenticated', 'Sign in to download documents');
     const { rid } = await params;
-    const kind =
-      new URL(req.url).searchParams.get('kind') === 'certificate' ? 'certificate' : 'signed';
-    const { bytes, filename } = await readRequestFile(
-      db(),
-      storage(),
-      { userId: session.user.id },
-      rid,
-      kind,
-      await requestMeta(),
+    const kind = completionKind(new URL(req.url).searchParams.get('kind'));
+    const meta = await requestMeta();
+    const { bytes, filename } = await readCompletion(kind, (k) =>
+      readRequestFile(db(), storage(), { userId: session.user.id }, rid, k, meta),
     );
     const safe = filename.replace(/[^\w.\-() ]+/g, '_');
     return new Response(Buffer.from(bytes), {

@@ -770,3 +770,6 @@ export async function readDocumentVersion(
     filename: file.originalFilename.replace(/\.pdf$/i, '') + suffix + '.pdf',
   };
 }
+
+/** Short, human reference for a document (ST- plus the first eight characters of its ID). */
+export const documentReferenceOf = (id: string) => `ST-${id.slice(0, 8).toUpperCase()}`;
