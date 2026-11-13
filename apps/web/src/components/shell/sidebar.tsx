@@ -1,19 +1,46 @@
 'use client';
 import Image from 'next/image';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { Menu, X, ChevronLeft, ChevronRight, Rocket, ArrowRight, Plus } from 'lucide-react';
+import {
+  Menu,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Rocket,
+  ArrowRight,
+  Plus,
+  PenLine,
+} from 'lucide-react';
 import { NAV_ITEMS, isActive } from './nav';
 import { cn } from '@/lib/cn';
 import { BRAND_ASSETS } from '@/lib/brand-assets';
 
-function NavList({ onNavigate, collapsed }: { onNavigate?: () => void; collapsed?: boolean }) {
+/** What the server decided this person may see; icons stay on the client side. */
+export interface SidebarProps {
+  /** hrefs of the navigation items this member may open (permissions checked on the server). */
+  allowed: string[];
+  /** The bottom card: a Signature Studio offer for people without a purchased signature, else a shortcut. */
+  promo: { kind: 'studio'; price: string } | { kind: 'create' };
+}
+
+function NavList({
+  allowed,
+  onNavigate,
+  collapsed,
+}: {
+  allowed: string[];
+  onNavigate?: () => void;
+  collapsed?: boolean;
+}) {
   const pathname = usePathname();
+  const search = useSearchParams();
   return (
     <ul className="flex flex-col gap-1">
-      {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-        const active = isActive(pathname, href);
+      {NAV_ITEMS.filter((n) => allowed.includes(n.href)).map((item) => {
+        const { href, label, icon: Icon } = item;
+        const active = isActive(pathname, href, item, search);
         return (
           <li key={href}>
             <Link
@@ -26,8 +53,8 @@ function NavList({ onNavigate, collapsed }: { onNavigate?: () => void; collapsed
                 'relative flex items-center gap-3 rounded-lg py-2.5 text-sm font-medium transition-colors',
                 collapsed ? 'justify-center px-0' : 'px-3',
                 active
-                  ? 'bg-white/10 text-white before:absolute before:inset-y-1.5 before:left-0 before:w-1 before:rounded-full before:bg-gold [&>svg]:text-gold'
-                  : 'text-slate-300 hover:bg-white/5 hover:text-white',
+                  ? 'bg-white/10 font-semibold text-white before:absolute before:inset-y-1.5 before:left-0 before:w-1 before:rounded-full before:bg-gold [&>svg]:text-gold'
+                  : 'text-slate-300 hover:bg-navy-royal hover:text-white',
               )}
             >
               <Icon className="size-5 shrink-0" aria-hidden />
@@ -94,7 +121,7 @@ function subscribe(cb: () => void) {
   };
 }
 
-export function Sidebar() {
+export function Sidebar({ allowed, promo }: SidebarProps) {
   const collapsed = useSyncExternalStore(subscribe, readCollapsed, () => false);
   const toggle = () => {
     try {
@@ -127,42 +154,15 @@ export function Sidebar() {
       <Brand collapsed={collapsed} />
       <GoldWave className="mt-3 h-5 w-full" />
       <nav aria-label="Primary" className="mt-4 flex-1 overflow-y-auto">
-        <NavList collapsed={collapsed} />
+        <NavList allowed={allowed} collapsed={collapsed} />
       </nav>
-      {collapsed ? (
-        <Link
-          href="/app/documents/new"
-          title="Create document"
-          aria-label="Create document"
-          className="mx-auto flex size-11 items-center justify-center rounded-xl bg-gradient-to-b from-soft-gold to-gold text-primary hover:brightness-105"
-        >
-          <Plus className="size-5" aria-hidden />
-        </Link>
-      ) : (
-        <div className="rounded-xl border border-white/15 bg-white/5 p-4">
-          <div className="flex items-start gap-3">
-            <Rocket className="mt-0.5 size-6 shrink-0 text-gold" aria-hidden />
-            <div>
-              <p className="font-semibold text-white">Get Started</p>
-              <p className="mt-1 text-xs leading-relaxed text-slate-300">
-                Send your first document for signature in minutes.
-              </p>
-            </div>
-          </div>
-          <Link
-            href="/app/documents/new"
-            className="mt-4 flex h-10 items-center justify-center gap-2 rounded-lg bg-gradient-to-b from-soft-gold to-gold text-sm font-semibold text-primary hover:brightness-105"
-          >
-            Create Document <ArrowRight className="size-4" aria-hidden />
-          </Link>
-        </div>
-      )}
+      <PromoCard promo={promo} collapsed={collapsed} />
       <GoldWave className="mt-4 h-5 w-full opacity-70" />
     </aside>
   );
 }
 
-export function MobileNav() {
+export function MobileNav({ allowed }: { allowed: string[] }) {
   const [open, setOpen] = useState(false);
   useEffect(() => {
     if (!open) return;
@@ -205,11 +205,95 @@ export function MobileNav() {
               </button>
             </div>
             <nav aria-label="Primary" className="mt-6 overflow-y-auto">
-              <NavList onNavigate={() => setOpen(false)} />
+              <NavList allowed={allowed} onNavigate={() => setOpen(false)} />
             </nav>
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+const PROMO_KEY = 'st.studio-promo.dismissed';
+function readDismissed(): boolean {
+  try {
+    return localStorage.getItem(PROMO_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function PromoCard({ promo, collapsed }: { promo: SidebarProps['promo']; collapsed: boolean }) {
+  const dismissed = useSyncExternalStore(subscribe, readDismissed, () => false);
+  const studio = promo.kind === 'studio' && !dismissed;
+  const href = studio ? '/app/signature-studio' : '/app/documents/new';
+  const gold =
+    'bg-gradient-to-b from-soft-gold to-gold text-primary hover:brightness-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold';
+  if (collapsed)
+    return (
+      <Link
+        href={href}
+        title={studio ? 'Create a custom signature' : 'Create document'}
+        aria-label={studio ? 'Create a custom signature' : 'Create document'}
+        className={cn('mx-auto flex size-11 items-center justify-center rounded-xl', gold)}
+      >
+        {studio ? (
+          <PenLine className="size-5" aria-hidden />
+        ) : (
+          <Plus className="size-5" aria-hidden />
+        )}
+      </Link>
+    );
+  return (
+    <div className="relative rounded-xl border border-gold/40 bg-white/5 p-4">
+      {studio ? (
+        <button
+          type="button"
+          onClick={() => {
+            try {
+              localStorage.setItem(PROMO_KEY, '1');
+            } catch {
+              /* ignore */
+            }
+            window.dispatchEvent(new Event(EVENT));
+          }}
+          aria-label="Dismiss the custom signature offer"
+          className="absolute right-2 top-2 rounded p-1 text-slate-300 hover:bg-white/10 hover:text-white"
+        >
+          <X className="size-3.5" aria-hidden />
+        </button>
+      ) : null}
+      <div className="flex items-start gap-3">
+        {studio ? (
+          <PenLine className="mt-0.5 size-6 shrink-0 text-gold" aria-hidden />
+        ) : (
+          <Rocket className="mt-0.5 size-6 shrink-0 text-gold" aria-hidden />
+        )}
+        <div className="pr-3">
+          <p
+            className={cn(
+              'text-white',
+              studio ? 'font-display text-lg leading-tight' : 'font-semibold',
+            )}
+          >
+            {studio ? 'Create a Custom Signature' : 'Get Started'}
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-slate-300">
+            {studio
+              ? `Design your unique signature for just ${promo.kind === 'studio' ? promo.price : ''}.`
+              : 'Send a document for signature in minutes.'}
+          </p>
+        </div>
+      </div>
+      <Link
+        href={href}
+        className={cn(
+          'mt-4 flex h-10 items-center justify-center gap-2 rounded-lg text-sm font-semibold',
+          gold,
+        )}
+      >
+        {studio ? 'Design Now' : 'Create Document'} <ArrowRight className="size-4" aria-hidden />
+      </Link>
     </div>
   );
 }
