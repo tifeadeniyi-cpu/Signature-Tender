@@ -16,8 +16,17 @@ import {
   Trash2,
   Copy,
   X,
+  TriangleAlert,
 } from 'lucide-react';
 import type { FieldType } from '@st/core';
+import {
+  DEFAULT_SIGNATURE_DISPLAY,
+  SIGNATURE_DISPLAY_LABELS,
+  layoutSignatureBlock,
+  recommendedFieldSize,
+  roleLabel,
+  type SignatureDisplayFormat,
+} from '@st/core/signature-block/layout';
 import type { ActionState } from '@/lib/action-result';
 import { PdfPages } from '@/components/documents/pdf-pages';
 import { Button, buttonClass } from '@/components/ui/button';
@@ -39,7 +48,7 @@ type Field = {
   label: string | null;
   options: string[] | null;
 };
-type Recipient = { id: string; name: string; colorIndex: number };
+type Recipient = { id: string; name: string; colorIndex: number; role?: string };
 export type FieldInput = Omit<Field, 'id'>;
 export interface EditorNav {
   /** Saves the fields (a bound server action). */
@@ -51,7 +60,7 @@ export interface EditorNav {
 }
 
 const PALETTE: { type: FieldType; label: string; Icon: typeof Type; w: number; h: number }[] = [
-  { type: 'signature', label: 'Signature', Icon: Signature, w: 0.26, h: 0.06 },
+  { type: 'signature', label: 'Signature', Icon: Signature, w: 0.32, h: 0.09 },
   { type: 'initials', label: 'Initials', Icon: Type, w: 0.1, h: 0.05 },
   { type: 'date_signed', label: 'Date signed', Icon: CalendarDays, w: 0.18, h: 0.035 },
   { type: 'name', label: 'Name', Icon: UserRound, w: 0.24, h: 0.035 },
@@ -85,13 +94,18 @@ export function FieldEditor({
   pageCount,
   recipients,
   initial,
+  signatureBlock,
 }: {
   nav: EditorNav;
   disabled: boolean;
   pageCount: number;
   recipients: Recipient[];
   initial: Field[];
+  /** The document's signature block format, so small signature fields can be flagged. */
+  signatureBlock?: { format: SignatureDisplayFormat; timeZone: string | null };
 }) {
+  const blockFormat = signatureBlock?.format ?? DEFAULT_SIGNATURE_DISPLAY;
+  const blockZone = signatureBlock?.timeZone ?? null;
   const router = useRouter();
   const [fields, setFields] = useState<Field[]>(initial);
   const [recipientId, setRecipientId] = useState(recipients[0]!.id);
@@ -565,13 +579,45 @@ export function FieldEditor({
           <PdfPages
             src={nav.fileSrc}
             onPageClick={(page, x, y) => place(page, x, y)}
-            overlay={(page, size) =>
+            overlay={(page, size, points) =>
               fields
                 .filter((f) => f.page === page)
                 .map((f) => {
                   const c = colorFor(rIndex(f.recipientId));
                   const m = meta(f.type);
                   const active = f.id === selected;
+                  const signer = recipients.find((r) => r.id === f.recipientId);
+                  // Small signature fields get a shorter block; tell the sender and offer to enlarge.
+                  const tooSmall =
+                    f.type === 'signature' &&
+                    !layoutSignatureBlock({
+                      width: f.width * points.width,
+                      height: f.height * points.height,
+                      format: blockFormat,
+                      name: signer?.name ?? 'Signer',
+                      role: roleLabel(signer?.role ?? 'signer'),
+                      timestamp: { state: 'pending', timeZone: blockZone },
+                    }).fits;
+                  const enlarge = () => {
+                    const want = recommendedFieldSize({
+                      format: blockFormat,
+                      name: signer?.name ?? 'Signer',
+                      role: roleLabel(signer?.role ?? 'signer'),
+                      timeZone: blockZone,
+                    });
+                    const width = round(
+                      clamp(Math.max(f.width, want.width / points.width), 0.02, 1),
+                    );
+                    const height = round(
+                      clamp(Math.max(f.height, want.height / points.height), 0.015, 1),
+                    );
+                    change(f.id, {
+                      width,
+                      height,
+                      x: round(clamp(f.x, 0, 1 - width)),
+                      y: round(clamp(f.y, 0, 1 - height)),
+                    });
+                  };
                   return (
                     <div
                       key={f.id}
@@ -602,6 +648,36 @@ export function FieldEditor({
                       <m.Icon className="size-3 shrink-0" aria-hidden />
                       <span className="min-w-0 truncate">{f.label || m.label}</span>
                       {f.required ? <span aria-hidden>*</span> : null}
+                      {tooSmall ? (
+                        <TriangleAlert
+                          className="ml-auto size-3.5 shrink-0 text-warning"
+                          aria-label="Field is too small for the full signature block"
+                        />
+                      ) : null}
+                      {tooSmall && active ? (
+                        <span
+                          role="status"
+                          onPointerDown={(e) => e.stopPropagation()}
+                          className="absolute left-0 top-full z-20 mt-1 flex w-64 flex-col gap-1.5 rounded-lg border border-border bg-white p-2 text-[11px] font-normal text-heading shadow-card"
+                        >
+                          This field is too small for &ldquo;{SIGNATURE_DISPLAY_LABELS[blockFormat]}
+                          &rdquo;. A shorter block will be used and the full signing details stay in
+                          the certificate.
+                          {!disabled ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                enlarge();
+                              }}
+                            >
+                              Enlarge field to fit
+                            </Button>
+                          ) : null}
+                        </span>
+                      ) : null}
                       {active && !disabled ? (
                         <button
                           type="button"

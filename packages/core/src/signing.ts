@@ -8,6 +8,7 @@ import { getConfigValue } from './config';
 import {
   checkReadiness,
   documentSettingsSchema,
+  signatureBlockSettings,
   type DocumentSettings,
   type FieldType,
   type RecipientRole,
@@ -26,6 +27,20 @@ import {
   verifyChain,
 } from './signing-crypto';
 import { buildCertificate, buildSignedPdf } from './finalize-pdf';
+import { validTimeZone } from './signature-block/layout';
+
+/** Short public reference to a recipient's completion event: its sequence number and hash prefix. */
+export function signingEventRef(
+  events: { seq: number; type: string; recipientId: string | null; hash: string }[],
+  recipientId: string,
+): string | null {
+  const e = events.findLast(
+    (x) =>
+      x.recipientId === recipientId &&
+      ['recipient.signed', 'recipient.approved', 'recipient.reviewed'].includes(x.type),
+  );
+  return e ? `EV-${e.seq}-${e.hash.slice(0, 12).toUpperCase()}` : null;
+}
 import { consumeHold, reserveCredit, restoreOnCancel } from './billing';
 import { enqueueCompletionNotifications } from './notifications';
 
@@ -329,6 +344,17 @@ export async function sendForSignature(
       .from(schema.workspaces)
       .where(eq(schema.workspaces.id, doc.workspace_id));
     const expiresAt = settings.expiresAt ? endOfDayUtc(settings.expiresAt) : null;
+    // Signing times on the document are shown in this zone. Fixed at send so it cannot change later.
+    const [profile] = settings.timeZone
+      ? []
+      : await tx
+          .select({ timezone: schema.userProfiles.timezone })
+          .from(schema.userProfiles)
+          .where(eq(schema.userProfiles.userId, actor.userId));
+    const requestSettings = {
+      ...settings,
+      timeZone: settings.timeZone ?? validTimeZone(profile?.timezone),
+    };
 
     const [req] = await tx
       .insert(schema.signingRequests)
@@ -345,7 +371,7 @@ export async function sendForSignature(
         sourceFileId: file!.id,
         sourceSha256: file!.sha256,
         signingOrderEnabled: doc.signing_order_enabled,
-        settings,
+        settings: requestSettings,
         emailMessage: doc.email_message,
         disclosureVersion: disclosure.version,
         disclosureText: disclosure.text,
@@ -1563,18 +1589,38 @@ export async function finalizeRequest(
     if (sha256Hex(source) !== req.sourceSha256)
       throw new Error('Source file failed its integrity check');
     const sigById = new Map(sigs.map((s) => [s.id, s]));
+    const recipById = new Map(recips.map((r) => [r.id, r]));
+    const block = signatureBlockSettings(req.settings);
     const signed = await buildSignedPdf(
       source,
-      fields.map((f) => ({
-        type: f.type,
-        page: f.page,
-        x: f.x,
-        y: f.y,
-        width: f.width,
-        height: f.height,
-        value: f.value,
-        imagePng: f.signatureId ? (sigById.get(f.signatureId)?.imagePng ?? null) : null,
-      })),
+      fields.map((f) => {
+        const r = recipById.get(f.recipientId);
+        const hasMark = Boolean(f.signatureId);
+        // The block's time is the server's recorded completion time for that recipient. A mark
+        // without one would mean evidence is missing, so finalization stops rather than invent it.
+        if (hasMark && !r?.signedAt)
+          throw new Error(`Signature field ${f.id} has no recorded signing time`);
+        return {
+          type: f.type,
+          page: f.page,
+          x: f.x,
+          y: f.y,
+          width: f.width,
+          height: f.height,
+          value: f.value,
+          imagePng: f.signatureId ? (sigById.get(f.signatureId)?.imagePng ?? null) : null,
+          signer:
+            hasMark && r?.signedAt
+              ? {
+                  name: r.name,
+                  role: r.role,
+                  signedAt: r.signedAt,
+                  timeZone: block.timeZone,
+                  format: block.format,
+                }
+              : null,
+        };
+      }),
       { isTest: req.isTest, requestId },
     );
     const signedSha = sha256Hex(signed);
@@ -1604,6 +1650,7 @@ export async function finalizeRequest(
       pageCount: file.pageCount,
       signingOrderEnabled: req.signingOrderEnabled,
       disclosureVersion: req.disclosureVersion,
+      timeZone: block.timeZone,
       recipients: recips.map((r) => ({
         name: r.name,
         email: r.email,
@@ -1618,6 +1665,7 @@ export async function finalizeRequest(
         signatures: sigs
           .filter((s) => s.recipientId === r.id && usedSigIds.has(s.id))
           .map((s) => ({ kind: s.kind, method: s.method, imagePng: s.imagePng })),
+        signingEventRef: signingEventRef(events, r.id),
       })),
       events: events.map((e) => ({
         at: e.createdAt,

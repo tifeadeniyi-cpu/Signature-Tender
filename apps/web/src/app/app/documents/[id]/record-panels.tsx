@@ -6,11 +6,58 @@ import { Alert } from '@/components/ui/feedback';
 import { FormStatus } from '@/components/ui/form-status';
 import { PdfPages } from '@/components/documents/pdf-pages';
 import { legalHoldAction } from '../library-actions';
+import type { SealField, SealInfo } from '@st/core/signature-seals';
+import {
+  SealHotspots,
+  VerificationPanel,
+  type IntegrityResult,
+} from '@/components/signature-block/seal-panel';
 
 /** Loads the preview only on request, because each view is recorded in the audit log. */
-export function PreviewOnDemand({ src, label }: { src: string; label: string }) {
+export function PreviewOnDemand({
+  src,
+  label,
+  seals,
+  checkIntegrity,
+}: {
+  src: string;
+  label: string;
+  /** Signature blocks on a signed copy: their seals open the verification panel. */
+  seals?: SealInfo | null;
+  checkIntegrity?: (requestId: string) => Promise<IntegrityResult>;
+}) {
   const [show, setShow] = useState(false);
-  if (show) return <PdfPages src={src} maxWidth={760} />;
+  const [open, setOpen] = useState<SealField | null>(null);
+  if (show)
+    return (
+      <>
+        <PdfPages
+          src={src}
+          maxWidth={760}
+          overlay={
+            seals?.fields.length
+              ? (page, size, points) => (
+                  <SealHotspots
+                    info={seals}
+                    page={page}
+                    size={size}
+                    points={points}
+                    onOpen={setOpen}
+                  />
+                )
+              : undefined
+          }
+        />
+        {open && seals ? (
+          <VerificationPanel
+            info={seals}
+            field={open}
+            onClose={() => setOpen(null)}
+            checkIntegrity={checkIntegrity}
+          />
+        ) : null}
+      </>
+    );
   return (
     <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-blush/30 px-4 py-10 text-center">
       <FileSearch className="size-8 text-primary" aria-hidden />
