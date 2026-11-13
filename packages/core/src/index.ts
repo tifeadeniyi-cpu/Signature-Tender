@@ -14,6 +14,7 @@ export * from './certificate';
 export * from './certificate-reissue';
 export * from './billing';
 export * from './library';
+export * from './board';
 export * from './retrieval';
 export * from './team';
 export * from './contacts';
