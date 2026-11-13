@@ -55,7 +55,7 @@ const activityFor = cache((userId: string, ws: string, from: string, to: string,
 );
 const signaturesFor = cache((userId: string) => libraryItems(userId));
 
-const card = 'rounded-2xl border border-border bg-white p-5 shadow-card sm:p-6';
+const card = 'min-w-0 rounded-2xl border border-border bg-white p-5 shadow-card sm:p-6';
 const goldBtn =
   'bg-gradient-to-b from-soft-gold to-gold text-primary hover:brightness-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
 
@@ -78,7 +78,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const ctx = { userId: user.id, ws, tz, range };
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex min-w-0 flex-col gap-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-display text-4xl text-heading">Dashboard</h1>
@@ -90,7 +90,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       </header>
 
       {/* Row 1: KPIs and the two document actions */}
-      <div className="grid gap-4 xl:grid-cols-[1fr_220px]">
+      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_220px]">
         {canDocs ? (
           <Suspense fallback={<KpiSkeleton />}>
             <Kpis {...ctx} studioOn={studioOn} />
@@ -125,7 +125,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       </div>
 
       {/* Row 2: recent documents and quick actions */}
-      <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
+      <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         {canDocs ? (
           <section className={card} aria-labelledby="recent-heading">
             <div className="mb-4 flex items-center justify-between gap-3">
@@ -344,7 +344,10 @@ async function Kpis({ userId, ws, tz, range, studioOn }: Ctx & { studioOn: boole
     });
   return (
     <ul
-      className={cn('grid gap-4 sm:grid-cols-2', studioOn ? 'lg:grid-cols-4' : 'lg:grid-cols-3')}
+      className={cn(
+        'grid min-w-0 gap-4 sm:grid-cols-2',
+        studioOn ? 'xl:grid-cols-4' : 'xl:grid-cols-3',
+      )}
       aria-label="Summary"
     >
       {cards.map((k) => (
@@ -403,7 +406,7 @@ function Delta({
 function KpiSkeleton() {
   return (
     <div
-      className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
+      className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
       aria-busy="true"
       aria-label="Loading summary"
     >
@@ -457,7 +460,7 @@ async function Recent({
   return (
     <DocumentDrawerHost initialId={selected}>
       {/* Table on larger screens */}
-      <div className="hidden overflow-x-auto md:block">
+      <div className="hidden overflow-x-auto lg:block">
         <table className="w-full text-left text-sm">
           <caption className="sr-only">Recently updated documents, newest first</caption>
           <thead className="bg-cream/70 text-xs font-semibold text-dark-text">
@@ -527,7 +530,7 @@ async function Recent({
         </table>
       </div>
       {/* Cards on phones */}
-      <ul className="flex flex-col gap-2 md:hidden">
+      <ul className="flex flex-col gap-2 lg:hidden">
         {rows.map((d) => (
           <li
             key={d.id}

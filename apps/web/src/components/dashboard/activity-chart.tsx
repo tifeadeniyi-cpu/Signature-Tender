@@ -34,14 +34,14 @@ function niceMax(v: number) {
 /** Two-series line chart of real daily counts, with a crosshair tooltip and a table for screen readers. */
 export function ActivityChart({ data }: { data: ActivityPoint[] }) {
   const wrap = useRef<HTMLDivElement>(null);
-  const [w, setW] = useState(600);
+  const [w, setW] = useState(320);
   const [hover, setHover] = useState<number | null>(null);
   const titleId = useId();
 
   useEffect(() => {
     const el = wrap.current;
     if (!el) return;
-    const ro = new ResizeObserver(([e]) => setW(Math.max(280, Math.round(e!.contentRect.width))));
+    const ro = new ResizeObserver(([e]) => setW(Math.max(240, Math.floor(e!.contentRect.width))));
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
@@ -82,7 +82,7 @@ export function ActivityChart({ data }: { data: ActivityPoint[] }) {
   const h = hover !== null ? data[hover] : null;
 
   return (
-    <figure className="m-0">
+    <figure className="m-0 min-w-0">
       <ul className="mb-3 flex flex-wrap gap-x-6 gap-y-1 text-sm" aria-label="Legend">
         {SERIES.map((s) => (
           <li key={s.key} className="flex items-center gap-2">
@@ -96,7 +96,7 @@ export function ActivityChart({ data }: { data: ActivityPoint[] }) {
           </li>
         ))}
       </ul>
-      <div ref={wrap} className="relative w-full">
+      <div ref={wrap} className="relative w-full min-w-0 overflow-hidden">
         <svg
           width={w}
           height={H}
