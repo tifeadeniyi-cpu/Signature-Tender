@@ -3,6 +3,7 @@ import { Plug, CircleCheck, Boxes, Hourglass, TriangleAlert } from 'lucide-react
 import { INTEGRATIONS, hasPermission, listConnections } from '@st/core';
 import { db } from '@/lib/db';
 import { requireWorkspace } from '@/lib/session';
+import { WEBHOOKS_NOT_READY, webhooksReady } from '@/lib/webhooks';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, StatCard } from '@/components/ui/card';
 import { Alert, Badge } from '@/components/ui/feedback';
@@ -20,6 +21,7 @@ export default async function IntegrationsPage() {
   const canManage =
     hasPermission(membership.permissions, 'integrations.manage') &&
     hasPermission(membership.permissions, 'api.manage');
+  const ready = webhooksReady();
   const conns = await listConnections(db(), { userId: user.id }, membership.workspace.id);
   const active = conns.filter((c) => c.status === 'active');
   const health = (c: (typeof conns)[number]) =>
@@ -62,6 +64,11 @@ export default async function IntegrationsPage() {
           icon={<TriangleAlert className="size-5" />}
         />
       </div>
+      {canManage && !ready ? (
+        <Alert tone="warning" className="mb-6">
+          {WEBHOOKS_NOT_READY}
+        </Alert>
+      ) : null}
       {canManage ? null : (
         <Alert tone="info" className="mb-6">
           Only owners, admins and API developers can connect or disconnect integrations.
@@ -95,7 +102,7 @@ export default async function IntegrationsPage() {
                 )}
               </div>
               <p className="mb-4 text-sm">{i.description}</p>
-              {canManage ? (
+              {canManage && ready ? (
                 <ConnectForm
                   provider={i.key}
                   name={i.name}

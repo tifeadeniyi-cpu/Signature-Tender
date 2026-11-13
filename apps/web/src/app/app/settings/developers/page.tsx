@@ -11,6 +11,7 @@ import {
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
 import { requireWorkspace } from '@/lib/session';
+import { WEBHOOKS_NOT_READY, webhooksReady } from '@/lib/webhooks';
 import { Card, CardHeader } from '@/components/ui/card';
 import { Alert, Badge } from '@/components/ui/feedback';
 import {
@@ -53,6 +54,7 @@ export default async function DevelopersPage({
     listWebhookEndpoints(db(), actor, ws),
     listWebhookDeliveries(db(), actor, ws, { status: onlyFailed ? 'dead' : undefined, limit: 50 }),
   ]);
+  const hooksReady = webhooksReady();
   const now = currentTime();
   const active = keys.filter((k) => !k.revokedAt && (!k.expiresAt || k.expiresAt.getTime() > now));
   const inactive = keys.filter((k) => !active.includes(k));
@@ -155,8 +157,14 @@ export default async function DevelopersPage({
         ) : (
           <p className="mb-6 text-sm">No endpoints yet.</p>
         )}
-        <h3 className="mb-3 font-semibold text-heading">Add an endpoint</h3>
-        <CreateWebhookForm events={WEBHOOK_EVENTS} />
+        {hooksReady ? (
+          <>
+            <h3 className="mb-3 font-semibold text-heading">Add an endpoint</h3>
+            <CreateWebhookForm events={WEBHOOK_EVENTS} />
+          </>
+        ) : (
+          <Alert tone="warning">{WEBHOOKS_NOT_READY}</Alert>
+        )}
       </Card>
 
       <Card>
