@@ -30,7 +30,9 @@ function SignIn() {
       <p className="mt-1 text-sm">
         {claim
           ? 'Sign in to add your signed document to your account.'
-          : 'Welcome back to Signature Tender.'}
+          : claimNext === '/signature-studio/continue'
+            ? 'Sign in to save your signature design and unlock it.'
+            : 'Welcome back to Signature Tender.'}
       </p>
       {claim?.existing ? (
         <Alert tone="info" className="mt-4">

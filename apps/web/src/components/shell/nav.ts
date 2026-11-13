@@ -7,6 +7,7 @@ import {
   CreditCard,
   Plug,
   Settings,
+  Signature,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -21,6 +22,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/app', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/app/documents', label: 'Documents', icon: FileText },
   { href: '/app/templates', label: 'Templates', icon: Layers },
+  { href: '/app/signature-studio', label: 'Signature Studio', icon: Signature },
   { href: '/app/contacts', label: 'Contacts', icon: Contact },
   { href: '/app/team', label: 'Team', icon: Users },
   { href: '/app/billing', label: 'Billing & Credits', icon: CreditCard },

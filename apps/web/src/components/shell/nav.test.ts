@@ -7,6 +7,7 @@ describe('primary navigation', () => {
       'Dashboard',
       'Documents',
       'Templates',
+      'Signature Studio',
       'Contacts',
       'Team',
       'Billing & Credits',

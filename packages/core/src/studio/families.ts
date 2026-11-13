@@ -587,7 +587,7 @@ export const STUDIO_INKS: { id: string; label: string; color: string }[] = [
   { id: 'navy', label: 'Midnight navy', color: '#0D1B33' },
   { id: 'black', label: 'Black', color: '#111111' },
   { id: 'blue', label: 'Royal blue', color: '#1D4ED8' },
-  { id: 'purple', label: 'Violet', color: '#5B3FA0' },
+  { id: 'purple', label: 'Dark purple', color: '#5B3FA0' },
   { id: 'burgundy', label: 'Burgundy', color: '#7F1D3A' },
   { id: 'green', label: 'Forest green', color: '#166534' },
 ];

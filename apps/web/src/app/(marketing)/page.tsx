@@ -4,6 +4,7 @@ import { getPricing, formatMoney } from '@st/core';
 import { db } from '@/lib/db';
 import { ButtonLink } from '@/components/ui/button';
 import { PricingStrip } from '@/components/pricing-strip';
+import { getStudioSettings } from '@st/core/studio/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,7 +21,7 @@ const STEPS = [
 ];
 
 export default async function HomePage() {
-  const { prices } = await getPricing(db());
+  const [{ prices }, studio] = await Promise.all([getPricing(db()), getStudioSettings(db())]);
   const single = prices.find((p) => p.code === 'single_request');
   return (
     <>
@@ -98,6 +99,29 @@ export default async function HomePage() {
             </li>
           ))}
         </ol>
+      </section>
+
+      <section aria-labelledby="home-studio" className="mx-auto max-w-7xl px-4 pb-16 sm:px-6">
+        <div className="grid items-center gap-6 overflow-hidden rounded-2xl bg-primary p-6 text-white sm:p-10 lg:grid-cols-[1.4fr_1fr]">
+          <div>
+            <p className="text-xs font-semibold tracking-[0.18em] text-gold">NEW · SIGNATURE STUDIO</p>
+            <h2 id="home-studio" className="mt-2 font-display text-3xl">
+              Create Your Own Handwritten Signature
+            </h2>
+            <p className="mt-3 max-w-xl text-white/85">
+              Design a signature that looks and feels uniquely yours. Preview it free and download
+              your finished design for {formatMoney(studio.priceCents, studio.currency)}.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3 lg:justify-end">
+            <ButtonLink href="/signature-studio#studio" size="lg" className="bg-gold text-primary hover:bg-soft-gold">
+              Design My Signature
+            </ButtonLink>
+            <ButtonLink href="/signature-studio#styles" size="lg" variant="ghost" className="text-white hover:bg-white/10">
+              Explore Styles
+            </ButtonLink>
+          </div>
+        </div>
       </section>
 
       <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6">

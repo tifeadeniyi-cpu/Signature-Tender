@@ -12,10 +12,13 @@ import { Alert } from '@/components/ui/feedback';
 export function SignUpForm({
   defaultEmail,
   claim,
+  studio = false,
 }: {
   defaultEmail?: string | null;
   /** Arrived from a completed document's Create Free Account. */
   claim: boolean;
+  /** Arrived from Signature Studio's "Create Free Account". */
+  studio?: boolean;
 }) {
   const router = useRouter();
   const [error, setError] = useState('');
@@ -23,12 +26,14 @@ export function SignUpForm({
   return (
     <>
       <h1 className="font-display text-2xl">
-        {claim ? 'Create your free account' : 'Create your account'}
+        {claim || studio ? 'Create your free account' : 'Create your account'}
       </h1>
       <p className="mt-1 text-sm">
-        {claim
-          ? 'Keep your signed document in one place. No subscription required: you only pay if you send documents yourself.'
-          : 'No subscription required. You only pay when you send a document.'}
+        {studio
+          ? 'Save your signature design and unlock it. Your design comes with you to your new account.'
+          : claim
+            ? 'Keep your signed document in one place. No subscription required: you only pay if you send documents yourself.'
+            : 'No subscription required. You only pay when you send a document.'}
       </p>
       <form
         className="mt-6 flex flex-col gap-4"

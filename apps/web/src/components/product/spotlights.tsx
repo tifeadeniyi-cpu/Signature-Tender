@@ -129,13 +129,7 @@ export function DocumentPreparationSpotlight({
   );
 }
 
-export function SignatureStudioSpotlight({
-  families,
-  startHref,
-}: {
-  families: StudioFamily[];
-  startHref: string;
-}) {
+export function SignatureStudioSpotlight({ families }: { families: StudioFamily[] }) {
   return (
     <Section id="signature-studio" tone="dark" labelledBy="studio-heading" className="py-4">
       <svg
@@ -185,24 +179,24 @@ export function SignatureStudioSpotlight({
                   'Typed signatures',
                   'Hand-drawn signatures',
                   'Uploaded signatures',
-                  'Cursive styles',
-                  'Calligraphy',
+                  '12 signature families',
+                  '50+ handwriting fonts',
                   'Initials',
-                  { label: 'More signature families', soon: true },
-                  { label: 'Letter slant', soon: true },
-                  { label: 'Curves, loops and flourishes', soon: true },
-                  { label: 'Underlines', soon: true },
-                  { label: 'Ink stroke weight', soon: true },
-                  { label: 'Saved signatures', soon: true },
+                  'Letter slant and spacing',
+                  'Curves, loops and flourishes',
+                  'Underlines',
+                  'Smart Stroke refinement',
+                  'Transparent PNG, SVG and JPEG',
+                  'Saved signature library',
                 ]}
               />
             </div>
-            <Cta href={startHref} dark>
+            <Cta href="/signature-studio" dark>
               Create Your Signature
             </Cta>
             <p className="mt-4 text-sm text-white/70">
-              You create your signature when you sign a document you were sent, or when you sign
-              your own.
+              Design free in Signature Studio and download your finished signature for a small
+              one-time fee. Signing documents you were sent stays free.
             </p>
           </div>
         </div>

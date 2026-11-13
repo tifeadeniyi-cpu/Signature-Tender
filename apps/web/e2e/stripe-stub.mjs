@@ -65,6 +65,12 @@ const server = http.createServer(async (req, res) => {
         currency: p.get('line_items[0][price_data][currency]'),
         name: p.get('line_items[0][price_data][product_data][name]'),
         customer: p.get('customer'),
+        customerEmail: p.get('customer_email'),
+        metadata: Object.fromEntries(
+          [...p.entries()]
+            .filter(([k]) => /^metadata\[\w+\]$/.test(k))
+            .map(([k, v]) => [k.slice(9, -1), v]),
+        ),
         success: p.get('success_url'),
         cancel: p.get('cancel_url'),
       };
@@ -75,6 +81,11 @@ const server = http.createServer(async (req, res) => {
         mode: s.mode,
         url: `http://localhost:${PORT}/pay/${id}`,
       });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/v1/refunds') {
+      const p = await read(req);
+      return json(res, 200, { id: next('re_stub'), object: 'refund', payment_intent: p.get('payment_intent'), status: 'succeeded' });
     }
 
     if (req.method === 'POST' && url.pathname === '/v1/billing_portal/sessions')
@@ -104,7 +115,8 @@ const server = http.createServer(async (req, res) => {
         payment_intent: s.mode === 'payment' ? `pi_${s.id}` : null,
         subscription: s.mode === 'subscription' ? next('sub_stub_') : null,
         invoice: null,
-        metadata: {},
+        customer_details: s.customerEmail ? { email: s.customerEmail } : null,
+        metadata: s.metadata,
       });
       res.writeHead(303, { location: s.success.replace('{CHECKOUT_SESSION_ID}', s.id) });
       return res.end();

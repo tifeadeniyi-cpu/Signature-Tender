@@ -15,6 +15,14 @@ import { db } from '@/lib/db';
 import { stripe, stripeLiveMode, webhookSecret } from '@/lib/stripe';
 import { liveSendingEnabled } from '@/lib/billing';
 import { checkoutFacts, invoiceFacts, subscriptionFacts } from '@/lib/stripe-events';
+import {
+  applyStudioCheckoutClosed,
+  applyStudioCheckoutCompleted,
+  applyStudioReversal,
+  generateStudioAssets,
+  recordStudioEvent,
+} from '@st/core/studio/server';
+import { studioDeps, studioSettings } from '@/lib/studio';
 import { sendInvitations } from '@/lib/signing-mail';
 
 export const dynamic = 'force-dynamic';
@@ -50,19 +58,62 @@ async function dispatchPaid(requestId: string, dispatchAs: string) {
   }
 }
 
+const isStudio = (s: Stripe.Checkout.Session) => s.metadata?.st_kind === 'signature_studio';
+
+/**
+ * A Signature Studio checkout finished. Unlocks only the frozen design, only when our records
+ * match what Stripe says was paid. Files are generated now; if that fails the customer keeps
+ * access and the files are generated again on download, never with a new charge.
+ */
+async function studioCompleted(s: Stripe.Checkout.Session) {
+  const out = await applyStudioCheckoutCompleted(db(), {
+    sessionId: s.id,
+    paymentStatus: s.payment_status,
+    amountSubtotal: s.amount_subtotal,
+    currency: s.currency,
+    paymentIntentId: id(s.payment_intent),
+    customerEmail: s.customer_details?.email ?? null,
+  });
+  if (out.action === 'refund_duplicate' && out.paymentIntentId) {
+    await stripe().refunds.create(
+      { payment_intent: out.paymentIntentId, reason: 'duplicate', metadata: { st_purchase_id: out.purchaseId } },
+      { idempotencyKey: `studio-duplicate-refund:${out.purchaseId}` },
+    );
+    return true;
+  }
+  if (out.action === 'refund_duplicate') return true;
+  if (out.action === 'none') return out.reason !== 'unknown_session';
+  await recordStudioEvent(db(), 'purchase_completed', { userId: out.userId, designId: out.designId }).catch(() => undefined);
+  try {
+    await generateStudioAssets(db(), studioDeps(), out.purchaseId, await studioSettings());
+  } catch (err) {
+    console.error(`Studio files for ${out.purchaseId} will be generated on download`, err);
+  }
+  return true;
+}
+
 async function handle(event: Stripe.Event) {
   switch (event.type) {
     case 'checkout.session.completed':
     case 'checkout.session.async_payment_succeeded': {
+      if (isStudio(event.data.object)) {
+        await studioCompleted(event.data.object);
+        return;
+      }
       const out = await applyCheckoutCompleted(db(), checkoutFacts(event.data.object));
       if (out.action === 'dispatch') await dispatchPaid(out.requestId, out.dispatchAs);
+      // Sessions without our metadata are matched by their id instead.
+      if (out.action === 'none' && out.reason === 'unknown_session') await studioCompleted(event.data.object);
       return;
     }
     case 'checkout.session.expired':
       await applyCheckoutClosed(db(), event.data.object.id, 'expired');
+      await applyStudioCheckoutClosed(db(), event.data.object.id, 'expired');
       return;
     case 'checkout.session.async_payment_failed':
       await applyCheckoutClosed(db(), event.data.object.id, 'failed');
+      if (await applyStudioCheckoutClosed(db(), event.data.object.id, 'failed'))
+        await recordStudioEvent(db(), 'purchase_failed').catch(() => undefined);
       return;
     case 'customer.subscription.created':
     case 'customer.subscription.updated':
@@ -80,22 +131,31 @@ async function handle(event: Stripe.Event) {
       return;
     case 'charge.refunded': {
       const pi = id(event.data.object.payment_intent);
-      if (pi)
-        await applyReversal(db(), {
+      if (pi) {
+        const r = await applyReversal(db(), {
           paymentIntentId: pi,
           kind: 'refund',
           amountRefunded: event.data.object.amount_refunded,
         });
+        if (!r.found)
+          await applyStudioReversal(db(), {
+            paymentIntentId: pi,
+            kind: 'refund',
+            amountRefunded: event.data.object.amount_refunded,
+          });
+      }
       return;
     }
     case 'charge.dispute.created': {
       const pi = id(event.data.object.payment_intent);
-      if (pi)
-        await applyReversal(db(), {
+      if (pi) {
+        const r = await applyReversal(db(), {
           paymentIntentId: pi,
           kind: 'dispute',
           disputeId: event.data.object.id,
         });
+        if (!r.found) await applyStudioReversal(db(), { paymentIntentId: pi, kind: 'dispute' });
+      }
       return;
     }
     default:

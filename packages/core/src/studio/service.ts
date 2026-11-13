@@ -117,6 +117,8 @@ function checkAllowed(d: Design, settings: StudioSettings) {
   }
   if (d.kind === 'initials' && !settings.initialsEnabled)
     throw new AppError('invalid', 'The initials designer is not available right now.');
+  if (d.kind === 'initials' && d.text && d.text.value.replace(/[^\p{L}]/gu, '').length > 3)
+    throw new AppError('invalid', 'Initials can have up to three letters.');
 }
 
 export interface DraftInput {
