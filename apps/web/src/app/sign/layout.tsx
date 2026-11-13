@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { getConfigValue } from '@st/core';
 import { db } from '@/lib/db';
 import { HelpMenu } from './help-menu';
+import { BRAND_ASSETS } from '@/lib/brand-assets';
 
 export const metadata: Metadata = {
   title: 'Review and sign',
@@ -32,11 +33,9 @@ export default async function SignLayout({ children }: { children: React.ReactNo
             aria-label="Signature Tender home (opens in a new tab)"
           >
             <Image
-              src="/brand/logo-reversed.png"
+              {...BRAND_ASSETS.reversed}
               alt="Signature Tender"
-              width={327}
-              height={168}
-              className="h-12 w-auto rounded-md sm:h-16"
+              className="h-14 w-auto sm:h-16"
               priority
             />
           </a>
@@ -51,13 +50,7 @@ export default async function SignLayout({ children }: { children: React.ReactNo
         <Wave flip className="absolute inset-x-0 -top-px h-6 w-full sm:h-10" />
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-5 px-4 pb-8 pt-12 sm:flex-row sm:justify-between sm:px-6 sm:pt-14">
           <div className="flex flex-col items-center gap-3 sm:flex-row sm:gap-6">
-            <Image
-              src="/brand/logo-reversed.png"
-              alt="Signature Tender"
-              width={327}
-              height={168}
-              className="h-12 w-auto rounded-md"
-            />
+            <Image {...BRAND_ASSETS.reversed} alt="Signature Tender" className="h-12 w-auto" />
             <span className="hidden h-10 w-px bg-white/30 sm:block" aria-hidden />
             <p className="font-display text-lg italic text-white/90">Send. Sign. Pay Once.</p>
           </div>

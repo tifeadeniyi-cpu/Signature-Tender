@@ -1,4 +1,5 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
+import { REVERSED_LOGO_PNG_BASE64 } from './brand-logo.generated';
 import {
   layoutSignatureBlock,
   roleLabel,
@@ -35,7 +36,9 @@ export interface StampField {
 }
 
 const INK = rgb(0.06, 0.09, 0.2);
-const BURGUNDY = rgb(0.357, 0.039, 0.11);
+/** Midnight Navy and Champagne Gold. Only new certificates use these; stored PDFs never change. */
+const NAVY = rgb(0.051, 0.106, 0.2);
+const GOLD = rgb(0.847, 0.686, 0.408);
 const MUTED = rgb(0.29, 0.33, 0.39);
 
 function fitText(font: PDFFont, text: string, maxW: number, maxH: number) {
@@ -209,19 +212,27 @@ export async function buildCertificate(c: CertificateData): Promise<Uint8Array> 
   const heading = (t: string, keepWith = 30) => {
     ensure(keepWith);
     y -= 8;
-    page.drawText(t, { x: M, y, size: 13, font: bold, color: BURGUNDY });
+    page.drawText(t, { x: M, y, size: 13, font: bold, color: NAVY });
     y -= 8;
     page.drawLine({
       start: { x: M, y },
       end: { x: W - M, y },
       thickness: 0.5,
-      color: rgb(0.91, 0.87, 0.88),
+      color: rgb(0.906, 0.882, 0.839),
     });
     y -= 14;
   };
 
-  page.drawRectangle({ x: 0, y: H - 70, width: W, height: 70, color: BURGUNDY });
-  page.drawText('Signature Tender', { x: M, y: H - 42, size: 18, font: bold, color: rgb(1, 1, 1) });
+  page.drawRectangle({ x: 0, y: H - 70, width: W, height: 70, color: NAVY });
+  page.drawRectangle({ x: 0, y: H - 72, width: W, height: 2, color: GOLD });
+  const logo = await pdf.embedPng(Buffer.from(REVERSED_LOGO_PNG_BASE64, 'base64'));
+  const logoH = 52;
+  page.drawImage(logo, {
+    x: M - 6,
+    y: H - 70 + (70 - logoH) / 2,
+    width: (logo.width / logo.height) * logoH,
+    height: logoH,
+  });
   page.drawText('Completion Certificate', {
     x: W - M - bold.widthOfTextAtSize('Completion Certificate', 13),
     y: H - 40,

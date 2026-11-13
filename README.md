@@ -42,4 +42,4 @@ pnpm build && pnpm test:e2e   # Playwright end-to-end
 
 ## Brand assets
 
-Approved logo files live in `apps/web/public/brand/` and are used unchanged. Vector (SVG) versions are a separate design task.
+The logo family (Midnight Navy and Champagne Gold) lives in `apps/web/public/branding/signature-tender/` and is referenced only through `apps/web/src/lib/brand-assets.ts`. Files were recoloured from the approved burgundy masters without changing the artwork; the masters are raster only, so vector (SVG) versions remain a separate design task.

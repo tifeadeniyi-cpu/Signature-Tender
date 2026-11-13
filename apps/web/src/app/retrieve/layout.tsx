@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import type { Metadata } from 'next';
+import { BRAND_ASSETS } from '@/lib/brand-assets';
 
 export const metadata: Metadata = {
   title: 'Get your documents',
@@ -12,10 +13,8 @@ export default function RetrieveLayout({ children }: { children: React.ReactNode
     <div className="flex min-h-dvh flex-col bg-ivory">
       <header className="flex h-14 items-center border-b border-border bg-white px-4">
         <Image
-          src="/brand/logo-horizontal.png"
+          {...BRAND_ASSETS.horizontalLight}
           alt="Signature Tender"
-          width={316}
-          height={168}
           className="h-10 w-auto"
           priority
         />
