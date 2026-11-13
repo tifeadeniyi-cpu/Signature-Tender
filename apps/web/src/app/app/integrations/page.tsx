@@ -177,7 +177,7 @@ export default async function IntegrationsPage() {
       ))}
       <p className="mt-6 text-sm">
         Building your own connection? See the{' '}
-        <Link href="/developers" className="font-semibold text-primary underline">
+        <Link href="/app/api-docs" className="font-semibold text-primary underline">
           API documentation
         </Link>{' '}
         and manage keys under{' '}

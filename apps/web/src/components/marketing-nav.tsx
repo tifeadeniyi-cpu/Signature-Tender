@@ -23,12 +23,6 @@ export const NAV: NavItem[] = [
     label: 'Resources',
     items: [
       {
-        label: 'API documentation',
-        href: '/developers',
-        match: '/developers',
-        description: 'Send for signature from your own software',
-      },
-      {
         label: 'FAQ',
         href: '/product#faq',
         description: 'Answers about signing, pricing and security',

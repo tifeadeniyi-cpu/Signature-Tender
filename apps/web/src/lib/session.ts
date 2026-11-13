@@ -13,6 +13,7 @@ import {
 } from '@st/core';
 import { auth } from './auth';
 import { db } from './db';
+import { safeNextPath } from './next-path';
 
 export const WORKSPACE_COOKIE = 'st_ws';
 
@@ -21,7 +22,11 @@ export const getSession = cache(async () => auth().api.getSession({ headers: awa
 /** Requires a signed-in, verified user. Redirects to sign-in otherwise. */
 export async function requireUser() {
   const session = await getSession();
-  if (!session) redirect('/sign-in');
+  if (!session) {
+    // src/proxy.ts passes the requested path; only allow-listed pages come back after sign-in.
+    const next = safeNextPath((await headers()).get('x-pathname'));
+    redirect(next ? `/sign-in?next=${encodeURIComponent(next)}` : '/sign-in');
+  }
   if (!session.user.emailVerified) redirect('/verify-email');
   return session.user;
 }
