@@ -5,6 +5,7 @@ import { formatSigningTime, layoutSignatureBlock } from '@st/core/signature-bloc
 import type { SealField, SealInfo } from '@st/core/signature-seals';
 import { Button } from '@/components/ui/button';
 import { VerificationSeal } from './signature-block';
+import { SIGNATURE_BRAND_STYLE } from './brand';
 
 type PageSize = { width: number; height: number };
 
@@ -94,6 +95,7 @@ export function VerificationPanel({
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-heading/40 sm:items-center sm:p-4"
+      style={SIGNATURE_BRAND_STYLE}
       onClick={onClose}
     >
       <div

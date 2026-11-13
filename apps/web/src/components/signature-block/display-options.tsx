@@ -7,6 +7,7 @@ import {
 } from '@st/core/signature-block/layout';
 import { Card, CardHeader } from '@/components/ui/card';
 import { SignatureBlock } from './signature-block';
+import { SIGNATURE_BRAND_STYLE } from './brand';
 
 const OPTION_LETTER: Record<SignatureDisplayFormat, string> = {
   signature: 'A',
@@ -48,74 +49,77 @@ export function SignatureDisplayCard({
   }, []);
   const sampleTime = useMemo(() => new Date(Date.UTC(2026, 10, 12, 15, 24)).toISOString(), []);
   return (
-    <Card className={className}>
-      <CardHeader
-        title="Signature block"
-        description="What each signature field shows on the signed document. The signing time always comes from Signature Tender's server and is kept in the completion certificate."
-      />
-      <div
-        role="radiogroup"
-        aria-label="Signature block format"
-        className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
-      >
-        {SIGNATURE_DISPLAY_FORMATS.map((f) => (
-          <label
-            key={f}
-            className="flex cursor-pointer flex-col gap-2 rounded-xl border border-border p-3 has-[:checked]:border-primary has-[:checked]:bg-primary-surface"
-          >
-            <span className="flex items-start gap-2">
-              <input
-                type="radio"
-                name="signatureDisplay"
-                className="mt-0.5 size-4"
-                checked={format === f}
-                onChange={() => onFormat(f)}
-              />
-              <span className="text-sm font-semibold text-heading">
-                {OPTION_LETTER[f]}. {SIGNATURE_DISPLAY_LABELS[f]}
-                {f === 'full' ? (
-                  <span className="ml-1 text-xs font-normal">(recommended)</span>
-                ) : null}
-              </span>
-            </span>
-            <span aria-hidden className="block h-[78px] w-full rounded-lg bg-white p-1">
-              <SignatureBlock
-                widthPt={230}
-                heightPt={78}
-                imageSrc={SAMPLE_SIGNATURE}
-                name="Alex Morgan"
-                role="Signer"
-                format={f}
-                timestamp={{
-                  state: 'completed',
-                  signedAt: sampleTime,
-                  timeZone: timeZone ?? 'America/New_York',
-                }}
-              />
-            </span>
-          </label>
-        ))}
-      </div>
-      <p className="mt-3 text-xs">
-        The seal means Signature Tender recorded the signing event and its evidence is available. It
-        does not mean anyone&apos;s identity was independently verified. If a field is too small for
-        the format you pick, a shorter version is used and the full details stay in the certificate.
-      </p>
-      <label className="mt-4 flex flex-col gap-1 text-sm font-medium text-heading">
-        Time zone for signing times
-        <select
-          value={timeZone ?? ''}
-          onChange={(e) => onTimeZone(e.target.value || null)}
-          className="h-10 max-w-sm rounded-lg border border-border px-2 font-normal"
+    <div className="contents" style={SIGNATURE_BRAND_STYLE}>
+      <Card className={className}>
+        <CardHeader
+          title="Signature block"
+          description="What each signature field shows on the signed document. The signing time always comes from Signature Tender's server and is kept in the completion certificate."
+        />
+        <div
+          role="radiogroup"
+          aria-label="Signature block format"
+          className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
         >
-          <option value="">Use the sender&apos;s profile time zone</option>
-          {zones.map((z) => (
-            <option key={z} value={z}>
-              {z.replace(/_/g, ' ')}
-            </option>
+          {SIGNATURE_DISPLAY_FORMATS.map((f) => (
+            <label
+              key={f}
+              className="flex cursor-pointer flex-col gap-2 rounded-xl border border-border p-3 has-[:checked]:border-primary has-[:checked]:bg-primary-surface"
+            >
+              <span className="flex items-start gap-2">
+                <input
+                  type="radio"
+                  name="signatureDisplay"
+                  className="mt-0.5 size-4"
+                  checked={format === f}
+                  onChange={() => onFormat(f)}
+                />
+                <span className="text-sm font-semibold text-heading">
+                  {OPTION_LETTER[f]}. {SIGNATURE_DISPLAY_LABELS[f]}
+                  {f === 'full' ? (
+                    <span className="ml-1 text-xs font-normal">(recommended)</span>
+                  ) : null}
+                </span>
+              </span>
+              <span aria-hidden className="block h-[78px] w-full rounded-lg bg-white p-1">
+                <SignatureBlock
+                  widthPt={230}
+                  heightPt={78}
+                  imageSrc={SAMPLE_SIGNATURE}
+                  name="Alex Morgan"
+                  role="Signer"
+                  format={f}
+                  timestamp={{
+                    state: 'completed',
+                    signedAt: sampleTime,
+                    timeZone: timeZone ?? 'America/New_York',
+                  }}
+                />
+              </span>
+            </label>
           ))}
-        </select>
-      </label>
-    </Card>
+        </div>
+        <p className="mt-3 text-xs">
+          The seal means Signature Tender recorded the signing event and its evidence is available.
+          It does not mean anyone&apos;s identity was independently verified. If a field is too
+          small for the format you pick, a shorter version is used and the full details stay in the
+          certificate.
+        </p>
+        <label className="mt-4 flex flex-col gap-1 text-sm font-medium text-heading">
+          Time zone for signing times
+          <select
+            value={timeZone ?? ''}
+            onChange={(e) => onTimeZone(e.target.value || null)}
+            className="h-10 max-w-sm rounded-lg border border-border px-2 font-normal"
+          >
+            <option value="">Use the sender&apos;s profile time zone</option>
+            {zones.map((z) => (
+              <option key={z} value={z}>
+                {z.replace(/_/g, ' ')}
+              </option>
+            ))}
+          </select>
+        </label>
+      </Card>
+    </div>
   );
 }
