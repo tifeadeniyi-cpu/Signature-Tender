@@ -30,3 +30,6 @@ export * from './completed';
 export * from './signature-block/index';
 export * from './signature-block/pdf';
 export * from './signature-seals';
+export * from './integration-oauth';
+export * from './integration-store';
+export * from './connectors/google-drive';
