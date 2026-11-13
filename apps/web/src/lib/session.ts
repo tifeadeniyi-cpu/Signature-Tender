@@ -15,6 +15,7 @@ import { auth } from './auth';
 import { db } from './db';
 
 export const WORKSPACE_COOKIE = 'st_ws';
+export const WORKSPACE_HEADER = 'x-st-workspace';
 
 export const getSession = cache(async () => auth().api.getSession({ headers: await headers() }));
 
@@ -41,7 +42,10 @@ export const requireWorkspace = cache(async (): Promise<AppContext> => {
   const actor = { userId: user.id };
   const workspaces = await listMyWorkspaces(db(), actor);
   if (workspaces.length === 0) redirect('/onboarding');
-  const preferred = (await cookies()).get(WORKSPACE_COOKIE)?.value;
+  // The mobile app sends its choice in a header; the website uses a cookie. Either way it is only
+  // a preference: membership is checked below.
+  const preferred =
+    (await headers()).get(WORKSPACE_HEADER) ?? (await cookies()).get(WORKSPACE_COOKIE)?.value;
   const chosen = workspaces.find((w) => w.id === preferred) ?? workspaces[0]!;
   try {
     const membership = await getMembership(db(), actor, chosen.id);
