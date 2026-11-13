@@ -6,7 +6,7 @@ import { db } from '@/lib/db';
 import { OnboardingForm } from './onboarding-form';
 import { BRAND_ASSETS } from '@/lib/brand-assets';
 
-export const metadata = { title: 'Create your workspace' };
+export const metadata = { title: 'Create your workspace', robots: { index: false, follow: false } };
 export const dynamic = 'force-dynamic';
 
 export default async function OnboardingPage({

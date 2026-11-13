@@ -4,10 +4,10 @@ test.describe('Product page', () => {
   test('shows real prices and availability, and every CTA goes somewhere real', async ({ page, request }) => {
     const res = await page.goto('/product');
     expect(res!.status()).toBe(200);
-    await expect(page).toHaveTitle('Electronic Signature Features | Signature Tender');
+    await expect(page).toHaveTitle('E-Signature Features: Templates, Workflows & API | Signature Tender');
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', /\/product$/);
     await expect(page.locator('meta[property="og:title"]')).toHaveAttribute('content', /Signature Tender/);
-    const ld = JSON.parse((await page.locator('script[type="application/ld+json"]').textContent())!);
+    const ld = (await page.locator('script[type="application/ld+json"]').allTextContents()).map((t) => JSON.parse(t)).find((b) => b['@graph']?.some((n: { '@type': string }) => n['@type'] === 'FAQPage'));
     expect(ld['@graph'][0].offers.price).toBe('2.99');
     expect(ld['@graph'][1].mainEntity).toHaveLength(15);
 

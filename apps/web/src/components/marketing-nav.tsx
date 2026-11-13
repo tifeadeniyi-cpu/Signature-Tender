@@ -135,6 +135,7 @@ export function MarketingNav() {
             {...BRAND_ASSETS.horizontalLight}
             alt="Signature Tender"
             className="h-auto w-40 sm:w-44"
+            sizes="176px"
             priority
           />
         </Link>
@@ -200,7 +201,12 @@ export function MarketingNav() {
           className="fixed inset-0 z-50 flex flex-col bg-primary-dark text-white lg:hidden"
         >
           <div className="flex items-center justify-between px-4 py-3">
-            <Image {...BRAND_ASSETS.reversed} alt="Signature Tender" className="h-auto w-40" />
+            <Image
+              {...BRAND_ASSETS.reversed}
+              alt="Signature Tender"
+              className="h-auto w-40"
+              sizes="160px"
+            />
             <button
               type="button"
               autoFocus

@@ -42,7 +42,12 @@ export function MarketingFooter() {
     <footer className="border-t border-border bg-white">
       <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-[1.4fr_repeat(3,1fr)]">
         <div>
-          <Image {...BRAND_ASSETS.horizontalLight} alt="Signature Tender" className="h-auto w-44" />
+          <Image
+            {...BRAND_ASSETS.horizontalLight}
+            alt="Signature Tender"
+            className="h-auto w-44"
+            sizes="176px"
+          />
           <p className="mt-4 font-display text-lg text-heading">Send. Sign. Pay Once.</p>
           <p className="mt-2 max-w-xs text-sm">
             Electronic signatures without a subscription. Pay only when you send a document.
