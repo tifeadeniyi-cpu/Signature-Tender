@@ -93,12 +93,14 @@ export default async function BillingPage({
   }
   const paymentsOn = await paymentsAvailable();
   const supportEmail = await getConfigValue(db(), 'support.email', 'support@signaturetender.com');
-  const canBuy = o.canManage && paymentsOn;
-  const notice = !paymentsOn
-    ? 'Online payments are not switched on yet. These are the launch prices; no charge can be made.'
-    : !o.canManage
-      ? 'Only workspace owners and admins can buy credits or change plans.'
-      : null;
+  const canBuy = o.canManage && paymentsOn && !o.complimentary;
+  const notice = o.complimentary
+    ? null
+    : !paymentsOn
+      ? 'Online payments are not switched on yet. These are the launch prices; no charge can be made.'
+      : !o.canManage
+        ? 'Only workspace owners and admins can buy credits or change plans.'
+        : null;
   const single = o.prices.find((p) => p.code === 'single_request');
 
   return (
@@ -150,7 +152,15 @@ export default async function BillingPage({
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-text">
               Current billing model
             </p>
-            {o.isSubscribed && o.plan ? (
+            {o.complimentary ? (
+              <>
+                <p className="mt-1 font-display text-3xl">Founder workspace</p>
+                <p className="mt-1 text-sm">
+                  Unlimited signing requests at no charge. Sending never uses credits and there is
+                  nothing to pay.
+                </p>
+              </>
+            ) : o.isSubscribed && o.plan ? (
               <>
                 <p className="mt-1 font-display text-3xl">{o.plan.name} plan</p>
                 <p className="mt-1 text-sm">
@@ -178,10 +188,15 @@ export default async function BillingPage({
             )}
           </Card>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Stat label="Available credits" value={String(o.balances.available)}>
-              {o.balances.allowance > 0
-                ? `${o.balances.allowance} from this month's allowance, ${o.balances.purchased} purchased`
-                : `${o.balances.purchased} purchased`}
+            <Stat
+              label="Available credits"
+              value={o.complimentary ? 'Unlimited' : String(o.balances.available)}
+            >
+              {o.complimentary
+                ? 'Founder workspace: sending is free.'
+                : o.balances.allowance > 0
+                  ? `${o.balances.allowance} from this month's allowance, ${o.balances.purchased} purchased`
+                  : `${o.balances.purchased} purchased`}
             </Stat>
             <Stat label="Requests sent this month" value={String(o.usage.sentThisMonth)}>
               Test requests are not counted.
