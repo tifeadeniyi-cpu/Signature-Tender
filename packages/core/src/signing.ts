@@ -26,7 +26,15 @@ import {
   sha256Hex,
   verifyChain,
 } from './signing-crypto';
-import { buildCertificate, buildSignedPdf } from './finalize-pdf';
+import { buildSignedPdf } from './finalize-pdf';
+import { buildCompletionCertificate, buildCompletionPackage, pageSizeFor } from './certificate-pdf';
+import {
+  certificateEvents,
+  certificateSigners,
+  newVerificationRef,
+  nextCertificateNumber,
+} from './certificate';
+import { documentReferenceOf } from './library';
 import { validTimeZone } from './signature-block/layout';
 
 /** Short public reference to a recipient's completion event: its sequence number and hash prefix. */
@@ -71,7 +79,7 @@ export interface Invitation {
 // ---------------------------------------------------------------------------------------------
 // Evidence log
 
-async function appendEvent(
+export async function appendEvent(
   tx: Tx,
   e: {
     requestId: string;
@@ -1798,6 +1806,7 @@ export async function finalizeRequest(
   storage: ObjectStorage,
   ctx: { token: string } | { actor: ActorContext },
   requestId: string,
+  opts: { appUrl?: string } = {},
 ): Promise<{
   invitations: Invitation[];
   senderEmail: string;
@@ -1917,52 +1926,53 @@ export async function finalizeRequest(
         .where(eq(schema.signingEvents.requestId, requestId))
         .orderBy(asc(schema.signingEvents.seq)),
     );
-    const nameOf = new Map(recips.map((r) => [r.id, `${r.name} <${r.email}>`]));
-    const usedSigIds = new Set(fields.map((f) => f.signatureId).filter(Boolean));
     const completedAt = new Date();
-    const cert = await buildCertificate({
-      requestId,
+    const certificateNumber = await run((tx) => nextCertificateNumber(tx, completedAt));
+    const verificationRef = newVerificationRef();
+    const usedSigIds = new Set(fields.map((f) => f.signatureId).filter(Boolean));
+    const signedDoc = await PDFDocument.load(signed);
+    const first = signedDoc.getPage(0).getSize();
+    const appUrl = (opts.appUrl ?? process.env.BETTER_AUTH_URL ?? '').replace(/\/+$/, '');
+    const cert = await buildCompletionCertificate({
+      pageSize: pageSizeFor(first.width, first.height),
       isTest: req.isTest,
       title: req.title,
-      workspaceName: req.workspaceName,
+      documentRef: documentReferenceOf(req.documentId),
+      requestId,
+      verificationRef,
+      certificateNumber,
       senderName: req.senderName,
-      senderEmail: req.senderEmail,
-      sentAt: req.sentAt ?? req.createdAt,
+      organization: req.workspaceName || null,
+      createdAt: file.createdAt,
+      sentAt: req.sentAt,
       completedAt,
-      sourceSha256: req.sourceSha256,
-      signedSha256: signedSha,
-      pageCount: file.pageCount,
-      signingOrderEnabled: req.signingOrderEnabled,
-      disclosureVersion: req.disclosureVersion,
+      issuedAt: completedAt,
+      reissue: null,
+      agreementPages: signedDoc.getPageCount(),
       timeZone: block.timeZone,
-      recipients: recips.map((r) => ({
-        name: r.name,
-        email: r.email,
-        role: r.role,
-        signingOrder: r.signingOrder,
-        authMethod: r.authMethod,
-        authenticatedAt: r.authenticatedAt,
-        consentedAt: r.consentedAt,
-        signedAt: r.signedAt,
-        ip: r.signedIp,
-        userAgent: r.signedUserAgent,
-        signatures: sigs
-          .filter((s) => s.recipientId === r.id && usedSigIds.has(s.id))
-          .map((s) => ({ kind: s.kind, method: s.method, imagePng: s.imagePng })),
-        signingEventRef: signingEventRef(events, r.id),
-      })),
-      events: events.map((e) => ({
-        at: e.createdAt,
-        type: e.type,
-        who: e.recipientId
-          ? (nameOf.get(e.recipientId) ?? '')
-          : e.actorUserId
-            ? `${req.senderName} (sender)`
-            : 'system',
-        detail: e.ipAddress ? `IP ${e.ipAddress}` : '',
-      })),
-      chainHead: events.at(-1)?.hash ?? GENESIS_HASH,
+      signingOrder: req.signingOrderEnabled,
+      signers: certificateSigners(
+        recips,
+        sigs.filter((x) => usedSigIds.has(x.id)),
+        (id) => signingEventRef(events, id),
+      ),
+      copyRecipients: recips.filter((r) => !ACTING_ROLES.includes(r.role)).length,
+      events: certificateEvents({
+        events,
+        recipients: recips,
+        senderName: req.senderName,
+        uploadedAt: file.createdAt,
+        completedAt,
+      }),
+      evidenceEventCount: events.length,
+      hashes: {
+        signed: signedSha,
+        original: req.sourceSha256,
+        chainHead: events.at(-1)?.hash ?? GENESIS_HASH,
+      },
+      verifyUrl: `${appUrl}/verify?ref=${verificationRef}`,
     });
+    const packageSha = sha256Hex(await buildCompletionPackage(signed, cert));
     const certSha = sha256Hex(cert);
     const base = `ws/${req.workspaceId}/doc/${req.documentId}/req/${requestId}`;
     signedKey = `${base}/signed-${signedSha.slice(0, 16)}.pdf`;
@@ -2020,6 +2030,10 @@ export async function finalizeRequest(
           completedAt,
           signedFileId: sf!.id,
           certificateFileId: cf!.id,
+          certificateNumber,
+          verificationRef,
+          certificateIssuedAt: completedAt,
+          packageSha256: packageSha,
           finalizationError: null,
           updatedAt: completedAt,
         })
@@ -2029,7 +2043,13 @@ export async function finalizeRequest(
         workspaceId: req.workspaceId,
         actorUserId: 'actor' in ctx ? ctx.actor.userId : null,
         type: 'request.completed',
-        data: { signedSha256: signedSha, certificateSha256: certSha },
+        data: {
+          signedSha256: signedSha,
+          certificateSha256: certSha,
+          packageSha256: packageSha,
+          certificateNumber,
+          verificationRef,
+        },
       });
       // Completion emails are queued only now: files stored, hashes recorded, evidence closed.
       await enqueueCompletionNotifications(tx, {
@@ -2110,7 +2130,7 @@ export interface FinalizationRetry {
 export async function retryFailedFinalizations(
   db: Database,
   storage: ObjectStorage,
-  opts: { limit?: number; maxAttempts?: number } = {},
+  opts: { limit?: number; maxAttempts?: number; appUrl?: string } = {},
 ): Promise<FinalizationRetry[]> {
   const queue = (await db.execute(
     sql`select * from st_finalization_retry_queue(${opts.limit ?? 10}, ${opts.maxAttempts ?? 3})`,
@@ -2128,6 +2148,7 @@ export async function retryFailedFinalizations(
         storage,
         { actor: { userId: q.sent_by } },
         q.request_id,
+        { appUrl: opts.appUrl },
       );
       out.push({
         requestId: q.request_id,

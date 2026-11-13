@@ -107,7 +107,9 @@ test('completion email: recipient verifies, views, downloads and opens the evide
   await expect(guest).toHaveURL(/\/retrieve\/documents\/[0-9a-f-]{36}$/);
   await expect(guest.getByRole('heading', { name: 'Fictional Booking Agreement' })).toBeVisible();
   await expect(guest.getByRole('list', { name: 'Signers' }).getByText('Tess Tester')).toBeVisible();
-  await expect(guest.getByRole('img', { name: 'Page 2 of 2' })).toBeVisible({ timeout: 15_000 });
+  await expect(guest.getByRole('img', { name: /^Page 2 of \d+$/ })).toBeVisible({
+    timeout: 15_000,
+  });
   // The forwarded browser still cannot fetch the file, even knowing the request id.
   const requestId = guest.url().split('/').at(-1);
   const blocked = await forwarded.request.get(`/api/retrieve/${requestId}/file?kind=signed`);

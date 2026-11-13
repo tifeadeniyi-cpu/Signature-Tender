@@ -107,9 +107,9 @@ test('a recipient without an account gets a new link, signs, and downloads the c
   // Back in the same retrieval session, the completed copy and certificate download.
   await guest.reload();
   await expect(item.getByText('Completed')).toBeVisible();
-  for (const name of ['Signed copy', 'Certificate']) {
+  for (const name of ['Signed copy + certificate', 'Certificate']) {
     const res = await guest.request.get(
-      (await item.getByRole('link', { name }).getAttribute('href')) as string,
+      (await item.getByRole('link', { name, exact: true }).getAttribute('href')) as string,
     );
     expect(res.status()).toBe(200);
     expect((await res.body()).subarray(0, 5).toString()).toBe('%PDF-');

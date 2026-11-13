@@ -25,6 +25,7 @@ const FOOTER: { title: string; links: [string, string][] }[] = [
       ['API documentation', '/developers'],
       ['FAQ', '/product#faq'],
       ['Get your documents', '/retrieve'],
+      ['Verify a certificate', '/verify'],
     ],
   },
   {

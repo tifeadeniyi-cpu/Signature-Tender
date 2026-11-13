@@ -63,7 +63,7 @@ const EVENT_LABELS: Record<string, string> = {
 export interface CompletedPageProps {
   view: CompletedView;
   /** URL of a completed file. `inline` streams it for the viewer (recorded as a view). */
-  fileUrl: (kind: 'signed' | 'certificate', inline?: boolean) => string;
+  fileUrl: (kind: 'package' | 'signed' | 'certificate', inline?: boolean) => string;
   /** This page without query parameters, used for the evidence toggle. */
   selfHref: string;
   evidence: boolean;
@@ -174,12 +174,26 @@ export function CompletedPage(p: CompletedPageProps) {
           />
           {showViewer ? (
             <DownloadLink
-              href={p.fileUrl('signed')}
+              href={p.fileUrl(view.files.certificate ? 'package' : 'signed')}
               from="summary"
               className="mt-4 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary font-semibold text-white hover:bg-primary-hover lg:hidden"
             >
-              <Download className="size-5" aria-hidden /> Download signed document
+              <Download className="size-5" aria-hidden />{' '}
+              {view.files.certificate ? 'Download complete package' : 'Download signed document'}
             </DownloadLink>
+          ) : null}
+          {showViewer && view.files.certificate ? (
+            <p className="mt-3 text-sm">
+              Complete package = signed agreement + Certificate of Completion. Or download the{' '}
+              <a href={p.fileUrl('signed')} className="font-semibold text-primary underline">
+                signed agreement only
+              </a>{' '}
+              or the{' '}
+              <a href={p.fileUrl('certificate')} className="font-semibold text-primary underline">
+                certificate only
+              </a>
+              .
+            </p>
           ) : null}
         </section>
 
@@ -194,10 +208,15 @@ export function CompletedPage(p: CompletedPageProps) {
             <EvidencePanel view={view} fileUrl={p.fileUrl} selfHref={p.selfHref} at={at} />
           ) : showViewer ? (
             <CompletedPdfViewer
-              src={p.fileUrl('signed', true)}
-              downloadHref={p.fileUrl('signed')}
+              src={p.fileUrl(view.files.certificate ? 'package' : 'signed', true)}
+              downloadHref={p.fileUrl(view.files.certificate ? 'package' : 'signed')}
               allowPrint={r.allowPrint}
               title={r.title}
+              certificateFromPage={
+                view.files.certificate && view.files.signed?.pageCount
+                  ? view.files.signed.pageCount + 1
+                  : null
+              }
             />
           ) : (
             <ViewerPlaceholder view={view} supportEmail={p.supportEmail} />

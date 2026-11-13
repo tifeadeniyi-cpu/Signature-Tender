@@ -274,7 +274,9 @@ export async function retryFinalizeAction(
   kickWebhooks();
   const user = await requireUser();
   try {
-    await finalizeRequest(db(), storage(), { actor: { userId: user.id } }, requestId);
+    await finalizeRequest(db(), storage(), { actor: { userId: user.id } }, requestId, {
+      appUrl: env().BETTER_AUTH_URL,
+    });
     dispatchAfterResponse(requestId);
   } catch (err) {
     const r = toActionError(err);

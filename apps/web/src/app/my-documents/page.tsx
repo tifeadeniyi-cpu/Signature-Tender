@@ -93,7 +93,7 @@ export default async function MyDocumentsPage({
                   {d.canDownload ? (
                     <>
                       <DownloadLink
-                        href={`/api/claimed/${d.requestId}/file?kind=signed`}
+                        href={`/api/claimed/${d.requestId}/file?kind=package`}
                         from="my_documents"
                         className={buttonClass('secondary', 'sm')}
                       >

@@ -80,6 +80,21 @@ export async function withNotificationSystem<T>(
 }
 
 /**
+ * Runs `fn` as the certificate re-issue job: it may read completed requests' evidence and give
+ * those still on an old certificate a new one (see migration 0023). Only @st/core's
+ * reissueCertificates may call this, after a staff check.
+ */
+export async function withCertificateSystem<T>(
+  db: Database,
+  fn: (tx: Tx) => Promise<T>,
+): Promise<T> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select set_config('app.system_actor', 'certificates', true)`);
+    return fn(tx);
+  });
+}
+
+/**
  * Runs `fn` as a signed-in user reading documents they claimed after signing. Claim policies are
  * active only in this context, so claimed requests never appear in ordinary workspace queries.
  */

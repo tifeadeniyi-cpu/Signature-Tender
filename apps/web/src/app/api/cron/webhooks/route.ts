@@ -23,7 +23,7 @@ function authorized(req: Request) {
  * notifications sweep if the email provider is down.
  */
 async function retryFinishing() {
-  const runs = await retryFailedFinalizations(db(), storage());
+  const runs = await retryFailedFinalizations(db(), storage(), { appUrl: env().BETTER_AUTH_URL });
   for (const r of runs) {
     if (!r.ok) continue;
     await dispatchNotifications({ requestId: r.requestId }).catch((err) =>

@@ -162,7 +162,8 @@ export async function adoptStudioDesignAction(
     if (view.recipient.email.toLowerCase() !== user.email.toLowerCase())
       return {
         ok: false,
-        message: 'Your saved signatures can only be used on documents sent to your own email address.',
+        message:
+          'Your saved signatures can only be used on documents sent to your own email address.',
       };
     const png = await purchasedDesignPng(
       db(),
@@ -176,7 +177,12 @@ export async function adoptStudioDesignAction(
       db(),
       token,
       signSession,
-      { kind: input.kind, method: 'uploaded', pngBase64: png.toString('base64'), applyTo: input.applyTo },
+      {
+        kind: input.kind,
+        method: 'uploaded',
+        pngBase64: png.toString('base64'),
+        applyTo: input.applyTo,
+      },
       await requestMeta(),
       { kind: 'signature_studio', designId: input.designId },
     );
@@ -240,7 +246,9 @@ export async function completeAction(
     if (result.readyToFinalize) {
       // Finalizing queues the completion emails (sender and every recipient) in the same
       // transaction; they are sent after this response so signing never waits on email.
-      await finalizeRequest(db(), storage(), { token }, result.requestId);
+      await finalizeRequest(db(), storage(), { token }, result.requestId, {
+        appUrl: env().BETTER_AUTH_URL,
+      });
       dispatchAfterResponse(result.requestId);
     }
   } catch (err) {

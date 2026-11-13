@@ -2,6 +2,7 @@ import { readCompletedFileForSigner } from '@st/core';
 import { db } from '@/lib/db';
 import { storage } from '@/lib/storage';
 import { apiError } from '@/lib/api';
+import { completionKind, readCompletion } from '@/lib/completion-files';
 import { requestMeta } from '@/lib/session';
 import { readSignSession } from '@/lib/sign-session';
 import { readRetrieveSession } from '@/lib/retrieve-session';
@@ -17,20 +18,27 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
   try {
     const { token } = await params;
     const q = new URL(req.url).searchParams;
-    const kind = q.get('kind') === 'certificate' ? 'certificate' : 'signed';
+    const kind = completionKind(q.get('kind'));
     const view = q.get('view') === '1';
-    const { bytes, filename } = await readCompletedFileForSigner(
-      db(),
-      storage(),
-      token,
-      await readSignSession(token),
-      await readRetrieveSession(),
-      kind,
-      view ? 'view' : 'download',
-      await requestMeta(),
+    const meta = await requestMeta();
+    const signSession = await readSignSession(token);
+    const retrieveSession = await readRetrieveSession();
+    const { bytes, filename } = await readCompletion(kind, (k) =>
+      readCompletedFileForSigner(
+        db(),
+        storage(),
+        token,
+        signSession,
+        retrieveSession,
+        k,
+        view ? 'view' : 'download',
+        meta,
+      ),
     );
     const name =
-      filename.replace(/\.pdf$/i, '') + (kind === 'certificate' ? '-certificate' : '') + '.pdf';
+      kind === 'package'
+        ? filename
+        : filename.replace(/\.pdf$/i, '') + (kind === 'certificate' ? '-certificate' : '') + '.pdf';
     return new Response(Buffer.from(bytes), {
       headers: {
         'Content-Type': 'application/pdf',

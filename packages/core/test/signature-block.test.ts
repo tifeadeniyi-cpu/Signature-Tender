@@ -12,7 +12,7 @@ import {
   type Primitive,
 } from '../src/signature-block/layout';
 import { displayedPageSize, fieldSizePt } from '../src/signature-block/pdf';
-import { buildSignedPdf, buildCertificate } from '../src/finalize-pdf';
+import { buildSignedPdf } from '../src/finalize-pdf';
 import { documentSettingsSchema, signatureBlockSettings } from '../src/documents';
 import { pdfContent, pdfHex } from './pdf-text';
 
@@ -344,45 +344,5 @@ describe('signature block in the PDF', () => {
     expect(text).toContain(pdfHex('Signed on Nov 12, 2026 at 10:24 AM (EST)'));
     expect(text).toContain(pdfHex('Signed on Nov 13, 2026 at 4:01 AM (EST)'));
     expect(text).toContain(pdfHex('Ben Venue'));
-  });
-
-  it('shows the block and the signing event in the certificate', async () => {
-    const cert = await buildCertificate({
-      requestId: 'req-1',
-      isTest: false,
-      title: 'Agreement',
-      workspaceName: 'WS',
-      senderName: 'Sam',
-      senderEmail: 'sam@example.test',
-      sentAt: new Date(SIGNED_AT),
-      completedAt: new Date(SIGNED_AT),
-      sourceSha256: 'a'.repeat(64),
-      signedSha256: 'b'.repeat(64),
-      pageCount: 1,
-      signingOrderEnabled: false,
-      disclosureVersion: '1',
-      timeZone: 'America/New_York',
-      recipients: [
-        {
-          name: 'Alex Morgan',
-          email: 'alex@example.test',
-          role: 'signer',
-          signingOrder: 1,
-          authMethod: 'email_link',
-          authenticatedAt: null,
-          consentedAt: new Date(SIGNED_AT),
-          signedAt: new Date(SIGNED_AT),
-          ip: null,
-          userAgent: null,
-          signatures: [{ kind: 'signature', method: 'typed', imagePng: png() }],
-          signingEventRef: 'EV-7-ABCDEF123456',
-        },
-      ],
-      events: [],
-      chainHead: 'c'.repeat(64),
-    });
-    const text = pdfContent(cert);
-    expect(text).toContain(pdfHex('EV-7-ABCDEF123456'));
-    expect(text).toContain(pdfHex('Signed on Nov 12, 2026 at 10:24 AM (EST)'));
   });
 });
