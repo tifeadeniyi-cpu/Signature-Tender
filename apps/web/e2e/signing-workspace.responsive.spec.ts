@@ -143,7 +143,8 @@ test('a recipient reviews, signs, saves, resumes and completes', async ({ browse
   await studio.getByRole('button', { name: 'Use This Signature' }).click();
   const applied = page.getByRole('button', { name: /^Signature applied/ });
   await expect(applied).toBeVisible();
-  expect(await applied.locator('img').getAttribute('src')).toBe(preview);
+  // The field shows the signature block the signed PDF will carry, using exactly the previewed image.
+  expect(await applied.locator('image[data-part="signature"]').getAttribute('href')).toBe(preview);
   await expect(studio.getByText('1 of 2 completed')).toBeVisible();
 
   // Fill the text field (on a phone, in the bottom sheet's large input).

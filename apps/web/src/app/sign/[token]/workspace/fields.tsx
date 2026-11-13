@@ -1,7 +1,17 @@
 'use client';
 import { Check, PenLine, Lock, CalendarDays } from 'lucide-react';
+import { roleLabel, type SignatureDisplayFormat } from '@st/core/signature-block/layout';
 import { cn } from '@/lib/cn';
+import { SignatureBlock } from '@/components/signature-block/signature-block';
 import type { Mark } from './studio';
+
+/** The sender's signature block choice, the zone for signing times, and who is signing. */
+export type BlockSettings = {
+  format: SignatureDisplayFormat;
+  timeZone: string;
+  name: string;
+  role: string;
+};
 
 export type Field = {
   id: string;
@@ -30,6 +40,7 @@ export type OtherField = {
   value: string | null;
   dataUrl: string | null;
   recipientName: string;
+  recipientRole: string | null;
   signedAt: string | null;
 };
 
@@ -69,12 +80,16 @@ const pos = (f: { x: number; y: number; width: number; height: number }) => ({
 
 /**
  * The fields on one page, positioned with page-relative percentages so they stay aligned at any
- * zoom, fit mode or screen size. `pageHeight` is the rendered page height in CSS pixels.
+ * zoom, fit mode or screen size. `pageHeight` is the rendered page height in CSS pixels, and
+ * `pagePt` the page size in PDF points (signature blocks are laid out in points, like the PDF).
+ * Applied marks show the same signature block the signed PDF will carry, with the time pending.
  */
 export function FieldLayer({
   page,
   pageHeight,
   pageWidth,
+  pagePt,
+  block,
   fields,
   others,
   values,
@@ -88,6 +103,8 @@ export function FieldLayer({
   page: number;
   pageHeight: number;
   pageWidth: number;
+  pagePt: { width: number; height: number };
+  block: BlockSettings;
   fields: Field[];
   others: OtherField[];
   values: Record<string, string>;
@@ -111,7 +128,22 @@ export function FieldLayer({
             aria-label={`${fieldName(o)} completed by ${o.recipientName}${o.value ? `: ${o.value}` : ''}. Read-only.`}
             title={`Completed by ${o.recipientName}`}
           >
-            {o.dataUrl ? (
+            {o.dataUrl && (o.type === 'signature' || o.type === 'initials') ? (
+              <SignatureBlock
+                widthPt={o.width * pagePt.width}
+                heightPt={o.height * pagePt.height}
+                imageSrc={o.dataUrl}
+                name={o.recipientName}
+                role={roleLabel(o.recipientRole)}
+                format={block.format}
+                kind={o.type}
+                timestamp={
+                  o.signedAt
+                    ? { state: 'completed', signedAt: o.signedAt, timeZone: block.timeZone }
+                    : { state: 'pending' }
+                }
+              />
+            ) : o.dataUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={o.dataUrl} alt="" className="max-h-full max-w-full object-contain" />
             ) : o.type === 'checkbox' ? (
@@ -183,8 +215,17 @@ export function FieldLayer({
                 }
               >
                 {mark ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={mark.dataUrl} alt="" className="max-h-full max-w-full object-contain" />
+                  <SignatureBlock
+                    widthPt={f.width * pagePt.width}
+                    heightPt={f.height * pagePt.height}
+                    imageSrc={mark.dataUrl}
+                    name={block.name}
+                    role={block.role}
+                    format={block.format}
+                    kind={f.type === 'initials' ? 'initials' : 'signature'}
+                    timestamp={{ state: 'pending' }}
+                    className="pointer-events-none"
+                  />
                 ) : (
                   <span
                     className="flex items-center gap-1.5 font-medium whitespace-nowrap text-heading"

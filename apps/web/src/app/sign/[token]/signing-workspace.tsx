@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { Button, buttonClass } from '@/components/ui/button';
 import { Alert, Skeleton } from '@/components/ui/feedback';
+import { roleLabel, type SignatureDisplayFormat } from '@st/core/signature-block/layout';
 import { cn } from '@/lib/cn';
 import { adoptAction, completeAction, saveProgressAction } from './actions';
 import { DeclineForm } from './stages';
@@ -36,6 +37,7 @@ import {
   FieldControls,
   fieldName,
   fieldProblem,
+  type BlockSettings,
   type Field,
   type OtherField,
 } from './workspace/fields';
@@ -49,6 +51,7 @@ type Data = {
   sentAt: Date | string;
   pageCount: number;
   allowDownload: boolean;
+  signatureBlock: { format: SignatureDisplayFormat; timeZone: string };
   role: string;
   name: string;
   email: string;
@@ -103,6 +106,10 @@ export function SigningWorkspace({
 }) {
   const router = useRouter();
   const { pdf, sizes, error: pdfError, retry: retryPdf } = usePdf(`/api/sign/${token}/file`);
+  const block: BlockSettings = useMemo(
+    () => ({ ...data.signatureBlock, name: data.name, role: roleLabel(data.role) }),
+    [data.signatureBlock, data.name, data.role],
+  );
   const sigById = useMemo(
     () => new Map(data.signatures.map((s) => [s.id, { id: s.id, dataUrl: s.dataUrl }])),
     [data.signatures],
@@ -1028,6 +1035,8 @@ export function SigningWorkspace({
                           page={n}
                           pageHeight={s.height * scale}
                           pageWidth={s.width * scale}
+                          pagePt={s}
+                          block={block}
                           fields={data.fields}
                           others={data.completedByOthers}
                           values={values}

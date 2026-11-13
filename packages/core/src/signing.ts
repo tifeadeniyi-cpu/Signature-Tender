@@ -1232,6 +1232,8 @@ export async function getSigningWorkspace(
       sentAt: request.sentAt ?? request.createdAt,
       pageCount: file?.pageCount ?? 0,
       allowDownload: settings.allowDownload,
+      /** How signature fields are drawn (the sender's signature block choice) and in which zone. */
+      signatureBlock: signatureBlockSettings(request.settings),
       role: recipient.role,
       name: recipient.name,
       email: recipient.email,
@@ -1267,6 +1269,7 @@ export async function getSigningWorkspace(
           value: f.value,
           dataUrl: sig ? PNG_DATA_URL(sig.imagePng) : null,
           recipientName: people.find((p) => p.id === f.recipientId)?.name ?? '',
+          recipientRole: people.find((p) => p.id === f.recipientId)?.role ?? null,
           signedAt: people.find((p) => p.id === f.recipientId)?.signedAt?.toISOString() ?? null,
         };
       }),
