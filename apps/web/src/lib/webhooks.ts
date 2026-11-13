@@ -37,12 +37,14 @@ export async function runWebhookDispatch() {
   });
 }
 
-/** After the response is sent, deliver any webhooks the request just caused. Never throws. */
+/**
+ * After the response is sent, deliver any webhooks the request just caused, and run integration
+ * jobs those events queued (for example saving a finished document to Google Drive). Never throws.
+ */
 export function kickWebhooks() {
-  after(() =>
-    runWebhookDispatch().then(
-      () => undefined,
-      () => undefined,
-    ),
-  );
+  after(async () => {
+    await runWebhookDispatch().catch(() => undefined);
+    const { runIntegrationWorker } = await import('./integrations');
+    await runIntegrationWorker().catch(() => undefined);
+  });
 }

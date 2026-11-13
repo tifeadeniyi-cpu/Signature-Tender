@@ -51,6 +51,11 @@ const schema = z.object({
   // Sign in with Google (Google Cloud OAuth client). Leave empty to hide the button.
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
+  // Google Drive integration: reuses the Google OAuth client above. The Picker needs a browser API
+  // key (restricted to this site and the Picker API) and the Cloud project number. Leave empty
+  // and Google Drive shows as Unavailable in the Integrations Marketplace.
+  GOOGLE_PICKER_API_KEY: z.string().optional(),
+  GOOGLE_CLOUD_PROJECT_NUMBER: z.string().regex(/^\d+$/).optional(),
   // Sign in with Apple. APPLE_CLIENT_ID is the Services ID; the key is the .p8 file's contents.
   // The client secret JWT is generated from these at startup. Leave empty to hide the button.
   APPLE_CLIENT_ID: z.string().optional(),
