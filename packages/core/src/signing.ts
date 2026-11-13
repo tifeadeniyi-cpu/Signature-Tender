@@ -1467,6 +1467,11 @@ export async function adoptSignature(
   session: string | undefined,
   input: z.input<typeof adoptSchema>,
   meta: Meta = {},
+  /**
+   * Set only by the server when the image is a Signature Studio design the signed-in signer owns
+   * (never taken from the browser). Recorded in the audit trail as the mark's source.
+   */
+  source?: { kind: 'signature_studio'; designId: string },
 ) {
   const data = adoptSchema.parse(input);
   if (data.method === 'typed' && !data.typedText)
@@ -1516,6 +1521,7 @@ export async function adoptSignature(
         font: data.font ?? null,
         style: data.method === 'typed' ? (data.style ?? null) : null,
         sourceSha256: request.sourceSha256,
+        ...(source ? { source: source.kind, studioDesignId: source.designId } : {}),
       },
       ...meta,
     });

@@ -70,18 +70,18 @@ export default async function PurchasedDesignPage({ params, searchParams }: { pa
         </div>
         {settings.crossSell ? (
           <section aria-labelledby="work-heading" className="mt-12 rounded-2xl bg-primary p-8 text-white">
-            <h2 id="work-heading" className="font-display text-2xl">
+            <h2 id="work-heading" className="font-display text-2xl text-white">
               Put Your Signature to Work
             </h2>
             <p className="mt-2 max-w-2xl text-white/85">Now that you&apos;ve created your signature, use Signature Tender to sign and send documents online whenever you need.</p>
             <div className="mt-5 flex flex-wrap gap-3">
-              <Link href="/app/documents/new" className={buttonClass('primary', 'md', 'bg-gold text-primary hover:bg-soft-gold')}>
+              <Link href="/app/documents/new" className={buttonClass('gold', 'md')}>
                 Sign a Document
               </Link>
-              <Link href="/app/documents/new" className={buttonClass('secondary', 'md', 'border-white/40 bg-transparent text-white hover:bg-white/10')}>
+              <Link href="/app/documents/new" className={buttonClass('inverse', 'md')}>
                 Send for Signature
               </Link>
-              <Link href="/product" className={buttonClass('ghost', 'md', 'text-white hover:bg-white/10')}>
+              <Link href="/product" className={buttonClass('inverse-ghost', 'md')}>
                 Explore Signature Tender
               </Link>
             </div>

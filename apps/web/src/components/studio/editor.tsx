@@ -247,7 +247,7 @@ export function StudioEditor({
   }
 
   const methodTab = (
-    <div role="tablist" aria-label="How to create" className="grid grid-cols-2 gap-1 rounded-xl bg-cream p-1 sm:grid-cols-4">
+    <div role="tablist" aria-label="How to create" className="grid grid-cols-2 gap-1 rounded-xl bg-cream p-1 xl:grid-cols-4">
       {METHODS.map((m) => (
         <button
           key={m.id}
@@ -256,7 +256,7 @@ export function StudioEditor({
           aria-selected={design.method === m.id}
           onClick={() => setMethod(m.id)}
           className={cn(
-            'inline-flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-sm font-semibold transition-colors',
+            'inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-2 text-sm font-semibold transition-colors',
             design.method === m.id ? 'bg-white text-primary shadow' : 'text-slate-text hover:text-primary',
           )}
         >
@@ -364,9 +364,9 @@ export function StudioEditor({
 
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-card">
-      <div className="grid lg:grid-cols-[13rem_minmax(0,1fr)_22rem]">
+      <div className="grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[13rem_minmax(0,1fr)_22rem]">
         {/* Left navigation */}
-        <nav aria-label="Studio" className="border-b border-border bg-ivory/70 p-2 lg:border-b-0 lg:border-r lg:p-3">
+        <nav aria-label="Studio" className="min-w-0 border-b border-border bg-ivory/70 p-2 lg:border-b-0 lg:border-r lg:p-3">
           <ul className="flex gap-1 overflow-x-auto lg:flex-col">
             {nav
               .filter((n) => !n.hidden)
@@ -413,7 +413,7 @@ export function StudioEditor({
             </div>
           ) : null}
           {methodTab}
-          <div className="sticky top-0 z-10 -mx-3 bg-white px-3 pb-2 pt-1 sm:static sm:mx-0 sm:px-0">
+          <div>
             <div className="mb-2 flex flex-wrap items-center gap-1" role="toolbar" aria-label="Design tools">
               <button type="button" className={cn(toolbarBtn, mode === 'select' && 'bg-cream')} aria-pressed={mode === 'select'} onClick={() => setMode('select')} title="Select and move" aria-label="Select and move">
                 <MousePointer2 className="size-4" aria-hidden />
@@ -541,7 +541,7 @@ export function StudioEditor({
         </div>
 
         {/* Tools: a side panel on desktop, a sheet under the canvas on phones */}
-        <aside aria-label="Design tools" className="flex max-h-none flex-col gap-5 border-t border-border bg-white p-4 lg:max-h-[52rem] lg:overflow-y-auto lg:border-l lg:border-t-0">
+        <aside aria-label="Design tools" className="flex min-w-0 max-h-none flex-col gap-5 border-t border-border bg-white p-4 lg:max-h-[52rem] lg:overflow-y-auto lg:border-l lg:border-t-0">
           <div className="mx-auto -mt-2 h-1 w-10 rounded-full bg-border lg:hidden" aria-hidden />
           {selectedEl ? (
             <>
@@ -580,7 +580,7 @@ export function StudioEditor({
             {signedIn ? `Download it in high resolution for ${price}. No subscription.` : `Sign in and download it for ${price}. No subscription.`}
           </p>
         </div>
-        <Button type="button" onClick={() => void download()} loading={busy} disabled={!settings.purchasesEnabled} className="bg-gold text-primary hover:bg-soft-gold">
+        <Button type="button" onClick={() => void download()} loading={busy} disabled={!settings.purchasesEnabled} variant="gold">
           {signedIn ? `Download — ${price}` : `Sign In to Download — ${price}`}
         </Button>
       </div>

@@ -131,3 +131,34 @@ export async function designSvg(
   }
   return toSvg(renderDesign(design, fonts), { width: opts.width, background: opts.background, imageHref: () => href });
 }
+
+export interface SignerStudioDesign {
+  id: string;
+  name: string;
+  svg: string;
+}
+
+/**
+ * Purchased Studio designs the signed-in user may use on this signing request: only when their
+ * verified account email is the recipient's email. Anyone else sees none.
+ */
+export async function purchasedForSigner(
+  recipientEmail: string,
+): Promise<Record<'signature' | 'initials', SignerStudioDesign[]>> {
+  const empty = { signature: [], initials: [] };
+  const session = await getSession();
+  if (!session?.user.emailVerified || session.user.email.toLowerCase() !== recipientEmail.toLowerCase()) return empty;
+  const settings = await studioSettings();
+  if (!settings.enabled) return empty;
+  const { listSignableDesigns } = await import('@st/core/studio/server');
+  const load = async (kind: 'signature' | 'initials') =>
+    Promise.all(
+      (await listSignableDesigns(db(), session.user.id, kind)).map(async (d) => ({
+        id: d.id,
+        name: d.name,
+        svg: await designSvg(d.design, { width: 360 }).catch(() => ''),
+      })),
+    );
+  const [signature, initials] = await Promise.all([load('signature'), load('initials')]);
+  return { signature, initials };
+}

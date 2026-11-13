@@ -947,12 +947,28 @@ export async function listSignableDesigns(db: Database, userId: string, kind: 's
 }
 
 /**
- * The PNG of a purchased design for adopting in a document: rendered from the frozen snapshot,
- * only for the owner with active access. The caller still runs the normal adoption flow.
+ * A purchased design as a PNG for adopting in a document: rendered from the frozen snapshot at
+ * signing-field resolution, only for the owner with active access. The caller still runs the
+ * normal adoption flow (consent, the signer's own link) and the design adds no fee.
  */
-export async function purchasedDesignPng(db: Database, deps: RenderDeps, userId: string, designId: string, settings: StudioSettings) {
-  const file = await readStudioAsset(db, deps, userId, designId, 'png', settings, { via: 'document_signing' });
-  return file.body;
+export async function purchasedDesignPng(
+  db: Database,
+  deps: RenderDeps,
+  userId: string,
+  designId: string,
+  kind: 'signature' | 'initials',
+  settings: StudioSettings,
+) {
+  const info = await getPurchasedDesign(db, userId, designId, settings);
+  if (!info?.entitlement || info.design.status !== 'purchased')
+    throw new AppError('forbidden', 'That signature is not in your library.');
+  if (info.snapshot.kind !== kind) throw new AppError('invalid', `Choose one of your ${kind === 'initials' ? 'initials' : 'signatures'}.`);
+  const { r, imageHref } = await renderSnapshot(db, deps, info.snapshot);
+  const { png } = svgToPng(toSvg(r, { imageHref }), 1200);
+  await withStudioSystem(db, (tx) =>
+    tx.insert(schema.signatureDownloads).values({ entitlementId: info.entitlement!.id, assetId: null, format: 'png', via: 'document_signing', result: 'ok' }),
+  );
+  return png;
 }
 
 // ---------------------------------------------------------------------------------------------

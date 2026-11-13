@@ -114,10 +114,10 @@ export default async function HomePage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-3 lg:justify-end">
-            <ButtonLink href="/signature-studio#studio" size="lg" className="bg-gold text-primary hover:bg-soft-gold">
+            <ButtonLink href="/signature-studio#studio" size="lg" variant="gold">
               Design My Signature
             </ButtonLink>
-            <ButtonLink href="/signature-studio#styles" size="lg" variant="ghost" className="text-white hover:bg-white/10">
+            <ButtonLink href="/signature-studio#styles" size="lg" variant="inverse-ghost">
               Explore Styles
             </ButtonLink>
           </div>

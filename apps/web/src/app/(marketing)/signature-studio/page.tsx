@@ -106,17 +106,17 @@ export default async function SignatureStudioPage({ searchParams }: { searchPara
         <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 py-14 sm:px-6 lg:grid-cols-[1.05fr_1fr] lg:py-20">
           <div>
             <Eyebrow dark>SIGNATURE STUDIO</Eyebrow>
-            <h1 id="studio-hero" className="mt-5 font-display text-4xl leading-tight sm:text-5xl lg:text-6xl">
+            <h1 id="studio-hero" className="mt-5 font-display text-white text-4xl leading-tight sm:text-5xl lg:text-6xl">
               Create Your Own <span className="italic text-gold">Handwritten</span> Signature
             </h1>
             <p className="mt-5 max-w-xl text-lg text-white/85">
               Design a signature that looks and feels uniquely yours. Personalize every letter, curve, and flourish. Download your finished design for just {price}.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <a href="#studio" className={buttonClass('primary', 'lg', 'bg-gold text-primary hover:bg-soft-gold')}>
+              <a href="#studio" className={buttonClass('gold', 'lg')}>
                 Design My Signature — Free Preview
               </a>
-              <a href="#styles" className={buttonClass('secondary', 'lg', 'border-white/40 bg-transparent text-white hover:bg-white/10')}>
+              <a href="#styles" className={buttonClass('inverse', 'lg')}>
                 Explore Signature Styles
               </a>
             </div>
@@ -233,13 +233,13 @@ export default async function SignatureStudioPage({ searchParams }: { searchPara
               Put Your Signature to Work
             </Heading>
             <div className="flex flex-wrap gap-3 lg:justify-end">
-              <Link href={userId ? '/app/documents/new' : '/sign-up'} className={buttonClass('primary', 'lg', 'bg-gold text-primary hover:bg-soft-gold')}>
+              <Link href={userId ? '/app/documents/new' : '/sign-up'} className={buttonClass('gold', 'lg')}>
                 Sign a Document
               </Link>
-              <Link href={userId ? '/app/documents/new' : '/sign-up'} className={buttonClass('secondary', 'lg', 'border-white/40 bg-transparent text-white hover:bg-white/10')}>
+              <Link href={userId ? '/app/documents/new' : '/sign-up'} className={buttonClass('inverse', 'lg')}>
                 Send for Signature
               </Link>
-              <Link href="/product" className={buttonClass('ghost', 'lg', 'text-white hover:bg-white/10')}>
+              <Link href="/product" className={buttonClass('inverse-ghost', 'lg')}>
                 Explore Signature Tender
               </Link>
             </div>

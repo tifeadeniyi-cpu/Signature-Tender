@@ -19,7 +19,9 @@ import { db } from '@/lib/db';
 import { storage } from '@/lib/storage';
 import { env } from '@/lib/env';
 import { dispatchAfterResponse } from '@/lib/notifications';
-import { requestMeta } from '@/lib/session';
+import { getSession, requestMeta } from '@/lib/session';
+import { purchasedDesignPng } from '@st/core/studio/server';
+import { studioDeps, studioSettings } from '@/lib/studio';
 import { signCookieName, readSignSession } from '@/lib/sign-session';
 import {
   sendInvitations,
@@ -132,6 +134,51 @@ export async function adoptAction(
       await readSession(token),
       input,
       await requestMeta(),
+    );
+    return { ok: true, ...r };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/**
+ * Adopts one of the signer's purchased Signature Studio designs. Only when they are signed in
+ * with a verified email that matches this recipient; the design is checked against their
+ * entitlement on the server. It then goes through the normal adoption (consent, this signing
+ * session, audit trail) and costs nothing extra.
+ */
+export async function adoptStudioDesignAction(
+  token: string,
+  input: { kind: 'signature' | 'initials'; designId: string; applyTo?: string[] },
+): Promise<
+  { ok: true; id: string; dataUrl: string; applied: string[] } | { ok: false; message: string }
+> {
+  try {
+    const session = await getSession();
+    const user = session?.user.emailVerified ? session.user : null;
+    if (!user) return { ok: false, message: 'Sign in to use a signature from your library.' };
+    const signSession = await readSession(token);
+    const view = await getSignerView(db(), token, signSession);
+    if (view.recipient.email.toLowerCase() !== user.email.toLowerCase())
+      return {
+        ok: false,
+        message: 'Your saved signatures can only be used on documents sent to your own email address.',
+      };
+    const png = await purchasedDesignPng(
+      db(),
+      studioDeps(),
+      user.id,
+      input.designId,
+      input.kind,
+      await studioSettings(),
+    );
+    const r = await adoptSignature(
+      db(),
+      token,
+      signSession,
+      { kind: input.kind, method: 'uploaded', pngBase64: png.toString('base64'), applyTo: input.applyTo },
+      await requestMeta(),
+      { kind: 'signature_studio', designId: input.designId },
     );
     return { ok: true, ...r };
   } catch (err) {

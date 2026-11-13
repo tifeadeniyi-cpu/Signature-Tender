@@ -146,7 +146,7 @@ export function ChipButton({
       type="button"
       aria-pressed={active}
       className={cn(
-        'inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50',
+        'inline-flex min-h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50',
         active ? 'border-primary bg-primary text-white' : 'border-border bg-white text-heading hover:border-primary/40 hover:bg-ivory',
         className,
       )}
