@@ -1,6 +1,6 @@
 /**
  * Where to go after signing in or verifying an email. Only invitation links, document-claim
- * links and the Signature Studio hand-off are accepted, so the `next` parameter can never be used to send people to another site
+ * links and Signature Studio pages are accepted, so the `next` parameter can never be used to send people to another site
  * or an arbitrary page.
  */
 export function safeNextPath(next: string | null | undefined): string | null {
@@ -8,6 +8,12 @@ export function safeNextPath(next: string | null | undefined): string | null {
   if (/^\/invite\/[A-Za-z0-9_-]{43}$/.test(next)) return next;
   if (/^\/claim\/[A-Za-z0-9_-]{20,400}\.[A-Za-z0-9_-]{43}$/.test(next)) return next;
   if (next === '/signature-studio/continue') return next;
+  // Signature Studio pages that need an account: payment confirmation, the purchased design and
+  // its receipt. Each is still checked against the signed-in owner when it loads.
+  const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+  if (new RegExp(`^/signature-studio/return\\?p=${UUID}$`, 'i').test(next)) return next;
+  if (new RegExp(`^/signature-studio/(design|receipt|checkout)/${UUID}$`, 'i').test(next))
+    return next;
   return null;
 }
 
