@@ -68,14 +68,22 @@ async function sendAndSign(
   }
   await signer.getByLabel('I agree to use electronic records').check();
   await signer.getByRole('button', { name: 'Continue' }).click();
-  await signer.getByRole('button', { name: /Add your signature/ }).click();
+  await signer.getByRole('button', { name: 'Next Field' }).click();
   await signer
-    .getByRole('dialog', { name: 'Adopt your signature' })
-    .getByRole('button', { name: 'Adopt and use signature' })
+    .getByRole('complementary', { name: 'Signing tools' })
+    .getByRole('button', { name: 'Use This Signature' })
     .click();
-  await signer.getByRole('button', { name: 'Finish signing' }).click();
-  await signer.getByLabel(/intend to sign it electronically/).check();
-  await signer.getByRole('button', { name: 'Sign document' }).click();
+  await expect(signer.getByText('1 of 1 completed')).toBeVisible();
+  await signer
+    .getByRole('navigation', { name: 'Field navigation' })
+    .getByRole('button', { name: 'Finish Signing' })
+    .click();
+  const confirm = signer.getByRole('dialog', { name: 'Confirm Your Electronic Signature' });
+  await confirm.getByLabel(/intend to sign it electronically/).check();
+  await confirm.getByRole('button', { name: 'Complete Signing' }).click();
+  await expect(signer.getByRole('heading', { name: "You've Completed Your Signing" })).toBeVisible({
+    timeout: 20_000,
+  });
   await latestMail(opts.email, 'Your Document Is Complete', 20_000);
   return { signer, token };
 }
@@ -92,7 +100,10 @@ test('completed page: view, download, evidence, dismiss the offer, then create a
     emailCode: false,
   });
 
-  await signer.goto(`/sign/completed/${token}`);
+  // The success screen links to the completed document once everyone has signed.
+  await signer.reload();
+  await signer.getByRole('link', { name: 'View completed document' }).click();
+  await expect(signer).toHaveURL(new RegExp(`/sign/completed/${token}$`));
   await expect(signer.getByRole('heading', { name: 'This Document Is Completed' })).toBeVisible();
   await expect(signer.getByText('All required parties have signed.')).toBeVisible();
   await expect(signer.getByRole('heading', { name: 'Signers (1)' })).toBeVisible();
