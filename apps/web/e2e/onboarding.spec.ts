@@ -48,7 +48,7 @@ test('sign up, verify, create workspace, edit settings, sign out and back in', a
       .getByRole('link', { name: 'Billing & Credits' }),
   ).toBeVisible();
 
-  await page.locator('header summary').click();
+  await page.getByRole('banner').locator('summary').click();
   await page.getByRole('link', { name: 'Workspace', exact: true }).click();
   await expect(page.getByText('Your role: Owner')).toBeVisible();
   await page.getByLabel('Website').fill('not a url');
@@ -66,7 +66,7 @@ test('sign up, verify, create workspace, edit settings, sign out and back in', a
   await page.getByRole('button', { name: 'Save Profile' }).click();
   await expect(page.getByText('Profile saved.')).toBeVisible();
 
-  await page.locator('header summary').click();
+  await page.getByRole('banner').locator('summary').click();
   await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(page).toHaveURL(/sign-in/);
 
