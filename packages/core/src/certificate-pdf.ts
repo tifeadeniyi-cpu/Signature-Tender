@@ -23,6 +23,8 @@ export interface CertificateSigner {
   statusLabel: string;
   /** Reference to this person's recorded completion event, as shown on the document's seals. */
   eventRef?: string | null;
+  /** The signer's own time zone when they signed; their row's time is shown in it. */
+  timeZone?: string | null;
 }
 
 export interface CertificateEvent {
@@ -484,7 +486,7 @@ async function render(c: CompletionCertificate, totalCertPages: number) {
       const roleL = wrap(sans, s.roleLabel, 8, cols[2]!.w - 10);
       const authL = wrap(sans, s.authLabel, 8, cols[3]!.w - 10);
       const methL = wrap(sans, s.methodLabel, 8, cols[4]!.w - 10);
-      const when = t(s.doneAt);
+      const when = formatCertTime(s.doneAt, s.timeZone || tz);
       const lines = Math.max(
         nameL.length + mailL.length,
         roleL.length,

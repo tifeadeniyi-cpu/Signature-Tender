@@ -64,6 +64,8 @@ export async function requestMeta() {
   return {
     ipAddress: h.get('x-forwarded-for')?.split(',')[0]?.trim() ?? h.get('x-real-ip') ?? null,
     userAgent: h.get('user-agent'),
+    // Vercel's edge geolocates the IP; used for a signer's time zone when the device sends none.
+    ipTimeZone: h.get('x-vercel-ip-timezone'),
   };
 }
 
