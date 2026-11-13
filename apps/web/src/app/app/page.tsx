@@ -114,8 +114,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               <Plus className="size-5" aria-hidden /> Send Document
             </Link>
             <Link
-              href="/app/documents/new"
-              title="Upload a document and add yourself as a signer"
+              href="/app/documents/new?self=1"
+              title="Upload a PDF and sign it yourself, for a flat fee per document"
               className="flex h-14 items-center justify-center gap-2 rounded-xl border-2 border-primary/80 bg-white text-base font-semibold text-primary hover:bg-cream focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
             >
               <PenLine className="size-5" aria-hidden /> Sign a Document
@@ -620,10 +620,10 @@ function QuickActions({
       body: `Design and download for ${price}`,
     },
     canCreate && {
-      href: '/app/documents/new',
+      href: '/app/documents/new?self=1',
       icon: <FileText />,
       title: 'Upload & Sign',
-      body: 'Upload, then add yourself as a signer',
+      body: 'Sign your own document, no one else needed',
     },
     canCreate && {
       href: '/app/documents/new',

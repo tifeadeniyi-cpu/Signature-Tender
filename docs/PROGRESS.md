@@ -334,6 +334,17 @@ Clicking a row, a document name or its View link on `/app/documents` opens a rig
 
 - Actions the backend does not support yet are not shown in the drawer. They are planned in Phase 10 below.
 
+## Sign it yourself ($0.99): Done
+
+For documents only you need to sign. **Sign it yourself** (Documents page, dashboard "Sign a Document" and "Upload & Sign") uploads the PDF, adds you as the only signer, skips the signers step, and after you place your fields takes you straight into signing. The completed document and Certificate of Completion are the same as any request.
+
+- A request is "self-signing" when its one recipient is a signer with the sender's own email (`isSelfSignRecipients`).
+- Price: a flat **$0.99** per document from config `billing.self_sign_price` (`{ amountCents, currency }`; minimum 50 cents), kept out of the prices table so it never appears as a credit pack.
+- It never buys or spends a credit: the request waits for its own Stripe payment (`priceCode: self_sign`, `credits: 0`), and once paid it is sent without a credit hold. Workspaces with unlimited signing and test requests are free.
+- After payment, the return page opens signing directly (`/app/documents/[id]/sign-now` issues a fresh link to the signed-in sender only). Nobody is emailed, including you. The document page shows **Sign now** while it waits for your signature.
+- Paying needs the billing permission, like any request payment.
+- Tests: `packages/core/test/self-sign.test.ts` (no credit used, $0.99 checkout, paid send, owner-only link, other requests unaffected); `apps/web/e2e/self-sign.spec.ts` (test mode) and `self-sign-paid.spec.ts` (Stripe stand-in).
+
 ## Phase 10: Document management actions: Planned
 
 Adds the actions left out of the documents drawer. Each one appears in the drawer only when the server allows it, and every change is recorded in the evidence or audit log.

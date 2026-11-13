@@ -11,6 +11,7 @@ import {
   Download,
   TimerOff,
   Eye,
+  PenLine,
 } from 'lucide-react';
 import {
   searchLibrary,
@@ -94,6 +95,11 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
       <Plus className="size-4" aria-hidden /> New document
     </ButtonLink>
   ) : null;
+  const selfButton = canCreate ? (
+    <ButtonLink href="/app/documents/new?self=1" variant="secondary">
+      <PenLine className="size-4" aria-hidden /> Sign it yourself
+    </ButtonLink>
+  ) : null;
   const sortLink = (key: typeof f.sort, label: string) => {
     const active = f.sort === key;
     const dir = active && f.dir === 'desc' ? 'asc' : 'desc';
@@ -116,7 +122,14 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
       <PageHeader
         title="Documents"
         description="Find, track and download every document in this workspace."
-        actions={newButton}
+        actions={
+          newButton ? (
+            <>
+              {selfButton}
+              {newButton}
+            </>
+          ) : null
+        }
       />
 
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-5">

@@ -123,6 +123,11 @@ export async function subscribeAction(
   return checkout({ kind: 'subscription', planCode }, '/app/billing?tab=plans');
 }
 
+/** Opens Stripe Checkout for one request straight away (used right after "Sign it yourself"). */
+export async function startRequestCheckout(requestId: string): Promise<BillingActionState> {
+  return checkout({ kind: 'request', requestId }, '/app/documents');
+}
+
 export async function payForRequestAction(
   requestId: string,
   _prev: BillingActionState,
