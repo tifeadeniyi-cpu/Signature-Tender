@@ -92,7 +92,7 @@ function TwoFactorPanel({ enabled }: { enabled: boolean }) {
       await QRCode.toDataURL(data.totpURI, {
         margin: 1,
         width: 192,
-        color: { dark: '#270F17', light: '#FFFFFF' },
+        color: { dark: '#0d1b33', light: '#FFFFFF' },
       }),
     );
     setSecret(new URL(data.totpURI).searchParams.get('secret') ?? '');

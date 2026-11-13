@@ -303,16 +303,20 @@ function Success({ view, token }: { view: SignerView; token: string }) {
             : `${view.senderName} and the other recipients will be notified when the entire agreement is complete.`}
         </p>
       )}
-      <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
+      {/* Stacked full width: three buttons side by side did not fit their labels in this card. */}
+      <div className="mt-6 flex flex-col gap-2">
         {done ? (
-          <Link href={`/sign/completed/${token}`} className={buttonClass('primary', 'md')}>
+          <Link
+            href={`/sign/completed/${token}`}
+            className={buttonClass('primary', 'md', 'w-full')}
+          >
             View completed document
           </Link>
         ) : null}
         {ready ? (
           <a
             href={`/api/sign/${token}/signed`}
-            className={buttonClass(done ? 'secondary' : 'primary', 'md')}
+            className={buttonClass(done ? 'secondary' : 'primary', 'md', 'w-full')}
           >
             <Download className="size-4" aria-hidden /> Download signed copy
           </a>
@@ -321,7 +325,7 @@ function Success({ view, token }: { view: SignerView; token: string }) {
             The sender has not enabled downloads. Contact {view.senderName} for a copy.
           </p>
         ) : null}
-        <Link href="/" className={buttonClass('secondary', 'md')}>
+        <Link href="/" className={buttonClass('ghost', 'md', 'w-full')}>
           Return to Signature Tender homepage
         </Link>
       </div>
