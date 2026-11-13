@@ -2,7 +2,8 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Menu,
   X,
@@ -164,15 +165,27 @@ export function Sidebar({ allowed, promo }: SidebarProps) {
 
 export function MobileNav({ allowed }: { allowed: string[] }) {
   const [open, setOpen] = useState(false);
+  const openButton = useRef<HTMLButtonElement>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    // Keep the page behind still while the menu is open, and start keyboard focus inside it.
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    closeButton.current?.focus();
+    const back = openButton.current;
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+      back?.focus();
+    };
   }, [open]);
   return (
     <div className="lg:hidden">
       <button
+        ref={openButton}
         type="button"
         onClick={() => setOpen(true)}
         className="flex size-10 items-center justify-center rounded-lg text-primary hover:bg-primary-surface"
@@ -182,34 +195,45 @@ export function MobileNav({ allowed }: { allowed: string[] }) {
       >
         <Menu className="size-5" aria-hidden />
       </button>
-      {open ? (
-        <div className="fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label="Navigation">
-          <div
-            className="absolute inset-0 bg-heading/50"
-            onClick={() => setOpen(false)}
-            aria-hidden
-          />
-          <div
-            id="mobile-nav"
-            className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col bg-gradient-to-b from-navy-royal via-primary to-primary-dark px-4 py-5"
-          >
-            <div className="flex items-start justify-between">
-              <Brand />
-              <button
-                type="button"
+      {/* Rendered on <body>: the top bar's backdrop blur would otherwise trap this full-screen
+          panel inside the 64px header, so the menu opened but could not be seen or used. */}
+      {open
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-50 lg:hidden"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Navigation"
+            >
+              <div
+                className="absolute inset-0 bg-heading/50"
                 onClick={() => setOpen(false)}
-                className="rounded-lg p-2 text-white hover:bg-white/10"
-                aria-label="Close navigation"
+                aria-hidden
+              />
+              <div
+                id="mobile-nav"
+                className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col bg-gradient-to-b from-navy-royal via-primary to-primary-dark px-4 py-5"
               >
-                <X className="size-5" aria-hidden />
-              </button>
-            </div>
-            <nav aria-label="Primary" className="mt-6 overflow-y-auto">
-              <NavList allowed={allowed} onNavigate={() => setOpen(false)} />
-            </nav>
-          </div>
-        </div>
-      ) : null}
+                <div className="flex items-start justify-between">
+                  <Brand />
+                  <button
+                    ref={closeButton}
+                    type="button"
+                    onClick={() => setOpen(false)}
+                    className="rounded-lg p-2 text-white hover:bg-white/10"
+                    aria-label="Close navigation"
+                  >
+                    <X className="size-5" aria-hidden />
+                  </button>
+                </div>
+                <nav aria-label="Primary" className="mt-6 min-h-0 flex-1 overflow-y-auto">
+                  <NavList allowed={allowed} onNavigate={() => setOpen(false)} />
+                </nav>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
