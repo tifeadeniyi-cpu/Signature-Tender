@@ -299,8 +299,16 @@ function Success({ view, token }: { view: SignerView; token: string }) {
         </p>
       )}
       <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
+        {done ? (
+          <Link href={`/sign/completed/${token}`} className={buttonClass('primary', 'md')}>
+            View completed document
+          </Link>
+        ) : null}
         {ready ? (
-          <a href={`/api/sign/${token}/signed`} className={buttonClass('primary', 'md')}>
+          <a
+            href={`/api/sign/${token}/signed`}
+            className={buttonClass(done ? 'secondary' : 'primary', 'md')}
+          >
             <Download className="size-4" aria-hidden /> Download signed copy
           </a>
         ) : done ? (

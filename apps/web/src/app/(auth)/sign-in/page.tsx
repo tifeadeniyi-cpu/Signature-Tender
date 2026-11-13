@@ -1,22 +1,43 @@
 'use client';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useState } from 'react';
 import { Fingerprint } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 import { TextField } from '@/components/ui/field';
 import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/feedback';
-import { nextFromLocation } from '@/lib/next-path';
+import { isClaimNext, nextFromLocation, safeNextPath } from '@/lib/next-path';
+import { track } from '@/components/product/analytics';
 
-export default function SignInPage() {
+function SignIn() {
   const router = useRouter();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const params = useSearchParams();
+  const claimNext = safeNextPath(params.get('next'));
+  const claim = isClaimNext(claimNext)
+    ? { existing: params.get('existing') === '1', next: claimNext! }
+    : null;
+  const signedIn = () => {
+    if (isClaimNext(nextFromLocation())) track('existing_user_signed_in');
+    router.push(nextFromLocation() ?? '/app');
+    router.refresh();
+  };
   return (
     <>
       <h1 className="font-display text-2xl">Sign in</h1>
-      <p className="mt-1 text-sm">Welcome back to Signature Tender.</p>
+      <p className="mt-1 text-sm">
+        {claim
+          ? 'Sign in to add your signed document to your account.'
+          : 'Welcome back to Signature Tender.'}
+      </p>
+      {claim?.existing ? (
+        <Alert tone="info" className="mt-4">
+          You already have a Signature Tender account with the address this document was sent to.
+          Sign in and we&apos;ll offer to add the document to it.
+        </Alert>
+      ) : null}
       <form
         className="mt-6 flex flex-col gap-4"
         onSubmit={async (e) => {
@@ -42,8 +63,7 @@ export default function SignInPage() {
             );
           }
           if (data && 'twoFactorRedirect' in data && data.twoFactorRedirect) return; // handled by plugin redirect
-          router.push(nextFromLocation() ?? '/app');
-          router.refresh();
+          signedIn();
         }}
       >
         <TextField label="Email" name="email" type="email" autoComplete="email webauthn" required />
@@ -76,18 +96,28 @@ export default function SignInPage() {
           setError('');
           const res = await authClient.signIn.passkey();
           if (res?.error) return setError(res.error.message || 'Passkey sign-in did not complete.');
-          router.push(nextFromLocation() ?? '/app');
-          router.refresh();
+          signedIn();
         }}
       >
         <Fingerprint className="size-5" aria-hidden /> Sign in with a passkey
       </Button>
       <p className="mt-6 text-center text-sm">
         New to Signature Tender?{' '}
-        <Link href="/sign-up" className="font-semibold text-primary hover:underline">
+        <Link
+          href={claim ? `/sign-up?next=${encodeURIComponent(claim.next)}` : '/sign-up'}
+          className="font-semibold text-primary hover:underline"
+        >
           Create an account
         </Link>
       </p>
     </>
+  );
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense>
+      <SignIn />
+    </Suspense>
   );
 }

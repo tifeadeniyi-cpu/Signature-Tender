@@ -187,7 +187,7 @@ export async function completeAction(
     }
     return fail(err);
   }
-  await writeSession(token, null);
+  // The session cookie stays until it expires so the completed document opens without a new code.
   try {
     await sendInvitations(result.invitations, ctx);
     if (result.readyToFinalize) {

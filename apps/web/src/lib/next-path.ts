@@ -1,9 +1,18 @@
 /**
- * Where to go after signing in or verifying an email. Only invitation links are accepted, so the
- * `next` parameter can never be used to send people to another site or an arbitrary page.
+ * Where to go after signing in or verifying an email. Only invitation links and document-claim
+ * links are accepted, so the `next` parameter can never be used to send people to another site
+ * or an arbitrary page.
  */
 export function safeNextPath(next: string | null | undefined): string | null {
-  return next && /^\/invite\/[A-Za-z0-9_-]{43}$/.test(next) ? next : null;
+  if (!next) return null;
+  if (/^\/invite\/[A-Za-z0-9_-]{43}$/.test(next)) return next;
+  if (/^\/claim\/[A-Za-z0-9_-]{20,400}\.[A-Za-z0-9_-]{43}$/.test(next)) return next;
+  return null;
+}
+
+/** True when `next` is a completed-document claim (post-signing registration). */
+export function isClaimNext(next: string | null | undefined): boolean {
+  return Boolean(next && next.startsWith('/claim/') && safeNextPath(next));
 }
 
 /** Reads `next` from the current URL in the browser. */

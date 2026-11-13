@@ -118,7 +118,10 @@ test('completion email: recipient verifies, views, downloads and opens the evide
   await guest.goto(download);
   expect((await dl).suggestedFilename()).toMatch(/\.pdf$/);
   const file = await guest.request.get(
-    (await guest.getByRole('link', { name: 'Download signed document' }).getAttribute('href'))!,
+    (await guest
+      .getByRole('toolbar')
+      .getByRole('link', { name: 'Download' })
+      .getAttribute('href'))!,
   );
   expect(file.status()).toBe(200);
   expect((await file.body()).subarray(0, 5).toString()).toBe('%PDF-');
@@ -126,12 +129,15 @@ test('completion email: recipient verifies, views, downloads and opens the evide
   // Evidence certificate: integrity references, signing events and a certificate download.
   await guest.goto(evidence);
   await expect(guest.getByRole('heading', { name: 'Integrity references' })).toBeVisible();
+  await guest.getByText(/^Signing events/).click();
   await expect(guest.getByText('Completed: signed copy and certificate created')).toBeVisible();
   const cert = await guest.request.get(
     (await guest
-      .getByRole('link', { name: 'Download evidence certificate' })
+      .getByRole('toolbar')
+      .getByRole('link', { name: 'Download' })
       .getAttribute('href'))!,
   );
+  expect(cert.headers()['content-disposition']).toContain('certificate');
   expect(cert.status()).toBe(200);
 
   // The sender sees the emails and the recipient's access in Activity.
