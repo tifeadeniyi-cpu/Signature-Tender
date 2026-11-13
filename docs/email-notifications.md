@@ -86,7 +86,7 @@ download).
 - Images are attached inline (`cid:`) from `assets.generated.ts`, so they show without a public image
   host. Icons and illustrations are drawn in `assets/src/*.svg`; regenerate with
   `node apps/web/scripts/build-email-assets.mjs` (instructions in the script). The logo is the
-  approved `public/brand/logo-reversed.png`, unchanged; the script refuses to run if it differs.
+  approved `public/branding/signature-tender/reversed/signature-tender-reversed.png`, unchanged; the script refuses to run if it differs.
 
 To add another template (invitation, reminder, declined, expired, cancelled, account verification,
 password reset, receipt), build it from the same components and add a renderer branch in

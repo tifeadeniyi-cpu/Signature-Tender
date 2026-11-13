@@ -1,6 +1,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { CircleHelp, FolderOpen } from 'lucide-react';
+import { BRAND_ASSETS } from '@/lib/brand-assets';
 
 /**
  * Burgundy header for public recipient pages (completed documents, retrieval, claimed documents).
@@ -18,11 +19,7 @@ export function PublicHeader({
   signInNext?: string | null;
 }) {
   return (
-    <header
-      className="relative isolate overflow-hidden text-white"
-      // Matches the reversed logo's background so the logo sits seamlessly (same as the signing header).
-      style={{ backgroundColor: '#730a2a' }}
-    >
+    <header className="brand-burgundy relative isolate overflow-hidden bg-gradient-to-r from-primary-dark via-primary to-primary-hover text-white">
       <svg
         className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-7 w-full sm:h-9"
         viewBox="0 0 1440 40"
@@ -47,14 +44,7 @@ export function PublicHeader({
       </svg>
       <div className="mx-auto flex h-20 max-w-[1600px] items-start gap-3 px-4 pt-3 sm:h-24 sm:px-6 sm:pt-4">
         <Link href="/" aria-label="Signature Tender home" className="shrink-0">
-          <Image
-            src="/brand/logo-reversed.png"
-            alt="Signature Tender"
-            width={327}
-            height={168}
-            className="h-11 w-auto rounded-md sm:h-12"
-            priority
-          />
+          <Image {...BRAND_ASSETS.reversed} className="h-12 w-auto sm:h-14" priority />
         </Link>
         <div className="flex-1" />
         <a

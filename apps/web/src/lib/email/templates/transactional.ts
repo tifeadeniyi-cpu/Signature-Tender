@@ -367,7 +367,7 @@ export function renderTeamInvitation(
         { icon: 'calendar', label: 'Expires', value: i.expiresOn },
       ],
       status: 'Invitation',
-      statusTone: 'wine',
+      statusTone: 'navy',
     },
     fine: ['If you were not expecting this, you can ignore it. Nothing happens unless you accept.'],
   });

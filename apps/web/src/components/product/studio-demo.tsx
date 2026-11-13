@@ -24,7 +24,7 @@ type Flourish = (typeof FLOURISHES)[number]['id'];
 
 const INKS = [
   { id: 'black', label: 'Black ink', color: '#1F1A1C' },
-  { id: 'burgundy', label: 'Burgundy ink', color: '#5B0A1C' },
+  { id: 'blue', label: 'Blue ink', color: '#1E3A8A' },
   { id: 'navy', label: 'Navy ink', color: '#1E3A5F' },
 ] as const;
 
@@ -58,7 +58,7 @@ export function StudioDemo({ families }: { families: StudioFamily[] }) {
   const [familyId, setFamilyId] = useState(families[1]?.id ?? families[0]!.id);
   const [slant, setSlant] = useState(0);
   const [flourish, setFlourish] = useState<Flourish>('underline');
-  const [ink, setInk] = useState<(typeof INKS)[number]['id']>('burgundy');
+  const [ink, setInk] = useState<(typeof INKS)[number]['id']>('navy');
   const [weight, setWeight] = useState<(typeof WEIGHTS)[number]['id']>('regular');
   const opened = useRef(false);
 

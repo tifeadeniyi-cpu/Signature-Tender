@@ -305,12 +305,12 @@ export function CompletedPage(p: CompletedPageProps) {
 
 function Info({ icon, label, children }: { icon: ReactNode; label: string; children: ReactNode }) {
   return (
-    <div className="flex gap-3">
-      <span className="mt-0.5 text-primary">{icon}</span>
-      <div className="min-w-0">
-        <dt className="font-medium text-heading">{label}</dt>
-        <dd className="text-heading/80">{children}</dd>
-      </div>
+    <div className="grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-3">
+      <dt className="contents">
+        <span className="mt-0.5 text-primary">{icon}</span>
+        <span className="font-medium text-heading">{label}</span>
+      </dt>
+      <dd className="col-start-2 text-heading/80">{children}</dd>
     </div>
   );
 }

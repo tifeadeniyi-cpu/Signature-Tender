@@ -13,7 +13,7 @@ export default async function MyDocumentsLayout({ children }: { children: React.
   const session = await getSession();
   const user = session?.user.emailVerified ? { name: session.user.name } : null;
   return (
-    <div className="flex min-h-dvh flex-col bg-ivory">
+    <div className="brand-burgundy flex min-h-dvh flex-col bg-ivory">
       <PublicHeader user={user} supportEmail={await supportEmail()} />
       <main id="main" className="flex-1">
         {children}

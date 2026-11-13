@@ -1,7 +1,19 @@
 import { test, expect, type Browser, type Page } from '@playwright/test';
 import { PDFDocument, StandardFonts } from 'pdf-lib';
+import AxeBuilder from '@axe-core/playwright';
 import { signUpWithWorkspace } from './auth';
 import { latestLinkFor, latestMail } from './mail';
+
+const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
+
+/** WCAG 2.2 AA scan (including colour contrast) of the page as it stands. */
+async function expectNoAxeViolations(page: Page) {
+  await page.waitForLoadState('networkidle');
+  const res = await new AxeBuilder({ page }).withTags(TAGS).analyze();
+  expect(
+    res.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).slice(0, 3)}`),
+  ).toEqual([]);
+}
 
 async function makePdf() {
   const doc = await PDFDocument.create();
@@ -86,6 +98,8 @@ test('completed page: view, download, evidence, dismiss the offer, then create a
   await expect(signer.getByRole('heading', { name: 'Signers (1)' })).toBeVisible();
   await expect(signer.getByText('Alex Morgan(you)')).toBeVisible();
   await expect(signer.getByText(/Document ID: ST-/)).toBeVisible();
+  await expect(signer.getByRole('img', { name: 'Page 1 of 2' })).toBeVisible({ timeout: 15_000 });
+  await expectNoAxeViolations(signer);
 
   // The real finalized PDF renders, with working page navigation and zoom.
   await expect(signer.getByRole('img', { name: 'Page 1 of 2' })).toBeVisible({ timeout: 15_000 });
@@ -149,10 +163,12 @@ test('completed page: view, download, evidence, dismiss the offer, then create a
     signer.getByRole('heading', { name: 'Add your signed document to your account?' }),
   ).toBeVisible();
   await expect(signer.getByText('Service Agreement', { exact: true })).toBeVisible();
+  await expectNoAxeViolations(signer);
   await signer.getByRole('button', { name: 'Add to My Documents' }).click();
   await expect(signer.getByRole('heading', { name: 'Welcome to Signature Tender!' })).toBeVisible();
   await expect(signer.getByText('Your signed document is ready in your workspace.')).toBeVisible();
   await expect(signer.getByRole('heading', { name: 'Documents Signed by Me' })).toBeVisible();
+  await expectNoAxeViolations(signer);
 
   const claimedDl = await signer.request.get(
     (await signer.getByRole('link', { name: 'Download' }).getAttribute('href'))!,

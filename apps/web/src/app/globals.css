@@ -2,29 +2,37 @@
 
 /* Brand tokens (spec Part 4.3). Use these names everywhere instead of raw hex values. */
 @theme {
-  --color-primary: #5b0a1c;
-  --color-primary-hover: #7f1d3a;
-  --color-primary-dark: #430515;
-  --color-primary-surface: #f6e8ec;
-  --color-rose-gold: #e6b8a7;
-  --color-blush: #f9e4e8;
-  --color-ivory: #fff9f7;
-  --color-slate-text: #4b5563;
-  --color-heading: #270f17;
-  --color-border: #e9dde0;
+  /* Midnight Navy, Champagne Gold and Warm Ivory. Older token names are kept so every
+     component picks up the new palette: "rose-gold" is now Champagne Gold, "blush" is Cream. */
+  --color-primary: #0d1b33; /* Midnight Navy */
+  --color-primary-hover: #172d4d; /* Royal Navy */
+  --color-primary-dark: #081226;
+  --color-primary-surface: #eaeef5; /* pale navy tint for selected rows and hovers */
+  --color-navy: #0d1b33;
+  --color-navy-royal: #172d4d;
+  --color-gold: #d8af68; /* Champagne Gold */
+  --color-soft-gold: #f3deb4;
+  --color-cream: #f6f0e7;
+  --color-rose-gold: #d8af68;
+  --color-blush: #f6f0e7;
+  --color-ivory: #fff9f2; /* Warm Ivory */
+  --color-slate-text: #475569;
+  --color-heading: #0d1b33;
+  --color-dark-text: #1e293b;
+  --color-border: #e7e1d6;
   --color-success: #15803d;
   --color-success-bg: #dcfce7;
   --color-warning: #b45309;
   --color-warning-bg: #fef3c7;
   --color-error: #b91c1c;
   --color-error-bg: #fee2e2;
-  --color-info: #1d4ed8;
+  --color-info: #2563eb;
   --color-info-bg: #dbeafe;
 
   --font-display: var(--font-dm-serif), Georgia, 'Times New Roman', serif;
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 
-  --shadow-card: 0 1px 2px rgb(39 15 23 / 0.04), 0 4px 16px rgb(39 15 23 / 0.06);
+  --shadow-card: 0 1px 2px rgb(13 27 51 / 0.04), 0 4px 16px rgb(13 27 51 / 0.06);
 }
 
 @layer base {
@@ -71,4 +79,25 @@
     width: 100%;
     break-after: page;
   }
+}
+
+/* The spec's burgundy palette (Primary Burgundy, Wine, Rose Gold, Blush, Ivory, Slate), scoped to
+   the recipient completed-document, claim and My Documents pages. Redefining the tokens here makes
+   every utility inside (bg-primary, text-heading, ...) use burgundy without touching other pages. */
+.brand-burgundy {
+  --color-primary: #5b0a1c;
+  --color-primary-hover: #7f1d3a;
+  --color-primary-dark: #430515;
+  --color-primary-surface: #f6e8ec;
+  --color-rose-gold: #e6b8a7;
+  --color-blush: #f9e4e8;
+  --color-ivory: #fff9f7;
+  --color-slate-text: #4b5563;
+  --color-heading: #270f17;
+  --color-border: #e9dde0;
+  --shadow-card: 0 1px 2px rgb(39 15 23 / 0.04), 0 4px 16px rgb(39 15 23 / 0.06);
+  color: var(--color-slate-text);
+}
+.brand-burgundy :focus-visible {
+  outline-color: #7f1d3a;
 }
