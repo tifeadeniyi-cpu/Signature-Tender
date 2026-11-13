@@ -1276,3 +1276,116 @@ export async function getSendQuote(db: Database, actor: ActorContext, workspaceI
     };
   });
 }
+
+// ---------------------------------------------------------------------------------------------
+// Card on file (required to add team members)
+
+export const CARD_REQUIRED_MESSAGE =
+  'Add a card on file for this workspace before adding team members.';
+
+export interface CardOnFile {
+  /** False for workspaces that sign for free: they never need a card. */
+  required: boolean;
+  /** A saved card, or an active subscription (which always has one). */
+  hasCard: boolean;
+  brand: string | null;
+  last4: string | null;
+}
+
+export async function cardOnFile(tx: Tx, workspaceId: string): Promise<CardOnFile> {
+  const [row] = (await tx.execute(
+    sql`select has_card, brand, last4 from st_workspace_card(${workspaceId}::uuid)`,
+  )) as unknown as { has_card: boolean; brand: string | null; last4: string | null }[];
+  return {
+    required: !(await isComplimentary(tx, workspaceId)),
+    hasCard: Boolean(row?.has_card),
+    brand: row?.brand ?? null,
+    last4: row?.last4 ?? null,
+  };
+}
+
+export async function getCardOnFile(db: Database, actor: ActorContext, workspaceId: string) {
+  if (!uuid.safeParse(workspaceId).success) throw new AppError('not_found', 'Workspace not found');
+  return withActor(db, actor, (tx) => cardOnFile(tx, workspaceId));
+}
+
+/** Blocks adding people until the company has a card on file. */
+export async function requireCardForTeam(tx: Tx, workspaceId: string) {
+  const c = await cardOnFile(tx, workspaceId);
+  if (c.required && !c.hasCard) throw new AppError('conflict', CARD_REQUIRED_MESSAGE);
+}
+
+/** What Stripe needs to open Checkout in setup mode to save the company's card. */
+export async function beginCardSetup(db: Database, actor: ActorContext, workspaceId: string) {
+  if (!uuid.safeParse(workspaceId).success) throw new AppError('not_found', 'Workspace not found');
+  return withActor(db, actor, async (tx) => {
+    await requireBillingManager(tx, workspaceId);
+    const acct = await accountRow(tx, workspaceId);
+    const [ws] = await tx
+      .select({ name: schema.workspaces.name })
+      .from(schema.workspaces)
+      .where(eq(schema.workspaces.id, workspaceId));
+    const [me] = await tx
+      .select({ email: schema.user.email })
+      .from(schema.user)
+      .where(eq(schema.user.id, actor.userId));
+    return {
+      customerId: acct?.stripeCustomerId ?? null,
+      customerEmail: me?.email ?? '',
+      workspaceName: ws?.name ?? '',
+    };
+  });
+}
+
+export interface CardFacts {
+  workspaceId: string;
+  customerId: string;
+  paymentMethodId: string;
+  brand: string | null;
+  last4: string | null;
+}
+
+/**
+ * Stripe confirmed a saved card (setup-mode checkout). Recorded only for the workspace whose
+ * Stripe customer it belongs to. Safe to repeat.
+ */
+export async function recordCardOnFile(db: Database, f: CardFacts) {
+  if (!uuid.safeParse(f.workspaceId).success) return false;
+  return withBillingSystem(db, async (tx) => {
+    const rows = await tx
+      .update(schema.billingAccounts)
+      .set({
+        cardPaymentMethodId: f.paymentMethodId,
+        cardBrand: f.brand?.slice(0, 20) ?? null,
+        cardLast4: f.last4 && /^\d{4}$/.test(f.last4) ? f.last4 : null,
+        cardSavedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(schema.billingAccounts.workspaceId, f.workspaceId),
+          eq(schema.billingAccounts.stripeCustomerId, f.customerId),
+        ),
+      )
+      .returning({ id: schema.billingAccounts.workspaceId });
+    return rows.length > 0;
+  });
+}
+
+/** The saved card was removed in Stripe: the workspace no longer has it on file. */
+export async function clearCardOnFile(db: Database, paymentMethodId: string) {
+  return withBillingSystem(db, async (tx) => {
+    const rows = await tx
+      .update(schema.billingAccounts)
+      .set({
+        cardPaymentMethodId: null,
+        cardBrand: null,
+        cardLast4: null,
+        cardSavedAt: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.billingAccounts.cardPaymentMethodId, paymentMethodId))
+      .returning({ id: schema.billingAccounts.workspaceId });
+    return rows.length > 0;
+  });
+}

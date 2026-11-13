@@ -169,6 +169,13 @@
       "when": 1794540403297,
       "tag": "0023_certificates",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1794576216146,
+      "tag": "0026_team_card_on_file",
+      "breakpoints": true
     }
   ]
 }
