@@ -10,9 +10,13 @@ test('dashboard, reports and CSV export work for a new workspace', async ({ page
   test.setTimeout(90_000);
   await signUpWithWorkspace(page, 'Rita Report', 'Report Studio');
 
-  // Dashboard numbers come from the library, so a new workspace shows zeros, not sample data.
-  await expect(page.getByRole('link', { name: /Buy Credits/i }).first()).toBeVisible();
-  await expect(page.getByText('Bulk Send')).toBeVisible();
+  // Dashboard figures are real, so a new workspace shows empty states, never sample data.
+  await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible();
+  await expect(page.getByText('Your documents will appear here.')).toBeVisible();
+  await expect(page.getByText('No signing activity for this period.')).toBeVisible();
+  await page.getByRole('link', { name: 'Last 7 Days' }).click();
+  await expect(page).toHaveURL(/range=7d/);
+  await expect(page.getByText('No signing activity for this period.')).toBeVisible();
 
   await page.goto('/app/reports');
   await expect(page.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
