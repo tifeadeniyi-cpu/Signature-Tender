@@ -167,11 +167,7 @@ export const webhookDeliveries = pgTable(
   ],
 );
 
-/**
- * A connection from a workspace to a third-party app. Partner apps (Beam Artist, Jectstack) bundle
- * an API key and a webhook endpoint; OAuth apps (Google Drive) hold encrypted tokens in
- * `integration_credentials`. One connection per provider per workspace.
- */
+/** A partner connection (Beam Artist, Jectstack) bundles an API key and a webhook endpoint. */
 export const integrationConnections = pgTable(
   'integration_connections',
   {
@@ -186,29 +182,12 @@ export const integrationConnections = pgTable(
       onDelete: 'set null',
     }),
     createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
-    /** The account authorized at the provider (OAuth apps), e.g. a Google account email. */
-    externalAccountId: text('external_account_id'),
-    externalAccountLabel: text('external_account_label'),
-    scopes: text('scopes')
-      .array()
-      .notNull()
-      .default(sql`'{}'::text[]`),
-    /** Connector settings, e.g. Drive auto-save folder. Never holds secrets. */
-    settings: jsonb('settings').$type<Record<string, unknown>>().notNull().default({}),
-    connectedAt: timestamp('connected_at', { withTimezone: true }),
-    lastSuccessAt: timestamp('last_success_at', { withTimezone: true }),
-    lastErrorAt: timestamp('last_error_at', { withTimezone: true }),
-    lastError: text('last_error'),
-    revokedAt: timestamp('revoked_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     uniqueIndex('integration_connections_uq').on(t.workspaceId, t.provider),
-    check(
-      'integration_connections_status',
-      sql`${t.status} in ('active','expired','error','disabled')`,
-    ),
+    check('integration_connections_status', sql`${t.status} in ('active','disabled')`),
   ],
 );
 

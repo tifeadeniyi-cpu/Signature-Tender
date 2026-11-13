@@ -66,7 +66,7 @@ test('staff admin is a 404 for customers and opens for staff', async ({ page }) 
 
 test('Slack only accepts a Slack incoming webhook URL', async ({ page }) => {
   await signUpWithWorkspace(page, 'Sal Slack', 'Slack Studio');
-  await page.goto('/app/integrations/slack');
+  await page.goto('/app/integrations');
   await page.getByLabel('Slack incoming webhook URL').fill('https://example.com/not-slack');
   await page.getByRole('button', { name: 'Connect Slack' }).click();
   await expect(page.getByText(/hooks\.slack\.com/).first()).toBeVisible();

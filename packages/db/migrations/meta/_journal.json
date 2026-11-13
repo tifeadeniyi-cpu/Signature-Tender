@@ -169,20 +169,6 @@
       "when": 1794540403297,
       "tag": "0023_certificates",
       "breakpoints": true
-    },
-    {
-      "idx": 24,
-      "version": "7",
-      "when": 1794554885546,
-      "tag": "0024_integrations",
-      "breakpoints": true
-    },
-    {
-      "idx": 25,
-      "version": "7",
-      "when": 1794554958733,
-      "tag": "0025_integrations_rls",
-      "breakpoints": true
     }
   ]
 }

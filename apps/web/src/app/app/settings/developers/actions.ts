@@ -169,7 +169,7 @@ export async function connectAction(_p: SecretState, fd: FormData): Promise<Secr
       webhookContext(),
       meta,
     );
-    revalidatePath('/app/integrations', 'layout');
+    revalidatePath('/app/integrations');
     revalidatePath(DEV);
     kickWebhooks();
     if (!r.apiKey)
@@ -192,7 +192,7 @@ export async function disconnectAction(_p: SecretState, fd: FormData): Promise<S
   const { actor, ws, meta } = await ctx();
   try {
     await disconnectIntegration(db(), actor, ws, String(fd.get('provider') ?? ''), meta);
-    revalidatePath('/app/integrations', 'layout');
+    revalidatePath('/app/integrations');
     revalidatePath(DEV);
     return { ok: true, message: 'Disconnected. Its API key no longer works.' };
   } catch (err) {
