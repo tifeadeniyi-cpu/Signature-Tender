@@ -41,7 +41,6 @@ test('sign up, verify, create workspace, edit settings, sign out and back in', a
   await page.getByRole('button', { name: 'Create workspace' }).click();
 
   await expect(page).toHaveURL(/\/app$/);
-  // The redesigned dashboard (PR #30) titles the page "Dashboard" instead of greeting by name.
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dashboard');
   await expect(
     page
@@ -49,10 +48,8 @@ test('sign up, verify, create workspace, edit settings, sign out and back in', a
       .getByRole('link', { name: 'Billing & Credits' }),
   ).toBeVisible();
 
-  await page
-    .getByRole('navigation', { name: 'Primary' })
-    .getByRole('link', { name: 'Settings' })
-    .click();
+  await page.getByRole('banner').locator('summary').click();
+  await page.getByRole('link', { name: 'Workspace', exact: true }).click();
   await expect(page.getByText('Your role: Owner')).toBeVisible();
   await page.getByLabel('Website').fill('not a url');
   await page.getByRole('button', { name: 'Save Changes' }).click();
@@ -69,7 +66,7 @@ test('sign up, verify, create workspace, edit settings, sign out and back in', a
   await page.getByRole('button', { name: 'Save Profile' }).click();
   await expect(page.getByText('Profile saved.')).toBeVisible();
 
-  await page.locator('header summary').click();
+  await page.getByRole('banner').locator('summary').click();
   await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(page).toHaveURL(/sign-in/);
 

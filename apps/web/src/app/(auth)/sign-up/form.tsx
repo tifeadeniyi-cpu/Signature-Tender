@@ -8,17 +8,21 @@ import { authClient } from '@/lib/auth-client';
 import { TextField } from '@/components/ui/field';
 import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/feedback';
+import { SocialButtons, type SocialProviderId } from '@/components/auth/social-buttons';
 
 export function SignUpForm({
   defaultEmail,
   claim,
   studio = false,
+  providers = [],
 }: {
   defaultEmail?: string | null;
   /** Arrived from a completed document's Create Free Account. */
   claim: boolean;
   /** Arrived from Signature Studio's "Create Free Account". */
   studio?: boolean;
+  /** Configured Google / Apple sign-in. */
+  providers?: SocialProviderId[];
 }) {
   const router = useRouter();
   const [error, setError] = useState('');
@@ -35,8 +39,19 @@ export function SignUpForm({
             ? 'Keep your signed document in one place. No subscription required: you only pay if you send documents yourself.'
             : 'No subscription required. You only pay when you send a document.'}
       </p>
+      {providers.length ? (
+        <>
+          <div className="mt-6">
+            <SocialButtons providers={providers} />
+          </div>
+          <div className="mt-5 flex items-center gap-3 text-xs" aria-hidden>
+            <span className="h-px flex-1 bg-border" /> or sign up with email{' '}
+            <span className="h-px flex-1 bg-border" />
+          </div>
+        </>
+      ) : null}
       <form
-        className="mt-6 flex flex-col gap-4"
+        className={`${providers.length ? 'mt-5' : 'mt-6'} flex flex-col gap-4`}
         onSubmit={async (e) => {
           e.preventDefault();
           const fd = new FormData(e.currentTarget);
