@@ -8,6 +8,7 @@ import {
   beginCheckout,
   getStripeLinks,
   linkStripeCustomer,
+  beginCardSetup,
   planChange,
   type CheckoutInput,
 } from '@st/core';
@@ -121,6 +122,55 @@ export async function subscribeAction(
   _prev: BillingActionState,
 ): Promise<BillingActionState> {
   return checkout({ kind: 'subscription', planCode }, '/app/billing?tab=plans');
+}
+
+/**
+ * Saves a card on file for the company (Stripe Checkout in setup mode, nothing is charged).
+ * Required to add team members. The webhook records it once Stripe confirms.
+ */
+export async function saveCardAction(
+  returnPath: string,
+  _prev: BillingActionState,
+): Promise<BillingActionState> {
+  if (!(await paymentsAvailable())) return { ok: false, message: UNAVAILABLE };
+  const { user, membership } = await requireWorkspace();
+  const actor = { userId: user.id };
+  const workspaceId = membership.workspace.id;
+  const back = returnPath.startsWith('/app/') ? returnPath : '/app/billing';
+  let url: string;
+  try {
+    const setup = await beginCardSetup(db(), actor, workspaceId);
+    let customer = setup.customerId;
+    if (!customer) {
+      const c = await stripe().customers.create(
+        {
+          name: setup.workspaceName,
+          email: setup.customerEmail || undefined,
+          metadata: { st_workspace_id: workspaceId },
+        },
+        { idempotencyKey: `customer:${workspaceId}` },
+      );
+      customer = c.id;
+      await linkStripeCustomer(db(), actor, workspaceId, customer);
+    }
+    const sep = back.includes('?') ? '&' : '?';
+    const session = await stripe().checkout.sessions.create({
+      mode: 'setup',
+      currency: 'usd',
+      customer,
+      metadata: { st_purpose: 'card_on_file', st_workspace_id: workspaceId },
+      setup_intent_data: { metadata: { st_purpose: 'card_on_file', st_workspace_id: workspaceId } },
+      success_url: appUrl(`${back}${sep}card=saved`),
+      cancel_url: appUrl(`${back}${sep}card=cancelled`),
+    });
+    if (!session.url) throw new Error('Stripe did not return a checkout URL');
+    url = session.url;
+  } catch (err) {
+    if (err instanceof AppError) return { ok: false, message: err.message };
+    console.error('Card setup failed', err);
+    return { ok: false, message: 'We could not open Stripe. Please try again.' };
+  }
+  redirect(url);
 }
 
 export async function payForRequestAction(

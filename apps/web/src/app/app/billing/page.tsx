@@ -5,6 +5,7 @@ import {
   bundleSavingsPercent,
   formatMoney,
   getBillingOverview,
+  getCardOnFile,
   getConfigValue,
   reconcileCredits,
 } from '@st/core';
@@ -12,6 +13,7 @@ import { db } from '@/lib/db';
 import { requireWorkspace } from '@/lib/session';
 import { paymentsAvailable } from '@/lib/billing';
 import { stripeLiveMode } from '@/lib/stripe';
+import { SaveCardButton } from '@/components/billing/save-card-button';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardHeader } from '@/components/ui/card';
 import { Alert, Badge } from '@/components/ui/feedback';
@@ -92,6 +94,7 @@ export default async function BillingPage({
     throw err;
   }
   const paymentsOn = await paymentsAvailable();
+  const card = await getCardOnFile(db(), actor, workspaceId).catch(() => null);
   const supportEmail = await getConfigValue(db(), 'support.email', 'support@signaturetender.com');
   const canBuy = o.canManage && paymentsOn && !o.complimentary;
   const notice = o.complimentary
@@ -148,6 +151,32 @@ export default async function BillingPage({
 
       {tab === 'overview' ? (
         <div className="flex flex-col gap-6">
+          {card && card.required && o.canManage && paymentsOn ? (
+            <Card>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-text">
+                    Card on file
+                  </p>
+                  <p className="mt-1 text-lg font-semibold text-heading">
+                    {card.brand && card.last4
+                      ? `${card.brand[0]!.toUpperCase()}${card.brand.slice(1)} ending ${card.last4}`
+                      : card.hasCard
+                        ? 'On file with your subscription'
+                        : 'No card on file'}
+                  </p>
+                  <p className="mt-1 text-sm">
+                    Needed to add team members. Saving a card does not charge it.
+                  </p>
+                </div>
+                <SaveCardButton
+                  returnPath="/app/billing"
+                  label={card.brand ? 'Replace card' : 'Add a card'}
+                  variant={card.hasCard ? 'secondary' : 'primary'}
+                />
+              </div>
+            </Card>
+          ) : null}
           <Card>
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-text">
               Current billing model
