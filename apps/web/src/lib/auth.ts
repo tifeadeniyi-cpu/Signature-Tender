@@ -7,6 +7,7 @@ import { passkey } from '@better-auth/passkey';
 import { schema } from '@st/db';
 import { db } from './db';
 import { env } from './env';
+import { socialProvidersConfig } from './social-providers';
 import { sendEmail } from './email';
 import { emailConfig } from './email/config';
 import { renderPasswordReset, renderVerifyEmail } from './email/templates/transactional';
@@ -15,6 +16,7 @@ function build() {
   const e = env();
   const url = new URL(e.BETTER_AUTH_URL);
   const isProd = e.APP_ENV === 'production' || e.APP_ENV === 'staging';
+  const socialProviders = socialProvidersConfig();
   return betterAuth({
     appName: 'Signature Tender',
     baseURL: e.BETTER_AUTH_URL,
@@ -66,6 +68,17 @@ function build() {
         });
       },
     },
+    socialProviders,
+    // Apple returns to the callback with a cross-site form POST.
+    trustedOrigins: socialProviders.apple ? ['https://appleid.apple.com'] : [],
+    account: {
+      accountLinking: {
+        enabled: true,
+        // Google and Apple verify the address, so signing in with them joins an existing
+        // account for the same email instead of failing.
+        trustedProviders: ['google', 'apple'],
+      },
+    },
     session: { expiresIn: 60 * 60 * 24 * 7, updateAge: 60 * 60 * 24, freshAge: 60 * 15 },
     rateLimit: {
       enabled: e.APP_ENV !== 'test',
@@ -78,6 +91,7 @@ function build() {
         '/request-password-reset': { window: 300, max: 3 },
         '/two-factor/verify-totp': { window: 60, max: 5 },
         '/two-factor/verify-backup-code': { window: 60, max: 5 },
+        '/sign-in/social': { window: 60, max: 10 },
       },
     },
     advanced: {

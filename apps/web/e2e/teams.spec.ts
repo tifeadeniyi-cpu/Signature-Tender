@@ -75,7 +75,7 @@ test('contacts can be added, searched, imported and exported', async ({ page }) 
     .click();
   await expect(page.getByText('Imported 1 contact; skipped 1.')).toBeVisible();
 
-  await page.getByRole('searchbox').fill('label');
+  await page.getByRole('main').getByRole('searchbox').fill('label');
   await page.getByRole('button', { name: 'Apply' }).click();
   await expect(page.getByRole('link', { name: 'Art Ist', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Vera Venue', exact: true })).toHaveCount(0);
