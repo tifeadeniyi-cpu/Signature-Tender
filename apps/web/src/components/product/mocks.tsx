@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { DemoLabel, StatusPill, type Status } from './primitives';
+import { BRAND_ASSETS } from '@/lib/brand-assets';
 
 /** Same sections as the app sidebar. */
 const SIDEBAR = [
@@ -73,13 +74,7 @@ export function AppFrame({
       <div className="flex">
         {compact ? null : (
           <div className="hidden w-36 shrink-0 flex-col gap-0.5 bg-primary p-2 text-white sm:flex">
-            <Image
-              src="/brand/logo-reversed.png"
-              alt=""
-              width={327}
-              height={168}
-              className="mb-2 h-auto w-24 rounded-md"
-            />
+            <Image {...BRAND_ASSETS.reversed} alt="" className="mb-2 h-auto w-28" />
             {SIDEBAR.map(([Icon, label]) => (
               <span
                 key={label}

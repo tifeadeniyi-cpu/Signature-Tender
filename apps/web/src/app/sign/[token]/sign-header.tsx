@@ -1,25 +1,24 @@
 import Image from 'next/image';
 import { Check } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { BRAND_ASSETS } from '@/lib/brand-assets';
 
 export type SignStep = 1 | 2 | 3 | 4;
 const STEPS = ['Review', 'Sign', 'Complete'] as const;
 
 /**
- * Recipient header: navy bar, reversed logo, the Review → Sign → Complete progress, and an
+ * Recipient header: burgundy bar, reversed logo, the Review → Sign → Complete progress, and an
  * optional actions slot (Help, Save & Exit). `step` 4 means every stage is complete.
  */
 export function SignHeader({ step, actions }: { step: SignStep; actions?: React.ReactNode }) {
   return (
     <header
-      style={{ backgroundColor: '#0d1b33' }}
+      style={{ backgroundColor: '#5b0a1c' }}
       className="relative z-40 flex h-14 shrink-0 items-center gap-3 px-3 text-white sm:h-16 sm:px-5"
     >
       <Image
-        src="/brand/logo-reversed.png"
+        {...BRAND_ASSETS.reversed}
         alt="Signature Tender"
-        width={327}
-        height={168}
         className="h-9 w-auto sm:h-11"
         priority
       />
@@ -45,7 +44,7 @@ export function SignHeader({ step, actions }: { step: SignStep; actions?: React.
                       'flex size-7 items-center justify-center rounded-full text-sm font-semibold',
                       state === 'upcoming'
                         ? 'border border-white/60 text-white/80'
-                        : 'bg-white text-primary',
+                        : 'bg-white text-[#5b0a1c]',
                     )}
                   >
                     {state === 'done' ? <Check className="size-4" aria-hidden /> : n}

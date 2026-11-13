@@ -1,10 +1,11 @@
 import Image from 'next/image';
 import { getConfigValue } from '@st/core';
 import { db } from '@/lib/db';
+import { BRAND_ASSETS } from '@/lib/brand-assets';
 import { HelpMenu } from './help-menu';
 
-/** Matches the background of the reversed logo so it sits seamlessly in the header. */
-const LOGO_BG = '#0d1b33';
+/** Deep Burgundy from the brand palette; the reversed logo is transparent and sits on it. */
+const LOGO_BG = '#5b0a1c';
 
 /**
  * Branded header and footer for recipient pages outside the signing workspace (landing,
@@ -28,11 +29,9 @@ export async function SignChrome({ children }: { children: React.ReactNode }) {
             aria-label="Signature Tender home (opens in a new tab)"
           >
             <Image
-              src="/brand/logo-reversed.png"
+              {...BRAND_ASSETS.reversed}
               alt="Signature Tender"
-              width={327}
-              height={168}
-              className="h-12 w-auto rounded-md sm:h-16"
+              className="h-14 w-auto sm:h-16"
               priority
             />
           </a>
@@ -45,13 +44,7 @@ export async function SignChrome({ children }: { children: React.ReactNode }) {
         <Wave flip className="absolute inset-x-0 -top-px h-6 w-full sm:h-10" />
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-5 px-4 pb-8 pt-12 sm:flex-row sm:justify-between sm:px-6 sm:pt-14">
           <div className="flex flex-col items-center gap-3 sm:flex-row sm:gap-6">
-            <Image
-              src="/brand/logo-reversed.png"
-              alt="Signature Tender"
-              width={327}
-              height={168}
-              className="h-12 w-auto rounded-md"
-            />
+            <Image {...BRAND_ASSETS.reversed} alt="Signature Tender" className="h-12 w-auto" />
             <span className="hidden h-10 w-px bg-white/30 sm:block" aria-hidden />
             <p className="font-display text-lg italic text-white/90">Send. Sign. Pay Once.</p>
           </div>
@@ -62,7 +55,7 @@ export async function SignChrome({ children }: { children: React.ReactNode }) {
                   href="/legal/privacy"
                   target="_blank"
                   rel="noopener"
-                  className="underline underline-offset-4 hover:text-gold"
+                  className="underline underline-offset-4 hover:text-[#e6b8a7]"
                 >
                   Privacy Policy
                 </a>
@@ -72,7 +65,7 @@ export async function SignChrome({ children }: { children: React.ReactNode }) {
                   href="/legal/terms"
                   target="_blank"
                   rel="noopener"
-                  className="underline underline-offset-4 hover:text-gold"
+                  className="underline underline-offset-4 hover:text-[#e6b8a7]"
                 >
                   Terms of Service
                 </a>
@@ -80,7 +73,7 @@ export async function SignChrome({ children }: { children: React.ReactNode }) {
               <li>
                 <a
                   href={`mailto:${String(supportEmail)}`}
-                  className="underline underline-offset-4 hover:text-gold"
+                  className="underline underline-offset-4 hover:text-[#e6b8a7]"
                 >
                   Help &amp; Support
                 </a>
@@ -93,7 +86,7 @@ export async function SignChrome({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Thin champagne-gold curve between the navy bands and the ivory page. */
+/** Rose-gold curve between the burgundy bands and the ivory page. */
 function Wave({ className, flip }: { className?: string; flip?: boolean }) {
   return (
     <svg
@@ -103,8 +96,8 @@ function Wave({ className, flip }: { className?: string; flip?: boolean }) {
       style={flip ? { transform: 'scaleY(-1)' } : undefined}
       aria-hidden
     >
-      <path d="M0 30 C 360 70, 900 -10, 1440 28 L1440 60 L0 60 Z" fill="#d8af68" />
-      <path d="M0 40 C 420 72, 960 8, 1440 40 L1440 60 L0 60 Z" fill="#fff9f2" />
+      <path d="M0 30 C 360 70, 900 -10, 1440 28 L1440 60 L0 60 Z" fill="#e6b8a7" />
+      <path d="M0 40 C 420 72, 960 8, 1440 40 L1440 60 L0 60 Z" fill="#fff9f7" />
     </svg>
   );
 }

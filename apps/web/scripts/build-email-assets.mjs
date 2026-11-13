@@ -2,7 +2,7 @@
 // Images are sent inline (cid:) so emails render without depending on a public image host.
 // Icons and illustrations are drawn as SVG in assets/src and rendered at 2x with:
 //   for f in src/lib/email/assets/src/*.svg; do rsvg-convert -z 2 "$f" -o "${f%.svg}.png"; done
-// logo-reversed.png must stay byte-identical to public/brand/logo-reversed.png (approved asset).
+// logo-reversed.png must stay byte-identical to public/branding/signature-tender/reversed/signature-tender-reversed.png (approved asset).
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,10 +11,12 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 const dir = path.join(root, '../src/lib/email/assets');
 const out = path.join(root, '../src/lib/email/assets.generated.ts');
 
-const brand = fs.readFileSync(path.join(root, '../public/brand/logo-reversed.png'));
+const brand = fs.readFileSync(
+  path.join(root, '../public/branding/signature-tender/reversed/signature-tender-reversed.png'),
+);
 if (!brand.equals(fs.readFileSync(path.join(dir, 'logo-reversed.png'))))
   throw new Error(
-    'assets/logo-reversed.png differs from the approved public/brand/logo-reversed.png',
+    'assets/logo-reversed.png differs from the approved public/branding/signature-tender/reversed/signature-tender-reversed.png',
   );
 
 function pngSize(buf) {

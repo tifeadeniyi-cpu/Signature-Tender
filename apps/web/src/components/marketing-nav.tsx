@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Menu, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { BRAND_ASSETS } from '@/lib/brand-assets';
 
 type NavLink = { label: string; href: string; match?: string };
 type NavGroup = { label: string; items: (NavLink & { description: string })[] };
@@ -136,11 +137,9 @@ export function MarketingNav() {
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
         <Link href="/" aria-label="Signature Tender home" className="shrink-0">
           <Image
-            src="/brand/logo-horizontal.png"
+            {...BRAND_ASSETS.horizontalLight}
             alt="Signature Tender"
-            width={316}
-            height={168}
-            className="h-auto w-32 sm:w-36"
+            className="h-auto w-40 sm:w-44"
             priority
           />
         </Link>
@@ -206,13 +205,7 @@ export function MarketingNav() {
           className="fixed inset-0 z-50 flex flex-col bg-primary-dark text-white lg:hidden"
         >
           <div className="flex items-center justify-between px-4 py-3">
-            <Image
-              src="/brand/logo-reversed.png"
-              alt="Signature Tender"
-              width={327}
-              height={168}
-              className="h-auto w-32"
-            />
+            <Image {...BRAND_ASSETS.reversed} alt="Signature Tender" className="h-auto w-40" />
             <button
               type="button"
               autoFocus

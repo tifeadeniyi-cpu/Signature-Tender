@@ -153,7 +153,7 @@ export const FAMILIES: SignatureFamilyDef[] = [
       underline: 'swoosh',
       finish: 'tail',
       baseline: 4,
-      ink: 'navy',
+      ink: 'burgundy',
     },
   },
 ];

@@ -1,4 +1,5 @@
 import { test, expect, type Page, type Browser, type Locator } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 import { PDFDocument, StandardFonts } from 'pdf-lib';
 import { signUpWithWorkspace } from './auth';
 import { latestLinkFor } from './mail';
@@ -8,6 +9,14 @@ import { latestLinkFor } from './mail';
  * styled typed signature, save and exit, resume, confirm intent, and submit. Runs on desktop and
  * on a phone (this file also matches the mobile project).
  */
+
+const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
+
+/** WCAG 2.2 AA scan of the current screen, including the burgundy palette's contrast. */
+async function expectAccessible(page: Page) {
+  const res = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze();
+  expect(res.violations.map((v) => `${v.id}: ${v.nodes[0]?.target}`)).toEqual([]);
+}
 
 async function makePdf() {
   const doc = await PDFDocument.create();
@@ -124,6 +133,7 @@ test('a recipient reviews, signs, saves, resumes and completes', async ({ browse
   const studio = tools(page, isMobile);
   await expect(studio.getByRole('heading', { name: 'Signature Studio' })).toBeVisible();
   await expect(studio.getByLabel('Your full name')).toHaveValue('Alex Morgan');
+  await expectAccessible(page);
   await studio.getByLabel('Style').selectOption({ label: 'Luxury Calligraphy' });
   await studio.getByRole('radio', { name: 'Variation 2' }).click();
   await studio.getByRole('button', { name: 'Customize Style' }).click();
@@ -180,6 +190,7 @@ test('a recipient reviews, signs, saves, resumes and completes', async ({ browse
     timeout: 20_000,
   });
   await expect(page.getByText('Alex Morgan')).toBeVisible();
+  await expectAccessible(page);
 
   // The finished signer cannot reopen the workspace.
   await page.goto(link);
