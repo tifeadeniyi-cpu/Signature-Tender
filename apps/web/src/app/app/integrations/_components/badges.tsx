@@ -27,7 +27,7 @@ export function AppLogo({
       <img
         src={logo}
         alt=""
-        className={cn(dim, 'rounded-xl border border-border bg-white object-contain p-1.5')}
+        className={cn(dim, 'shrink-0 rounded-xl border border-border bg-white object-contain p-2')}
       />
     );
   const initials = name

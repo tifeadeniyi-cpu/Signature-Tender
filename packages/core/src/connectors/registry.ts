@@ -479,6 +479,33 @@ export const CONNECTORS: ConnectorDefinition[] = [
   ),
 ];
 
+/**
+ * Brand logos served from apps/web/public/integrations/logos. They are the brands' own marks,
+ * unmodified and in their own colours, used only to identify the app (from the CC0 gilbarbara/logos
+ * and Simple Icons collections). Apps without a mark those collections may redistribute (Outlook,
+ * SharePoint, Power Automate, Jotform), Pipedrive (wordmark only, unreadable at tile size) and our
+ * partners keep the initials tile.
+ */
+const LOGOS = new Set([
+  'slack',
+  'google_drive',
+  'hubspot',
+  'zapier',
+  'make',
+  'onedrive',
+  'salesforce',
+  'shopify',
+  'woocommerce',
+  'monday',
+  'clickup',
+  'asana',
+  'dropbox',
+  'box',
+  'n8n',
+  'zoho_crm',
+]);
+for (const c of CONNECTORS) if (LOGOS.has(c.key)) c.logo = `/integrations/logos/${c.key}.svg`;
+
 export function getConnector(key: string): ConnectorDefinition | undefined {
   return CONNECTORS.find((c) => c.key === key);
 }
