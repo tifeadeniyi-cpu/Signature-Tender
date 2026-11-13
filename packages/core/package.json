@@ -13,13 +13,17 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@st/db": "workspace:*",
     "drizzle-orm": "^0.45.4",
+    "jpeg-js": "^0.4.4",
+    "opentype.js": "^1.3.4",
     "pdf-lib": "^1.17.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
+    "@types/opentype.js": "^1.3.10",
     "typescript": "^5.9.3",
     "vitest": "^5.1.0"
   }

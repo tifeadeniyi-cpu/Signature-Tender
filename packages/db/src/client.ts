@@ -111,3 +111,47 @@ export async function withRetrieval<T>(
     return fn(tx);
   });
 }
+
+export interface StudioActor {
+  /** Signed-in user, if any. */
+  userId?: string | null;
+  /** SHA-256 of the guest Studio cookie, if the browser has one. */
+  guestHash?: string | null;
+}
+
+/**
+ * Runs `fn` as a Signature Studio designer: a signed-in user and/or a guest browser session.
+ * Policies show each actor only the designs and purchases that belong to them.
+ */
+export async function withStudio<T>(
+  db: Database,
+  actor: StudioActor,
+  fn: (tx: Tx) => Promise<T>,
+): Promise<T> {
+  if (actor.guestHash && !/^[0-9a-f]{64}$/.test(actor.guestHash))
+    throw new Error('withStudio requires a guest session hash');
+  if (!actor.userId && !actor.guestHash) throw new Error('withStudio requires an actor');
+  return db.transaction(async (tx) => {
+    if (actor.userId) await tx.execute(sql`select set_config('app.user_id', ${actor.userId}, true)`);
+    if (actor.guestHash)
+      await tx.execute(sql`select set_config('app.studio_guest', ${actor.guestHash}, true)`);
+    return fn(tx);
+  });
+}
+
+/**
+ * Runs `fn` as the Studio fulfilment service: it renders and stores purchased files, logs
+ * downloads and keeps rate-limit counters. Callers must check the entitlement first.
+ * Only the Studio service in @st/core may call this.
+ */
+export async function withStudioSystem<T>(
+  db: Database,
+  fn: (tx: Tx) => Promise<T>,
+  userId?: string,
+): Promise<T> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select set_config('app.system_actor', 'studio', true)`);
+    if (userId) await tx.execute(sql`select set_config('app.user_id', ${userId}, true)`);
+    return fn(tx);
+  });
+}
