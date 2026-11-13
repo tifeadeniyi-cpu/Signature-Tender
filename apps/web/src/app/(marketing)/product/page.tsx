@@ -3,7 +3,6 @@ import { headers } from 'next/headers';
 import { INTEGRATIONS, formatMoney, getConfigValue, getPricing } from '@st/core';
 import { db } from '@/lib/db';
 import { getSession } from '@/lib/session';
-import { appUrl } from '@/lib/billing';
 import { ProductHero, ProductFeatureGrid } from '@/components/product/hero';
 import {
   DocumentManagementSpotlight,
@@ -25,38 +24,20 @@ import { ProductFAQ, type FaqItem } from '@/components/product/faq';
 import { Heading, Section } from '@/components/product/primitives';
 import { PageViewTracker } from '@/components/product/reveal';
 import { SIGNATURE_FAMILIES } from '@/components/product/studio-fonts';
-import { BRAND_ASSETS } from '@/lib/brand-assets';
+import { absoluteUrl, faqJsonLd, pageMetadata } from '@/lib/seo';
+import { getStudioSettings } from '@st/core/studio/server';
 
 export const dynamic = 'force-dynamic';
 
-const TITLE = 'Electronic Signature Features | Signature Tender';
+const TITLE = 'E-Signature Features: Templates, Workflows & API | Signature Tender';
 const DESCRIPTION =
-  "Explore Signature Tender's electronic signing features, personalized signatures, document templates, multi-party workflows, secure document management, and flexible pay-as-you-go pricing.";
+  'Electronic signature features: custom signatures, reusable templates, multi-signer workflows, audit certificates, team workspaces and an API. Pay per document.';
 
-export function generateMetadata(): Metadata {
-  const url = appUrl('/product');
-  return {
-    title: { absolute: TITLE },
-    description: DESCRIPTION,
-    alternates: { canonical: url },
-    openGraph: {
-      type: 'website',
-      url,
-      title: TITLE,
-      description: DESCRIPTION,
-      siteName: 'Signature Tender',
-      images: [
-        {
-          url: appUrl(BRAND_ASSETS.socialCard.src),
-          width: BRAND_ASSETS.socialCard.width,
-          height: BRAND_ASSETS.socialCard.height,
-          alt: 'Signature Tender',
-        },
-      ],
-    },
-    twitter: { card: 'summary', title: TITLE, description: DESCRIPTION },
-  };
-}
+export const metadata: Metadata = pageMetadata({
+  title: TITLE,
+  description: DESCRIPTION,
+  path: '/product',
+});
 
 /** Where a call to action goes: the app when signed in, otherwise sign-up that returns there. */
 function appLink(signedIn: boolean, path: string) {
@@ -64,12 +45,13 @@ function appLink(signedIn: boolean, path: string) {
 }
 
 export default async function ProductPage() {
-  const [{ plans, prices }, session, maxSigners, linkDays, nonce] = await Promise.all([
+  const [{ plans, prices }, session, maxSigners, linkDays, nonce, studio] = await Promise.all([
     getPricing(db()),
     getSession(),
     getConfigValue<number>(db(), 'limits.max_signers_per_request', 5),
     getConfigValue<number>(db(), 'signing.link_valid_days', 30),
     headers().then((h) => h.get('x-nonce') ?? undefined),
+    getStudioSettings(db()),
   ]);
   const signedIn = Boolean(session?.user.emailVerified);
   const single = prices.find((p) => p.code === 'single_request');
@@ -110,7 +92,7 @@ export default async function ProductPage() {
     },
     {
       q: 'What makes Signature Studio different?',
-      a: 'It treats your typed signature as something personal rather than a plain font. Today you can choose from three handwriting styles when you sign. More signature families, slant, flourishes, underlines, ink weight and saved signatures are coming; you can try them in the preview on this page.',
+      a: `It treats your signature as something personal rather than a plain font. When you sign, you can type your name in a handwriting style, draw it or upload it. Signature Studio goes further: design a custom handwritten signature from your own name, adjust slant, spacing and flourishes, preview it free and download PNG, SVG and JPEG files for ${formatMoney(studio.priceCents, studio.currency)}.`,
     },
     {
       q: 'Can I track whether someone has signed?',
@@ -154,27 +136,21 @@ export default async function ProductPage() {
         name: 'Signature Tender',
         applicationCategory: 'BusinessApplication',
         operatingSystem: 'Web',
-        url: appUrl('/product'),
+        url: absoluteUrl('/product'),
+        applicationSubCategory: 'Electronic signature software',
         description: DESCRIPTION,
         ...(single
           ? {
               offers: {
                 '@type': 'Offer',
                 price: (single.amountCents / 100).toFixed(2),
-                priceCurrency: single.currency,
+                priceCurrency: single.currency.toUpperCase(),
                 description: 'One signing request',
               },
             }
           : {}),
       },
-      {
-        '@type': 'FAQPage',
-        mainEntity: faq.map((f) => ({
-          '@type': 'Question',
-          name: f.q,
-          acceptedAnswer: { '@type': 'Answer', text: f.a },
-        })),
-      },
+      faqJsonLd(faq),
     ],
   };
 

@@ -7,7 +7,7 @@ import { Alert } from '@/components/ui/feedback';
 import { buttonClass } from '@/components/ui/button';
 import { AcceptInvite } from './accept';
 
-export const metadata = { title: 'Workspace invitation' };
+export const metadata = { title: 'Workspace invitation', robots: { index: false, follow: false } };
 export const dynamic = 'force-dynamic';
 
 const MESSAGES = {

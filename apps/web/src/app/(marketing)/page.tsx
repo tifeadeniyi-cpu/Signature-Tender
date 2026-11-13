@@ -5,8 +5,36 @@ import { db } from '@/lib/db';
 import { ButtonLink } from '@/components/ui/button';
 import { PricingStrip } from '@/components/pricing-strip';
 import { getStudioSettings } from '@st/core/studio/server';
+import { JsonLd } from '@/components/json-ld';
+import { absoluteUrl, pageMetadata } from '@/lib/seo';
 
 export const dynamic = 'force-dynamic';
+
+const TITLE = 'Electronic Signatures Without a Subscription | Signature Tender';
+const DESCRIPTION =
+  'Sign and send PDFs online with Signature Tender. Add signers, place signature fields, track every step and pay per document. No subscription required.';
+
+export const metadata = pageMetadata({ title: TITLE, description: DESCRIPTION, path: '/' });
+
+/** Who sends with Signature Tender. Plain descriptions of what the product does today. */
+const USE_CASES = [
+  {
+    title: 'Freelancers and consultants',
+    body: 'Send proposals, statements of work and service agreements for e-signature, and pay only for the documents you send.',
+  },
+  {
+    title: 'Small businesses',
+    body: 'Get contracts, vendor forms and customer agreements signed online, with reusable templates and a shared team workspace.',
+  },
+  {
+    title: 'Landlords and property managers',
+    body: 'Collect signatures on leases, renewals and notices from several people, in order or at the same time.',
+  },
+  {
+    title: 'HR and operations teams',
+    body: 'Send offer letters, policies and onboarding forms, then download each signed PDF with its evidence certificate.',
+  },
+];
 
 const FEATURES = [
   { icon: Zap, title: 'Fast & Simple', body: 'Send in minutes' },
@@ -23,8 +51,30 @@ const STEPS = [
 export default async function HomePage() {
   const [{ prices }, studio] = await Promise.all([getPricing(db()), getStudioSettings(db())]);
   const single = prices.find((p) => p.code === 'single_request');
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'Signature Tender',
+    applicationCategory: 'BusinessApplication',
+    applicationSubCategory: 'Electronic signature software',
+    operatingSystem: 'Web browser',
+    url: absoluteUrl('/'),
+    description: DESCRIPTION,
+    ...(single
+      ? {
+          offers: {
+            '@type': 'Offer',
+            price: (single.amountCents / 100).toFixed(2),
+            priceCurrency: single.currency.toUpperCase(),
+            description: 'One signing request',
+            url: absoluteUrl('/pricing'),
+          },
+        }
+      : {}),
+  };
   return (
     <>
+      <JsonLd data={jsonLd} />
       <section className="bg-gradient-to-br from-primary via-primary to-primary-hover text-white">
         <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 py-14 sm:px-6 lg:grid-cols-[1.2fr_1fr] lg:py-20">
           <div>
@@ -36,8 +86,8 @@ export default async function HomePage() {
               <span className="block text-rose-gold">Pay Only When You Need To.</span>
             </h1>
             <p className="mt-5 max-w-xl text-lg text-white/85">
-              A simple, secure, and affordable way to get contracts, agreements, and important
-              documents signed online.
+              A simple, secure and affordable electronic signature service. Upload a PDF, add
+              signers and get contracts, agreements and important documents signed online.
             </p>
             <ul className="mt-8 grid gap-4 sm:grid-cols-3">
               {FEATURES.map(({ icon: Icon, title, body }) => (
@@ -101,10 +151,35 @@ export default async function HomePage() {
         </ol>
       </section>
 
+      <section aria-labelledby="home-uses" className="mx-auto max-w-7xl px-4 pb-16 sm:px-6">
+        <h2 id="home-uses" className="text-center font-display text-3xl">
+          Online Signatures for Every Kind of Agreement
+        </h2>
+        <p className="mx-auto mt-3 max-w-2xl text-center">
+          Recipients sign from a secure email link on any phone, tablet or computer, with no account
+          and nothing to pay. You get the completed PDF and an audit certificate.
+        </p>
+        <ul className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {USE_CASES.map((u) => (
+            <li key={u.title} className="rounded-2xl border border-border bg-white p-5 shadow-card">
+              <h3 className="font-semibold text-heading">{u.title}</h3>
+              <p className="mt-2 text-sm">{u.body}</p>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-6 text-center text-sm">
+          <Link href="/product" className="font-semibold text-primary hover:underline">
+            Explore all e-signature features
+          </Link>
+        </p>
+      </section>
+
       <section aria-labelledby="home-studio" className="mx-auto max-w-7xl px-4 pb-16 sm:px-6">
         <div className="grid items-center gap-6 overflow-hidden rounded-2xl bg-primary p-6 text-white sm:p-10 lg:grid-cols-[1.4fr_1fr]">
           <div>
-            <p className="text-xs font-semibold tracking-[0.18em] text-gold">NEW · SIGNATURE STUDIO</p>
+            <p className="text-xs font-semibold tracking-[0.18em] text-gold">
+              NEW · SIGNATURE STUDIO
+            </p>
             <h2 id="home-studio" className="mt-2 font-display text-3xl">
               Create Your Own Handwritten Signature
             </h2>

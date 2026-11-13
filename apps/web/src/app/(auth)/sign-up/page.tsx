@@ -1,9 +1,19 @@
+import { pageMetadata } from '@/lib/seo';
 import { readClaimEmail } from '@/lib/completed';
 import { safeNextPath } from '@/lib/next-path';
 import { enabledSocialProviders } from '@/lib/social-providers';
 import { SignUpForm } from './form';
 
 export const dynamic = 'force-dynamic';
+export const metadata = {
+  ...pageMetadata({
+    title: 'Create a Free Account | Signature Tender',
+    description:
+      'Create a free Signature Tender account. Send documents for e-signature and pay only when you send, with no subscription.',
+    path: '/sign-up',
+  }),
+  robots: { index: true, follow: true },
+};
 
 /**
  * Sign-up. After a recipient chose "Create Free Account" on a completed document, the address

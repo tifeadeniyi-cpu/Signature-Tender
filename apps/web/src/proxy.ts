@@ -28,7 +28,25 @@ export function proxy(request: NextRequest) {
   requestHeaders.set('Content-Security-Policy', csp);
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set('Content-Security-Policy', csp);
+  // Only the canonical domain belongs in search results. The vercel.app address and preview
+  // deployments serve the same pages, so tell crawlers to skip them.
+  if (isDuplicateHost(request.headers.get('host'))) {
+    response.headers.set('X-Robots-Tag', 'noindex, nofollow');
+  }
   return response;
+}
+
+function isDuplicateHost(host: string | null): boolean {
+  if (!host) return false;
+  const name = host.split(':')[0]!.toLowerCase();
+  if (name === 'localhost' || name === '127.0.0.1') return false;
+  const canonical = process.env.SITE_URL || process.env.BETTER_AUTH_URL;
+  if (!canonical) return false;
+  try {
+    return name !== new URL(canonical).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
 }
 
 export const config = {

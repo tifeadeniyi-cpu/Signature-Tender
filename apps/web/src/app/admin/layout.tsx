@@ -5,7 +5,7 @@ import { AdminNav } from './admin-nav';
 export const dynamic = 'force-dynamic';
 export const metadata = {
   title: { template: '%s · Staff', default: 'Staff' },
-  robots: { index: false },
+  robots: { index: false, follow: false },
 };
 
 /**
