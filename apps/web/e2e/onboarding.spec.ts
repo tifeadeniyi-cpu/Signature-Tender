@@ -41,14 +41,18 @@ test('sign up, verify, create workspace, edit settings, sign out and back in', a
   await page.getByRole('button', { name: 'Create workspace' }).click();
 
   await expect(page).toHaveURL(/\/app$/);
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('Dana');
+  // The redesigned dashboard (PR #30) titles the page "Dashboard" instead of greeting by name.
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dashboard');
   await expect(
     page
       .getByRole('navigation', { name: 'Primary' })
       .getByRole('link', { name: 'Billing & Credits' }),
   ).toBeVisible();
 
-  await page.getByRole('link', { name: 'Workspace settings' }).click();
+  await page
+    .getByRole('navigation', { name: 'Primary' })
+    .getByRole('link', { name: 'Settings' })
+    .click();
   await expect(page.getByText('Your role: Owner')).toBeVisible();
   await page.getByLabel('Website').fill('not a url');
   await page.getByRole('button', { name: 'Save Changes' }).click();
