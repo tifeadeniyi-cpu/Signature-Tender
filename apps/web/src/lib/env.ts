@@ -57,6 +57,10 @@ const schema = z.object({
   APPLE_TEAM_ID: z.string().optional(),
   APPLE_KEY_ID: z.string().optional(),
   APPLE_PRIVATE_KEY: z.string().optional(),
+  // Mobile app universal links. The iOS app is matched by APPLE_TEAM_ID plus the bundle ID; the
+  // Android app by the SHA-256 fingerprint(s) of its signing certificate (comma-separated, from
+  // `eas credentials`). Leave empty and signing links keep opening in the browser.
+  ANDROID_APP_CERT_SHA256: z.string().optional(),
 });
 
 let cached: z.infer<typeof schema> | undefined;

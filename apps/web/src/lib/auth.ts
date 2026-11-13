@@ -4,6 +4,7 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { nextCookies } from 'better-auth/next-js';
 import { twoFactor, haveIBeenPwned } from 'better-auth/plugins';
 import { passkey } from '@better-auth/passkey';
+import { expo } from '@better-auth/expo';
 import { schema } from '@st/db';
 import { db } from './db';
 import { env } from './env';
@@ -11,6 +12,9 @@ import { socialProvidersConfig } from './social-providers';
 import { sendEmail } from './email';
 import { emailConfig } from './email/config';
 import { renderPasswordReset, renderVerifyEmail } from './email/templates/transactional';
+
+/** The iOS and Android app's URL scheme (apps/mobile app.json). */
+export const MOBILE_APP_ORIGIN = 'signaturetender://';
 
 function build() {
   const e = env();
@@ -69,8 +73,12 @@ function build() {
       },
     },
     socialProviders,
-    // Apple returns to the callback with a cross-site form POST.
-    trustedOrigins: socialProviders.apple ? ['https://appleid.apple.com'] : [],
+    // Apple returns to the callback with a cross-site form POST. The mobile app identifies itself
+    // with its URL scheme (sent as the expo-origin header by the Expo client).
+    trustedOrigins: [
+      MOBILE_APP_ORIGIN,
+      ...(socialProviders.apple ? ['https://appleid.apple.com'] : []),
+    ],
     account: {
       accountLinking: {
         enabled: true,
@@ -99,6 +107,8 @@ function build() {
       ipAddress: { ipAddressHeaders: ['x-forwarded-for', 'x-real-ip'] },
     },
     plugins: [
+      // Lets the iOS and Android app sign in: its cookies travel in a header, not a browser jar.
+      expo(),
       twoFactor({ issuer: 'Signature Tender' }),
       passkey({ rpID: url.hostname, rpName: 'Signature Tender', origin: url.origin }),
       // Breached-password check uses k-anonymity (only a hash prefix leaves the server). Enabled outside local dev.

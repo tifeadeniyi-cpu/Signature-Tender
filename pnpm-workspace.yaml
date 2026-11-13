@@ -1,6 +1,8 @@
 packages:
   - apps/*
   - packages/*
+  # The Expo app has its own npm lockfile so React Native never touches the web build.
+  - '!apps/mobile'
 onlyBuiltDependencies:
   - esbuild
   - sharp

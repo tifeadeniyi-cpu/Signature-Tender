@@ -1,6 +1,8 @@
 import Link from 'next/link';
+import { cookies } from 'next/headers';
 import {
   CheckCircle2,
+  LayoutTemplate,
   Clock,
   FileText,
   Hourglass,
@@ -19,7 +21,18 @@ import {
   LIBRARY_TABS,
   type LibraryTab,
   type LibraryQuery,
+  listBoardRecipients,
+  BOARD_COLUMNS,
 } from '@st/core';
+import { getBoard } from '@/lib/board';
+import {
+  BOARD_COLLAPSE_COOKIE,
+  DOCS_VIEW_COOKIE,
+  type BoardColumnId,
+  type DocsView,
+} from '@/lib/board-types';
+import { DocumentBoard } from '@/components/documents/board/board';
+import { BoardFilters, DocumentSearch, ViewSwitch } from '@/components/documents/board/toolbar';
 import { db } from '@/lib/db';
 import { requireWorkspace } from '@/lib/session';
 import { PageHeader } from '@/components/ui/page-header';
@@ -58,14 +71,117 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
   const sp = await searchParams;
   const { user, membership } = await requireWorkspace();
   const canCreate = hasPermission(membership.permissions, 'documents.create');
-  const { selected, ...rest } = sp;
+  const { selected, view: viewParam, status, ...rest } = sp;
   const raw = Object.fromEntries(
     Object.entries(rest).map(([k, v]) => [k, one(v) ?? '']),
   ) as unknown as LibraryQuery;
+  const jar = await cookies();
+  const asked = one(viewParam) ?? jar.get(DOCS_VIEW_COOKIE)?.value;
+  const view: DocsView = asked === 'kanban' ? 'kanban' : 'list';
+
+  const header = (
+    <>
+      <PageHeader
+        title="Documents"
+        description="Create, send, sign, and manage your documents with a visual workflow."
+        actions={
+          canCreate ? (
+            <>
+              <ButtonLink href="/app/documents/new" variant="gold">
+                <Plus className="size-4" aria-hidden /> Send document
+              </ButtonLink>
+              <ButtonLink href="/app/templates" variant="secondary">
+                <LayoutTemplate className="size-4" aria-hidden /> Templates
+              </ButtonLink>
+            </>
+          ) : null
+        }
+      />
+    </>
+  );
+
+  if (view === 'kanban') {
+    const focusRaw = one(status);
+    const focus = (BOARD_COLUMNS as readonly string[]).includes(focusRaw ?? '')
+      ? (focusRaw as BoardColumnId)
+      : null;
+    const [board, recipients] = await Promise.all([
+      getBoard(user.id, membership, raw),
+      listBoardRecipients(db(), { userId: user.id }, membership.workspace.id),
+    ]);
+    const qs = new URLSearchParams(
+      Object.entries(raw as Record<string, string>).filter(
+        ([k, v]) => v !== '' && !['page', 'tab', 'limit', 'offset', 'column'].includes(k),
+      ),
+    ).toString();
+    const savedCollapse = jar.get(BOARD_COLLAPSE_COOKIE)?.value;
+    const collapsed = (
+      savedCollapse === undefined ? ['cancelled'] : decodeURIComponent(savedCollapse).split(',')
+    ).filter((c): c is BoardColumnId => (BOARD_COLUMNS as readonly string[]).includes(c));
+    const metricHref = (col: BoardColumnId | null) => {
+      const p = new URLSearchParams(qs);
+      p.set('view', 'kanban');
+      if (col) p.set('status', col);
+      const out = p.toString();
+      return `/app/documents${out ? `?${out}` : ''}`;
+    };
+    return (
+      <div>
+        {header}
+        <DocumentDrawerHost initialId={one(selected) ?? null}>
+          <DocumentBoard
+            initial={board}
+            queryString={qs}
+            collapsed={collapsed}
+            focus={focus}
+            canCreate={canCreate}
+            toolbar={
+              <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-border bg-white/70 p-3 shadow-card lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex flex-wrap items-center gap-3">
+                  <ViewSwitch view="kanban" />
+                  <DocumentSearch initial={(raw as { q?: string }).q ?? ''} />
+                </div>
+                <BoardFilters
+                  types={DOCUMENT_TYPES.map((d) => ({ value: d.value, label: d.label }))}
+                  recipients={recipients}
+                />
+              </div>
+            }
+            metricHrefs={
+              Object.fromEntries(
+                (['all', ...BOARD_COLUMNS] as const).map((c) => [
+                  c,
+                  metricHref(c === 'all' ? null : c),
+                ]),
+              ) as Record<BoardColumnId | 'all', string>
+            }
+          />
+        </DocumentDrawerHost>
+        <p className="mt-3 text-sm">
+          Status changes on its own as recipients view, sign, decline or let a request expire.{' '}
+          <Link
+            href="/app/documents/deleted"
+            className="font-semibold text-primary underline underline-offset-2"
+          >
+            Recently deleted drafts
+          </Link>
+        </p>
+      </div>
+    );
+  }
+
   const lib = await searchLibrary(db(), { userId: user.id }, membership.workspace.id, raw);
   const f = lib.query;
   const filtered = Boolean(
-    f.q || f.type || f.owner === 'me' || f.sentFrom || f.sentTo || f.completedFrom || f.completedTo,
+    f.q ||
+    f.type ||
+    f.owner === 'me' ||
+    f.sentFrom ||
+    f.sentTo ||
+    f.completedFrom ||
+    f.completedTo ||
+    f.range !== 'any' ||
+    f.recipient !== 'all',
   );
 
   // Builds a link that keeps the current filters and changes only the given keys.
@@ -80,6 +196,9 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
       owner: 'all',
       q: '',
       type: '',
+      range: 'any',
+      recipient: 'all',
+      rcpt: '',
     };
     for (const [k, v] of Object.entries(merged)) {
       if (v === undefined || v === '' || v === defaults[k]) continue;
@@ -113,11 +232,10 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
 
   return (
     <div>
-      <PageHeader
-        title="Documents"
-        description="Find, track and download every document in this workspace."
-        actions={newButton}
-      />
+      {header}
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <ViewSwitch view="list" />
+      </div>
 
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-5">
         <StatCard
@@ -182,6 +300,13 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
         <input type="hidden" name="tab" value={f.tab} />
         <input type="hidden" name="sort" value={f.sort} />
         <input type="hidden" name="dir" value={f.dir} />
+        {f.range !== 'any' ? <input type="hidden" name="range" value={f.range} /> : null}
+        {f.from ? <input type="hidden" name="from" value={f.from} /> : null}
+        {f.to ? <input type="hidden" name="to" value={f.to} /> : null}
+        {f.recipient !== 'all' ? (
+          <input type="hidden" name="recipient" value={f.recipient} />
+        ) : null}
+        {f.rcpt ? <input type="hidden" name="rcpt" value={f.rcpt} /> : null}
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex min-w-56 flex-1 flex-col gap-1.5 text-sm font-medium text-heading">
             Search
@@ -265,6 +390,11 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
                 sentTo: '',
                 completedFrom: '',
                 completedTo: '',
+                range: 'any',
+                from: '',
+                to: '',
+                recipient: 'all',
+                rcpt: '',
                 page: 1,
               })}
               className={buttonClass('ghost', 'sm')}
