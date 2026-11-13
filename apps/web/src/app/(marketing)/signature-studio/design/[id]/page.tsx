@@ -16,8 +16,8 @@ export const metadata = { title: 'Your signature', robots: { index: false } };
 /** The download window for a purchased design. Access is checked against the entitlement. */
 export default async function PurchasedDesignPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ new?: string }> }) {
   const session = await getSession();
-  if (!session?.user.emailVerified) redirect('/sign-in');
   const { id } = await params;
+  if (!session?.user.emailVerified) redirect(`/sign-in?next=${encodeURIComponent(`/signature-studio/design/${id}`)}`);
   const settings = await studioSettings();
   const info = await getPurchasedDesign(db(), session.user.id, id, settings);
   if (!info) notFound();
