@@ -19,6 +19,10 @@ const config: NextConfig = {
     '/admin/signature-studio': ['./public/studio-fonts/*.woff'],
     '/sign/**': ['./public/studio-fonts/*.woff'],
   },
+  // The API documentation moved behind sign-in. Old links land there (or on sign-in, then there).
+  async redirects() {
+    return [{ source: '/developers', destination: '/app/api-docs', permanent: false }];
+  },
   async headers() {
     return [
       {

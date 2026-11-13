@@ -22,7 +22,6 @@ const PUBLIC = [
   '/',
   '/product',
   '/pricing',
-  '/developers',
   '/sign-in',
   '/sign-up',
   '/forgot-password',
@@ -49,6 +48,7 @@ const APP = [
   '/app/settings/branding',
   '/app/settings/retention',
   '/app/settings/developers',
+  '/app/api-docs',
   '/app/reports',
 ];
 

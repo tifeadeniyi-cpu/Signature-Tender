@@ -15,6 +15,7 @@ describe('primary navigation', () => {
       'Billing & Credits',
       'Reports',
       'Integrations',
+      'API Docs',
       'Settings',
     ]);
   });
@@ -43,7 +44,14 @@ describe('primary navigation', () => {
   });
   it('hides items the member has no permission for, and studio items when it is off', () => {
     const labels = visibleNav(['documents.view_own'], false).map((n) => n.label);
-    expect(labels).toEqual(['Dashboard', 'Documents', 'Reports', 'Integrations', 'Settings']);
+    expect(labels).toEqual([
+      'Dashboard',
+      'Documents',
+      'Reports',
+      'Integrations',
+      'API Docs',
+      'Settings',
+    ]);
     expect(visibleNav([], true).map((n) => n.label)).toContain('My Signatures');
     expect(visibleNav(['billing.manage'], false).map((n) => n.label)).toContain('Transactions');
   });
