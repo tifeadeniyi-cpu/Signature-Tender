@@ -34,14 +34,14 @@ export const SIGNATURE_DISPLAY_LABELS: Record<SignatureDisplayFormat, string> = 
 
 export const BLOCK_COLORS = {
   ink: '#111111',
-  name: '#2A0A12',
+  name: '#0D1B33',
   role: '#4B5563',
-  divider: '#7F1D3A',
+  divider: '#172D4D',
   line: '#1F1F1F',
-  strip: '#F9E4E8',
+  strip: '#F3DEB4',
   stripText: '#262626',
   pendingText: '#4B5563',
-  separator: '#E6B8A7',
+  separator: '#D8AF68',
 } as const;
 
 export type BlockFont = 'sans' | 'serifBold';

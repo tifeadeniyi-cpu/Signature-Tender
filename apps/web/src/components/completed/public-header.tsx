@@ -19,7 +19,7 @@ export function PublicHeader({
   signInNext?: string | null;
 }) {
   return (
-    <header className="brand-burgundy relative isolate overflow-hidden bg-gradient-to-r from-primary-dark via-primary to-primary-hover text-white">
+    <header className="relative isolate overflow-hidden bg-gradient-to-r from-primary-dark via-primary to-primary-hover text-white">
       <svg
         className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-7 w-full sm:h-9"
         viewBox="0 0 1440 40"
@@ -28,17 +28,17 @@ export function PublicHeader({
       >
         <path
           d="M0 22 C 260 4 520 4 760 18 C 1000 32 1240 34 1440 14 L1440 40 L0 40 Z"
-          fill="#7f1d3a"
+          fill="#172d4d"
           opacity="0.6"
         />
         <path
           d="M0 30 C 300 12 560 14 800 26 C 1040 38 1260 36 1440 24 L1440 40 L0 40 Z"
-          fill="#fff9f7"
+          fill="#fff9f2"
         />
         <path
           d="M0 30 C 300 12 560 14 800 26 C 1040 38 1260 36 1440 24"
           fill="none"
-          stroke="#e6b8a7"
+          stroke="#d8af68"
           strokeWidth="1.5"
         />
       </svg>

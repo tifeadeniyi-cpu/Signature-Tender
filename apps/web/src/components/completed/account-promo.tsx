@@ -20,30 +20,30 @@ function ProductPreview() {
   return (
     <svg viewBox="0 0 320 170" className="mx-auto h-auto w-full max-w-[300px]" aria-hidden>
       <ellipse cx="160" cy="150" rx="150" ry="16" fill="#f3d3da" opacity="0.7" />
-      <circle cx="210" cy="70" r="70" fill="#f9e4e8" />
-      <rect x="40" y="18" width="200" height="124" rx="8" fill="#270f17" />
+      <circle cx="210" cy="70" r="70" fill="#f6f0e7" />
+      <rect x="40" y="18" width="200" height="124" rx="8" fill="#0d1b33" />
       <rect x="47" y="25" width="186" height="110" rx="3" fill="#fff" />
-      <rect x="47" y="25" width="186" height="26" rx="3" fill="#5b0a1c" />
-      <circle cx="60" cy="38" r="5" fill="#e6b8a7" />
+      <rect x="47" y="25" width="186" height="26" rx="3" fill="#0d1b33" />
+      <circle cx="60" cy="38" r="5" fill="#d8af68" />
       <rect x="70" y="35" width="44" height="6" rx="3" fill="#fff" opacity="0.9" />
       {[60, 76, 92, 108].map((y, i) => (
         <g key={y}>
-          <rect x="56" y={y} width="8" height="8" rx="2" fill={i === 0 ? '#15803d' : '#e6b8a7'} />
+          <rect x="56" y={y} width="8" height="8" rx="2" fill={i === 0 ? '#15803d' : '#d8af68'} />
           <rect x="70" y={y + 1} width="70" height="5" rx="2.5" fill="#d9cdd0" />
-          <rect x="176" y={y} width="44" height="8" rx="4" fill={i === 0 ? '#dcfce7' : '#f6e8ec'} />
+          <rect x="176" y={y} width="44" height="8" rx="4" fill={i === 0 ? '#dcfce7' : '#eaeef5'} />
         </g>
       ))}
-      <path d="M28 142 h224 l-10 8 h-204 z" fill="#4b5563" />
-      <rect x="236" y="54" width="54" height="100" rx="9" fill="#270f17" />
+      <path d="M28 142 h224 l-10 8 h-204 z" fill="#475569" />
+      <rect x="236" y="54" width="54" height="100" rx="9" fill="#0d1b33" />
       <rect x="240" y="60" width="46" height="88" rx="6" fill="#fff" />
-      <rect x="240" y="60" width="46" height="18" rx="6" fill="#5b0a1c" />
-      <circle cx="263" cy="69" r="3.5" fill="#e6b8a7" />
+      <rect x="240" y="60" width="46" height="18" rx="6" fill="#0d1b33" />
+      <circle cx="263" cy="69" r="3.5" fill="#d8af68" />
       {[86, 100, 114].map((y, i) => (
         <g key={y}>
-          <rect x="246" y={y} width="34" height="9" rx="3" fill={i === 0 ? '#dcfce7' : '#f6e8ec'} />
+          <rect x="246" y={y} width="34" height="9" rx="3" fill={i === 0 ? '#dcfce7' : '#eaeef5'} />
         </g>
       ))}
-      <rect x="248" y="130" width="30" height="9" rx="4.5" fill="#5b0a1c" />
+      <rect x="248" y="130" width="30" height="9" rx="4.5" fill="#0d1b33" />
     </svg>
   );
 }
