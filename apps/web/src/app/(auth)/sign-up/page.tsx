@@ -1,5 +1,6 @@
 import { readClaimEmail } from '@/lib/completed';
 import { safeNextPath } from '@/lib/next-path';
+import { enabledSocialProviders } from '@/lib/social-providers';
 import { SignUpForm } from './form';
 
 export const dynamic = 'force-dynamic';
@@ -20,6 +21,7 @@ export default async function SignUpPage({
       defaultEmail={email}
       claim={Boolean(next?.startsWith('/claim/'))}
       studio={Boolean(next?.startsWith('/signature-studio/'))}
+      providers={enabledSocialProviders()}
     />
   );
 }

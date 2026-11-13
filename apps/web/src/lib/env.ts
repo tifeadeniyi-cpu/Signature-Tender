@@ -48,6 +48,15 @@ const schema = z.object({
   WEBHOOK_SECRETS_KEY: z.string().min(32).optional(),
   // Vercel Cron sends it as a bearer token to /api/cron/*. Without it, cron routes refuse to run.
   CRON_SECRET: z.string().min(16).optional(),
+  // Sign in with Google (Google Cloud OAuth client). Leave empty to hide the button.
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  // Sign in with Apple. APPLE_CLIENT_ID is the Services ID; the key is the .p8 file's contents.
+  // The client secret JWT is generated from these at startup. Leave empty to hide the button.
+  APPLE_CLIENT_ID: z.string().optional(),
+  APPLE_TEAM_ID: z.string().optional(),
+  APPLE_KEY_ID: z.string().optional(),
+  APPLE_PRIVATE_KEY: z.string().optional(),
 });
 
 let cached: z.infer<typeof schema> | undefined;
