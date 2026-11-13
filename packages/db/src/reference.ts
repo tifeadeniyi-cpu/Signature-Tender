@@ -20,6 +20,8 @@ export const PERMISSIONS = {
   'contacts.view': 'View contacts',
   'contacts.manage': 'Create and edit contacts',
   'integrations.manage': 'Connect and configure integrations',
+  'integrations.use': 'Use connected apps and connect personal accounts',
+  'integrations.view_logs': 'View integration activity and sync logs',
   'api.manage': 'Manage API keys and webhooks',
   'audit.view': 'View workspace audit history',
 } as const;
@@ -62,6 +64,7 @@ export const SYSTEM_ROLES: Record<
       'contacts.view',
       'contacts.manage',
       'audit.view',
+      'integrations.use',
     ],
   },
   editor: {
@@ -73,6 +76,7 @@ export const SYSTEM_ROLES: Record<
       'templates.view',
       'contacts.view',
       'contacts.manage',
+      'integrations.use',
     ],
   },
   viewer: {
@@ -94,7 +98,14 @@ export const SYSTEM_ROLES: Record<
   api_developer: {
     name: 'API Developer',
     description: 'Manage API keys, webhooks and integrations',
-    permissions: ['api.manage', 'integrations.manage', 'documents.view_own', 'templates.view'],
+    permissions: [
+      'api.manage',
+      'integrations.manage',
+      'integrations.use',
+      'integrations.view_logs',
+      'documents.view_own',
+      'templates.view',
+    ],
   },
   signer: {
     name: 'Signer',
@@ -211,6 +222,12 @@ export const FEATURE_FLAGS = [
       'Accept requests to the public REST API (/api/v1) and deliver webhooks. Off in production until the owner turns it on.',
     enabled: true,
     environments: ['development', 'test', 'staging'],
+  },
+  {
+    key: 'integrations',
+    description:
+      'Integrations marketplace connections that use OAuth (Google Drive, HubSpot, ...). A connector also needs its provider app credentials configured before it can connect.',
+    enabled: true,
   },
 ] as const;
 

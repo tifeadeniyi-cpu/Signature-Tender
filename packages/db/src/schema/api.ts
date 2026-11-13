@@ -167,7 +167,13 @@ export const webhookDeliveries = pgTable(
   ],
 );
 
-/** A partner connection (Beam Artist, Jectstack) bundles an API key and a webhook endpoint. */
+/**
+ * A connection to another app. Partner connections (Beam Artist, Jectstack) bundle an API key and a
+ * webhook endpoint; Slack has only a webhook endpoint. Both are one per workspace. OAuth connections
+ * (Google Drive, HubSpot, ...) are one per external account, either shared with the workspace or
+ * personal to the member who connected them. Tokens are never stored here: see
+ * `integration_credentials`.
+ */
 export const integrationConnections = pgTable(
   'integration_connections',
   {
@@ -182,12 +188,44 @@ export const integrationConnections = pgTable(
       onDelete: 'set null',
     }),
     createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+    /** 'workspace': usable by members allowed to use integrations. 'personal': only `ownerUserId`. */
+    visibility: text('visibility').notNull().default('workspace'),
+    ownerUserId: text('owner_user_id').references(() => user.id, { onDelete: 'set null' }),
+    externalAccountId: text('external_account_id'),
+    externalAccountLabel: text('external_account_label'),
+    scopes: text('scopes')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    settings: jsonb('settings').$type<Record<string, unknown>>().notNull().default({}),
+    connectedAt: timestamp('connected_at', { withTimezone: true }),
+    lastSuccessAt: timestamp('last_success_at', { withTimezone: true }),
+    lastFailureAt: timestamp('last_failure_at', { withTimezone: true }),
+    lastRefreshedAt: timestamp('last_refreshed_at', { withTimezone: true }),
+    lastErrorCode: text('last_error_code'),
+    lastErrorMessage: text('last_error_message'),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    uniqueIndex('integration_connections_uq').on(t.workspaceId, t.provider),
-    check('integration_connections_status', sql`${t.status} in ('active','disabled')`),
+    // Partner and Slack connections: one per workspace.
+    uniqueIndex('integration_connections_uq')
+      .on(t.workspaceId, t.provider)
+      .where(sql`${t.externalAccountId} is null`),
+    // OAuth connections: one per external account per owner.
+    uniqueIndex('integration_connections_account_uq')
+      .on(t.workspaceId, t.provider, t.externalAccountId, sql`coalesce(${t.ownerUserId}, '')`)
+      .where(sql`${t.externalAccountId} is not null`),
+    check(
+      'integration_connections_status',
+      sql`${t.status} in ('active','disabled','expired','permission_required','error')`,
+    ),
+    check('integration_connections_visibility', sql`${t.visibility} in ('workspace','personal')`),
+    check(
+      'integration_connections_personal_owner',
+      sql`${t.visibility} = 'workspace' or ${t.ownerUserId} is not null`,
+    ),
   ],
 );
 
