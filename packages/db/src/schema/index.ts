@@ -12,4 +12,3 @@ export * from './platform';
 export * from './notifications';
 export * from './claims';
 export * from './studio';
-export * from './integrations';

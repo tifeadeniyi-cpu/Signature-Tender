@@ -3,7 +3,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { schema, withActor, type Database, type ActorContext } from '@st/db';
 import { AppError } from './errors';
 import { recordAudit } from './audit';
-import { createApiKey, revokeApiKey } from './api';
+import { createApiKey, revokeApiKey, type ApiScope } from './api';
 import {
   createSlackEndpoint,
   createWebhookEndpoint,
@@ -14,8 +14,127 @@ import {
 
 type Meta = { ipAddress?: string | null; userAgent?: string | null };
 
-export * from './integration-catalog';
-import { INTEGRATIONS } from './integration-catalog';
+/**
+ * The integrations catalogue. Only entries with `available: true` can be connected; the rest are
+ * listed so people can see what is planned, and are labelled as not available. Nothing here is
+ * shown as working unless the connection code exists (spec Part 22).
+ */
+export interface IntegrationInfo {
+  key: string;
+  name: string;
+  category: 'Partner apps' | 'Storage' | 'Productivity' | 'Communication' | 'CRM' | 'Payments';
+  description: string;
+  available: boolean;
+  /** `api`: the partner calls our API with a key. `slack`: we post messages to a Slack webhook. */
+  kind?: 'api' | 'slack';
+  /** Scopes the connection's API key gets. */
+  scopes?: ApiScope[];
+  note?: string;
+}
+
+const PARTNER_SCOPES: ApiScope[] = [
+  'documents:read',
+  'documents:write',
+  'requests:send',
+  'files:read',
+  'embedded:sign',
+];
+
+export const INTEGRATIONS: IntegrationInfo[] = [
+  {
+    key: 'beam_artist',
+    name: 'Beam Artist',
+    category: 'Partner apps',
+    description:
+      'Send booking agreements and contracts for signature from Beam Artist and get status back by webhook.',
+    available: true,
+    kind: 'api',
+    scopes: PARTNER_SCOPES,
+  },
+  {
+    key: 'jectstack',
+    name: 'Jectstack',
+    category: 'Partner apps',
+    description:
+      'Send project agreements for signature from Jectstack and keep a reference to the signed record.',
+    available: true,
+    kind: 'api',
+    scopes: PARTNER_SCOPES,
+  },
+  {
+    key: 'google_workspace',
+    name: 'Google Workspace',
+    category: 'Productivity',
+    description: 'Sign in and contacts from Google Workspace.',
+    available: false,
+  },
+  {
+    key: 'google_drive',
+    name: 'Google Drive',
+    category: 'Storage',
+    description: 'Import documents and save signed copies to Drive.',
+    available: false,
+  },
+  {
+    key: 'microsoft_365',
+    name: 'Microsoft 365',
+    category: 'Productivity',
+    description: 'Sign in and contacts from Microsoft 365.',
+    available: false,
+  },
+  {
+    key: 'onedrive',
+    name: 'OneDrive',
+    category: 'Storage',
+    description: 'Import documents and save signed copies to OneDrive.',
+    available: false,
+  },
+  {
+    key: 'dropbox',
+    name: 'Dropbox',
+    category: 'Storage',
+    description: 'Import documents and save signed copies to Dropbox.',
+    available: false,
+  },
+  {
+    key: 'box',
+    name: 'Box',
+    category: 'Storage',
+    description: 'Import documents and save signed copies to Box.',
+    available: false,
+  },
+  {
+    key: 'slack',
+    name: 'Slack',
+    category: 'Communication',
+    description:
+      'Post to a Slack channel when documents are sent, signed, completed, declined, expired or cancelled. Uses a Slack incoming webhook; messages carry the document title and a link, never its contents.',
+    available: true,
+    kind: 'slack',
+  },
+  {
+    key: 'salesforce',
+    name: 'Salesforce',
+    category: 'CRM',
+    description: 'Send agreements from Salesforce records.',
+    available: false,
+  },
+  {
+    key: 'jira',
+    name: 'Jira',
+    category: 'Productivity',
+    description: 'Link signing requests to Jira issues.',
+    available: false,
+  },
+  {
+    key: 'stripe',
+    name: 'Stripe',
+    category: 'Payments',
+    description: 'Collect payment from recipients as part of signing.',
+    available: false,
+    note: 'Signature Tender uses Stripe for its own billing. Connecting your own Stripe account is not available yet.',
+  },
+];
 
 export function getIntegration(key: string) {
   return INTEGRATIONS.find((i) => i.key === key);
@@ -30,17 +149,6 @@ export async function listConnections(db: Database, actor: ActorContext, workspa
         status: schema.integrationConnections.status,
         createdAt: schema.integrationConnections.createdAt,
         updatedAt: schema.integrationConnections.updatedAt,
-        connectedAt: schema.integrationConnections.connectedAt,
-        externalAccountLabel: schema.integrationConnections.externalAccountLabel,
-        scopes: schema.integrationConnections.scopes,
-        settings: schema.integrationConnections.settings,
-        lastSuccessAt: schema.integrationConnections.lastSuccessAt,
-        lastErrorAt: schema.integrationConnections.lastErrorAt,
-        lastError: schema.integrationConnections.lastError,
-        createdBy: schema.integrationConnections.createdBy,
-        connectedByName: sql<
-          string | null
-        >`(select u.name from "user" u where u.id = ${schema.integrationConnections.createdBy})`,
         apiKeyPrefix: schema.apiKeys.prefix,
         apiKeyLastUsedAt: schema.apiKeys.lastUsedAt,
         apiKeyRevokedAt: schema.apiKeys.revokedAt,
@@ -85,20 +193,10 @@ async function saveConnection(
         apiKeyId,
         webhookEndpointId,
         createdBy: actor.userId,
-        connectedAt: new Date(),
       })
       .onConflictDoUpdate({
         target: [schema.integrationConnections.workspaceId, schema.integrationConnections.provider],
-        set: {
-          status: 'active',
-          apiKeyId,
-          webhookEndpointId,
-          connectedAt: new Date(),
-          revokedAt: null,
-          lastError: null,
-          lastErrorAt: null,
-          updatedAt: new Date(),
-        },
+        set: { status: 'active', apiKeyId, webhookEndpointId, updatedAt: new Date() },
       });
     await recordAudit(tx, {
       workspaceId,
@@ -127,8 +225,7 @@ export async function connectIntegration(
 ): Promise<{ apiKey: string | null; webhookSecret: string | null }> {
   const input = connectInputSchema.parse(raw);
   const info = getIntegration(input.provider);
-  if (!info?.available || info.kind === 'oauth')
-    throw new AppError('invalid', 'This integration is not available yet.');
+  if (!info?.available) throw new AppError('invalid', 'This integration is not available yet.');
   const existing = await withActor(db, actor, async (tx) => {
     const [ok] = (await tx.execute(
       sql`select st_has_permission(${workspaceId}::uuid, 'integrations.manage') and st_has_permission(${workspaceId}::uuid, 'api.manage') as ok`,

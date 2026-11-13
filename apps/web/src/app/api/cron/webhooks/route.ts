@@ -5,7 +5,6 @@ import { db } from '@/lib/db';
 import { storage } from '@/lib/storage';
 import { dispatchNotifications } from '@/lib/notifications';
 import { runWebhookDispatch } from '@/lib/webhooks';
-import { runIntegrationWorker } from '@/lib/integrations';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -51,12 +50,5 @@ export async function GET(req: Request) {
   console.log(
     JSON.stringify({ event: 'webhooks.dispatch', ...(result ?? { skipped: 'public_api off' }) }),
   );
-  const integrations = await runIntegrationWorker().catch((err) => {
-    console.error('[ops-alert] Integration worker failed', err);
-    return null;
-  });
-  console.log(
-    JSON.stringify({ event: 'integrations.run', ...(integrations ?? { skipped: true }) }),
-  );
-  return Response.json({ webhooks: result ?? { skipped: true }, finishing, integrations });
+  return Response.json({ webhooks: result ?? { skipped: true }, finishing });
 }

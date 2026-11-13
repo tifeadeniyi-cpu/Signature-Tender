@@ -161,56 +161,20 @@ test('a developer creates a key, sends a document through the API and receives a
   }
 });
 
-test('the integrations marketplace only offers connectors that work', async ({ page }) => {
+test('the integrations page only offers connectors that work', async ({ page }) => {
   await signUpWithWorkspace(page, 'Ivy Integrator', 'Partner Studio');
   await page.goto('/app/integrations');
-  await expect(page.getByRole('heading', { name: 'Integrations', level: 1 })).toBeVisible();
-  const main = page.getByRole('main');
-  const card = (name: string) =>
-    main.getByRole('listitem').filter({ has: page.getByRole('heading', { name, exact: true }) });
+  await expect(page.getByRole('heading', { name: 'Beam Artist' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Jectstack' })).toBeVisible();
+  const dropbox = page.getByRole('listitem').filter({ hasText: 'Dropbox' });
+  await expect(dropbox.getByText('Not available yet')).toBeVisible();
+  await expect(dropbox.getByRole('button')).toHaveCount(0);
 
-  // Planned integrations are labelled and cannot be connected.
-  await expect(card('Dropbox').getByText('Coming Soon').first()).toBeVisible();
-  await expect(card('Dropbox').getByRole('link', { name: /Connect/ })).toHaveCount(0);
-  await expect(card('HubSpot').getByText('Coming Soon').first()).toBeVisible();
-  // Google Drive is built, but this test server has no Google credentials.
-  await expect(card('Google Drive').getByText('Unavailable')).toBeVisible();
-  await expect(card('Google Drive').getByRole('link', { name: /Connect/ })).toHaveCount(0);
-
-  // Search and categories.
-  await page.getByPlaceholder('Search apps and integrations...').fill('hubspot');
-  await expect(card('HubSpot')).toBeVisible();
-  await expect(card('Dropbox')).toHaveCount(0);
-  await page.getByPlaceholder('Search apps and integrations...').fill('');
-  await page.getByRole('tab', { name: 'CRM & Sales' }).click();
-  await expect(card('Salesforce')).toBeVisible();
-  await expect(card('Slack')).toHaveCount(0);
-  await page.getByRole('tab', { name: 'Connected' }).click();
-  await expect(main.getByText('No apps are connected yet')).toBeVisible();
-  await page.getByRole('tab', { name: 'All Integrations' }).click();
-
-  // Coming Soon details explain what is planned, with no connect action.
-  await card('Zapier').getByRole('link', { name: 'Zapier' }).click();
-  await expect(page.getByText('Planned. These features are not available')).toBeVisible();
-  await expect(page.getByRole('button', { name: /Connect/ })).toHaveCount(0);
-  await page.getByRole('link', { name: 'All integrations' }).click();
-
-  // A partner app connects from its details page.
-  await card('Beam Artist').getByRole('link', { name: 'Connect Beam Artist' }).click();
   await page.getByRole('button', { name: 'Connect Beam Artist' }).click();
   await expect(page.locator('code', { hasText: /^stk_/ })).toBeVisible();
   await page.reload();
-  await expect(page.getByText('Connected', { exact: true }).first()).toBeVisible();
-  await page.getByRole('link', { name: 'Connected Apps' }).click();
-  await expect(card('Beam Artist')).toBeVisible();
-  await card('Beam Artist').getByRole('link', { name: 'Manage Beam Artist' }).click();
+  await expect(page.getByText('Connected, not used yet')).toBeVisible();
   await page.getByRole('button', { name: 'Disconnect Beam Artist' }).click();
-  await expect(page.getByText('Disconnected', { exact: true })).toBeVisible();
+  await expect(page.getByText('Not connected').first()).toBeVisible();
   await expect(page.getByRole('button', { name: 'Connect Beam Artist' })).toBeVisible();
-
-  // Activity and automations pages load for a manager.
-  await page.goto('/app/integrations/activity');
-  await expect(page.getByText('Logs show actions and identifiers only')).toBeVisible();
-  await page.goto('/app/integrations/automations');
-  await expect(page.getByText('No automations yet.')).toBeVisible();
 });

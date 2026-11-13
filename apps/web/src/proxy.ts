@@ -8,20 +8,13 @@ import { NextResponse, type NextRequest } from 'next/server';
 export function proxy(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
   const isDev = process.env.NODE_ENV === 'development';
-  // The signed-in app embeds the Google Drive file picker (Google's own iframe and scripts).
-  const google = request.nextUrl.pathname.startsWith('/app/');
   const csp = [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ''}`,
     "style-src 'self' 'unsafe-inline'",
-    `img-src 'self' data: blob:${google ? ' https://*.googleusercontent.com https://ssl.gstatic.com https://www.gstatic.com' : ''}`,
+    "img-src 'self' data: blob:",
     "font-src 'self'",
-    `connect-src 'self'${google ? ' https://apis.google.com https://content.googleapis.com https://www.googleapis.com' : ''}`,
-    ...(google
-      ? [
-          'frame-src https://docs.google.com https://drive.google.com https://accounts.google.com https://content.googleapis.com',
-        ]
-      : []),
+    "connect-src 'self'",
     "worker-src 'self' blob:",
     "frame-ancestors 'none'",
     "base-uri 'self'",
