@@ -57,6 +57,12 @@ const schema = z.object({
   APPLE_TEAM_ID: z.string().optional(),
   APPLE_KEY_ID: z.string().optional(),
   APPLE_PRIVATE_KEY: z.string().optional(),
+  // Integrations marketplace OAuth apps. Leave empty to keep a connector unavailable.
+  // Google Drive can reuse the Sign in with Google client (add the Drive API, scope and redirect).
+  GOOGLE_DRIVE_CLIENT_ID: z.string().optional(),
+  GOOGLE_DRIVE_CLIENT_SECRET: z.string().optional(),
+  HUBSPOT_CLIENT_ID: z.string().optional(),
+  HUBSPOT_CLIENT_SECRET: z.string().optional(),
 });
 
 let cached: z.infer<typeof schema> | undefined;

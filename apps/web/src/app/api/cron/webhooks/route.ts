@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { storage } from '@/lib/storage';
 import { dispatchNotifications } from '@/lib/notifications';
 import { runWebhookDispatch } from '@/lib/webhooks';
+import { integrationSecretsReady, runIntegrationJobQueue } from '@/lib/integrations';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -40,8 +41,8 @@ async function retryFinishing() {
 }
 
 /**
- * Vercel Cron (scheduled maintenance): sends due webhook deliveries and retries documents that
- * failed to finish. Refuses to run without CRON_SECRET.
+ * Vercel Cron (scheduled maintenance): sends due webhook deliveries, runs due integration jobs and
+ * retries documents that failed to finish. Refuses to run without CRON_SECRET.
  */
 export async function GET(req: Request) {
   if (!authorized(req)) return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -50,5 +51,14 @@ export async function GET(req: Request) {
   console.log(
     JSON.stringify({ event: 'webhooks.dispatch', ...(result ?? { skipped: 'public_api off' }) }),
   );
-  return Response.json({ webhooks: result ?? { skipped: true }, finishing });
+  // Integration jobs (automations such as saving signed copies). Until the shared background queue
+  // exists, they also run right after the actions that queue them.
+  const integrations = integrationSecretsReady()
+    ? await runIntegrationJobQueue().catch((err) => {
+        console.error('[integrations] job run failed', err);
+        return { error: true };
+      })
+    : { skipped: 'secrets key missing' };
+  console.log(JSON.stringify({ event: 'integrations.jobs', ...integrations }));
+  return Response.json({ webhooks: result ?? { skipped: true }, finishing, integrations });
 }
