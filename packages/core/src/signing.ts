@@ -1391,7 +1391,9 @@ export async function completeSigning(
         signedAt: now,
         signedIp: meta.ipAddress ?? null,
         signedUserAgent: meta.userAgent ?? null,
-        sessionHash: null,
+        // The verified session is kept until it expires (SESSION_HOURS), so the signer can open
+        // the completed document without a second code. Signing actions still refuse a signed
+        // recipient, so it grants read access only.
       })
       .where(eq(schema.requestRecipients.id, recipient.id));
     const verb =

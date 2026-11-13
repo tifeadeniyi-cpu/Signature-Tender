@@ -185,7 +185,7 @@ test('completed page: view, download, evidence, dismiss the offer, then create a
   await expect(signer).toHaveURL(/\/onboarding/);
 });
 
-test('an email-code signer re-verifies by email before the completed document opens', async ({
+test('an email-code signer opens the completed document without a second code; a new browser verifies', async ({
   page,
   browser,
 }) => {
@@ -197,16 +197,22 @@ test('an email-code signer re-verifies by email before the completed document op
     emailCode: true,
   });
 
-  // The signing session ends at completion, so the page asks for a code sent to that address.
+  // The code they entered to sign still counts in the same browser.
   await signer.goto(`/sign/completed/${token}`);
-  await expect(signer.getByRole('heading', { name: "Confirm it's you" })).toBeVisible();
-  const before = await signer.request.get(`/api/sign/${token}/completed?kind=signed`);
-  expect(before.status()).toBe(401);
-  await signer.getByRole('button', { name: 'Email me a code' }).click();
-  const mail = await latestMail(email, 'Your document access code');
-  await signer.getByLabel('6-digit code').fill(mail.subject.match(/(\d{6})/)![1]!);
-  await signer.getByRole('button', { name: 'Verify and open the document' }).click();
   await expect(signer.getByRole('heading', { name: 'This Document Is Completed' })).toBeVisible();
-  await expect(signer.getByRole('button', { name: 'Create Free Account' })).toBeVisible();
   await expect(signer.getByRole('img', { name: 'Page 1 of 2' })).toBeVisible({ timeout: 15_000 });
+
+  // Another browser with only the link is asked for a code sent to that address.
+  const other = await (await browser.newContext()).newPage();
+  await other.goto(`/sign/completed/${token}`);
+  await expect(other.getByRole('heading', { name: "Confirm it's you" })).toBeVisible();
+  const before = await other.request.get(`/api/sign/${token}/completed?kind=signed`);
+  expect(before.status()).toBe(401);
+  await other.getByRole('button', { name: 'Email me a code' }).click();
+  const mail = await latestMail(email, 'Your document access code');
+  await other.getByLabel('6-digit code').fill(mail.subject.match(/(\d{6})/)![1]!);
+  await other.getByRole('button', { name: 'Verify and open the document' }).click();
+  await expect(other.getByRole('heading', { name: 'This Document Is Completed' })).toBeVisible();
+  await expect(other.getByRole('button', { name: 'Create Free Account' })).toBeVisible();
+  await expect(other.getByRole('img', { name: 'Page 1 of 2' })).toBeVisible({ timeout: 15_000 });
 });
