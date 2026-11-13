@@ -41,7 +41,7 @@ test('sign up, verify, create workspace, edit settings, sign out and back in', a
   await page.getByRole('button', { name: 'Create workspace' }).click();
 
   await expect(page).toHaveURL(/\/app$/);
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('Dana');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dashboard');
   await expect(
     page
       .getByRole('navigation', { name: 'Primary' })
