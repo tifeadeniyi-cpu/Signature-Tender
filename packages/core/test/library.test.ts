@@ -20,6 +20,7 @@ import {
   finalizeRequest,
   cancelRequest,
   searchLibrary,
+  loadBoard,
   setArchived,
   listDeletedDrafts,
   restoreDeletedDraft,
@@ -216,6 +217,69 @@ describe('library search', () => {
     expect((await searchLibrary(db, { userId: editor }, ws, {})).rows).toHaveLength(0);
     const outsider = await makeUser('lib_outsider');
     expect((await searchLibrary(db, { userId: outsider }, ws, {})).rows).toHaveLength(0);
+  });
+});
+
+describe('documents board', () => {
+  it('groups by canonical status into one column each, with counts and signer progress', async () => {
+    const b = await loadBoard(db, { userId: owner }, ws, {});
+    expect(b.counts).toMatchObject({
+      drafts: 1,
+      sent: 1,
+      in_progress: 0,
+      completed: 1,
+      declined_expired: 0,
+      cancelled: 0,
+    });
+    expect(b.total).toBe(3);
+    const byId = new Map(b.cards.map((c) => [c.id, c]));
+    expect(b.cards).toHaveLength(3);
+    expect(byId.get(openDoc)).toMatchObject({
+      column: 'sent',
+      requestStatus: 'sent',
+      requiredCount: 1,
+      requiredDone: 0,
+      awaitingSomeone: true,
+      canEdit: true,
+    });
+    expect(byId.get(completedDoc)).toMatchObject({
+      column: 'completed',
+      requiredDone: 1,
+      canDownload: true,
+      hasCertificate: true,
+    });
+    const draft = b.cards.find((c) => c.column === 'drafts')!;
+    expect(draft.requestId).toBeNull();
+    expect(draft.recipients.map((r) => r.email)).toEqual([signerB]);
+  });
+
+  it('shares the list filters and pages a single column', async () => {
+    const mine = await loadBoard(db, { userId: owner }, ws, { recipient: 'sent' });
+    expect(mine.total).toBe(2);
+    const forSigner = await loadBoard(db, { userId: owner }, ws, {
+      recipient: 'email',
+      rcpt: signerB.toUpperCase(),
+    });
+    expect(forSigner.cards.map((c) => c.column)).toEqual(['drafts']);
+    const recent = await loadBoard(db, { userId: owner }, ws, { range: '7d', q: 'lease' });
+    expect(recent.cards.map((c) => c.id)).toEqual([completedDoc]);
+    const page = await loadBoard(
+      db,
+      { userId: owner },
+      ws,
+      {},
+      { column: 'sent', offset: 0, limit: 1 },
+    );
+    expect(page.cards.map((c) => c.id)).toEqual([openDoc]);
+    expect(page.counts.completed).toBe(1);
+    const next = await loadBoard(db, { userId: owner }, ws, {}, { column: 'sent', offset: 1 });
+    expect(next.cards).toHaveLength(0);
+  });
+
+  it('shows nothing to people who cannot see the documents', async () => {
+    expect((await loadBoard(db, { userId: editor }, ws, {})).total).toBe(0);
+    const outsider = await makeUser('board_outsider');
+    expect((await loadBoard(db, { userId: outsider }, ws, {})).cards).toHaveLength(0);
   });
 });
 
