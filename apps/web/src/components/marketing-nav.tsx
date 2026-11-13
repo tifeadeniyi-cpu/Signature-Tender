@@ -3,6 +3,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, Menu, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { BRAND_ASSETS } from '@/lib/brand-assets';
@@ -191,58 +192,63 @@ export function MarketingNav() {
         </div>
       </div>
 
-      {drawer ? (
-        <div
-          id="mobile-menu"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Menu"
-          className="fixed inset-0 z-50 flex flex-col bg-primary-dark text-white lg:hidden"
-        >
-          <div className="flex items-center justify-between px-4 py-3">
-            <Image {...BRAND_ASSETS.reversed} alt="Signature Tender" className="h-auto w-40" />
-            <button
-              type="button"
-              autoFocus
-              className="inline-flex size-10 items-center justify-center rounded-lg hover:bg-white/10"
-              aria-label="Close menu"
-              onClick={() => setDrawer(false)}
+      {/* Rendered on <body>: once the page scrolls, the header's backdrop blur would trap this
+          full-screen menu inside the header bar. */}
+      {drawer
+        ? createPortal(
+            <div
+              id="mobile-menu"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Menu"
+              className="fixed inset-0 z-50 flex flex-col bg-primary-dark text-white lg:hidden"
             >
-              <X className="size-6" aria-hidden />
-            </button>
-          </div>
-          <nav aria-label="Mobile" className="flex-1 overflow-y-auto px-4 pb-8">
-            <ul className="flex flex-col divide-y divide-white/10 text-lg">
-              {NAV.flatMap((item) => (isGroup(item) ? item.items : [item])).map((l) => (
-                <li key={l.href}>
+              <div className="flex items-center justify-between px-4 py-3">
+                <Image {...BRAND_ASSETS.reversed} alt="Signature Tender" className="h-auto w-40" />
+                <button
+                  type="button"
+                  autoFocus
+                  className="inline-flex size-10 items-center justify-center rounded-lg hover:bg-white/10"
+                  aria-label="Close menu"
+                  onClick={() => setDrawer(false)}
+                >
+                  <X className="size-6" aria-hidden />
+                </button>
+              </div>
+              <nav aria-label="Mobile" className="flex-1 overflow-y-auto px-4 pb-8">
+                <ul className="flex flex-col divide-y divide-white/10 text-lg">
+                  {NAV.flatMap((item) => (isGroup(item) ? item.items : [item])).map((l) => (
+                    <li key={l.href}>
+                      <Link
+                        href={l.href}
+                        onClick={() => setDrawer(false)}
+                        aria-current={activeLink(l) ? 'page' : undefined}
+                        className={cn('block py-4', activeLink(l) && 'text-gold')}
+                      >
+                        {l.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-6 grid grid-cols-2 gap-3">
                   <Link
-                    href={l.href}
-                    onClick={() => setDrawer(false)}
-                    aria-current={activeLink(l) ? 'page' : undefined}
-                    className={cn('block py-4', activeLink(l) && 'text-gold')}
+                    href="/sign-in"
+                    className="inline-flex h-12 items-center justify-center rounded-lg border border-white/40 font-semibold"
                   >
-                    {l.label}
+                    Sign In
                   </Link>
-                </li>
-              ))}
-            </ul>
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              <Link
-                href="/sign-in"
-                className="inline-flex h-12 items-center justify-center rounded-lg border border-white/40 font-semibold"
-              >
-                Sign In
-              </Link>
-              <Link
-                href="/sign-up"
-                className="inline-flex h-12 items-center justify-center rounded-lg bg-gold font-semibold text-primary-dark"
-              >
-                Get Started
-              </Link>
-            </div>
-          </nav>
-        </div>
-      ) : null}
+                  <Link
+                    href="/sign-up"
+                    className="inline-flex h-12 items-center justify-center rounded-lg bg-gold font-semibold text-primary-dark"
+                  >
+                    Get Started
+                  </Link>
+                </div>
+              </nav>
+            </div>,
+            document.body,
+          )
+        : null}
     </header>
   );
 }
