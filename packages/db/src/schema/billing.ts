@@ -34,6 +34,11 @@ export const billingAccounts = pgTable(
     currentPeriodStart: timestamp('current_period_start', { withTimezone: true }),
     currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }),
     cancelAtPeriodEnd: boolean('cancel_at_period_end').notNull().default(false),
+    /** The card saved for the company (Stripe Checkout setup mode); display details only. */
+    cardPaymentMethodId: text('card_payment_method_id'),
+    cardBrand: text('card_brand'),
+    cardLast4: text('card_last4'),
+    cardSavedAt: timestamp('card_saved_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

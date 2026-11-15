@@ -5,7 +5,7 @@ import { BRAND_ASSETS } from '@/lib/brand-assets';
 import { HelpMenu } from './help-menu';
 
 /** Deep Burgundy from the brand palette; the reversed logo is transparent and sits on it. */
-const LOGO_BG = '#5b0a1c';
+const LOGO_BG = '#0d1b33';
 
 /**
  * Branded header and footer for recipient pages outside the signing workspace (landing,
@@ -55,7 +55,7 @@ export async function SignChrome({ children }: { children: React.ReactNode }) {
                   href="/legal/privacy"
                   target="_blank"
                   rel="noopener"
-                  className="underline underline-offset-4 hover:text-[#e6b8a7]"
+                  className="underline underline-offset-4 hover:text-[#d8af68]"
                 >
                   Privacy Policy
                 </a>
@@ -65,7 +65,7 @@ export async function SignChrome({ children }: { children: React.ReactNode }) {
                   href="/legal/terms"
                   target="_blank"
                   rel="noopener"
-                  className="underline underline-offset-4 hover:text-[#e6b8a7]"
+                  className="underline underline-offset-4 hover:text-[#d8af68]"
                 >
                   Terms of Service
                 </a>
@@ -73,7 +73,7 @@ export async function SignChrome({ children }: { children: React.ReactNode }) {
               <li>
                 <a
                   href={`mailto:${String(supportEmail)}`}
-                  className="underline underline-offset-4 hover:text-[#e6b8a7]"
+                  className="underline underline-offset-4 hover:text-[#d8af68]"
                 >
                   Help &amp; Support
                 </a>
@@ -86,7 +86,7 @@ export async function SignChrome({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Rose-gold curve between the burgundy bands and the ivory page. */
+/** Champagne-gold curve between the navy bands and the ivory page. */
 function Wave({ className, flip }: { className?: string; flip?: boolean }) {
   return (
     <svg
@@ -96,8 +96,8 @@ function Wave({ className, flip }: { className?: string; flip?: boolean }) {
       style={flip ? { transform: 'scaleY(-1)' } : undefined}
       aria-hidden
     >
-      <path d="M0 30 C 360 70, 900 -10, 1440 28 L1440 60 L0 60 Z" fill="#e6b8a7" />
-      <path d="M0 40 C 420 72, 960 8, 1440 40 L1440 60 L0 60 Z" fill="#fff9f7" />
+      <path d="M0 30 C 360 70, 900 -10, 1440 28 L1440 60 L0 60 Z" fill="#d8af68" />
+      <path d="M0 40 C 420 72, 960 8, 1440 40 L1440 60 L0 60 Z" fill="#fff9f2" />
     </svg>
   );
 }

@@ -68,3 +68,22 @@ describe('validation', () => {
     ).toBe(true);
   });
 });
+
+describe('signer time zone', () => {
+  it('prefers the device zone, falls back to the IP zone, and rejects anything else', async () => {
+    const { signerTimeZone, ianaZoneOrNull } = await import('../src');
+    expect(signerTimeZone('America/Chicago', 'Asia/Tokyo')).toEqual({
+      timeZone: 'America/Chicago',
+      source: 'device',
+    });
+    expect(signerTimeZone('', 'Europe/London')).toEqual({
+      timeZone: 'Europe/London',
+      source: 'ip',
+    });
+    expect(signerTimeZone('Mars/Olympus', 'nope')).toBeNull();
+    expect(signerTimeZone(undefined, undefined)).toBeNull();
+    expect(ianaZoneOrNull('<script>')).toBeNull();
+    expect(ianaZoneOrNull('x'.repeat(80))).toBeNull();
+    expect(ianaZoneOrNull('UTC')).toBe('UTC');
+  });
+});

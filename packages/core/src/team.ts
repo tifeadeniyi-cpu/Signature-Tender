@@ -2,6 +2,7 @@ import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { schema, withActor, type Database, type ActorContext, type Tx } from '@st/db';
 import { AppError } from './errors';
+import { requireCardForTeam } from './billing';
 import { recordAudit } from './audit';
 import { hashSecret, newSecret, isPlausibleSecret } from './signing-crypto';
 import { PERMISSIONS, isPermissionKey, type PermissionKey } from './permissions';
@@ -297,11 +298,15 @@ export async function inviteMember(
   workspaceId: string,
   raw: InviteInput,
   meta: Meta = {},
+  /** Set when payments are live: companies then need a card on file to add people. */
+  opts: { cardRequired?: boolean } = {},
 ): Promise<InvitationMail> {
   checkId(workspaceId, 'Workspace not found');
   const input = inviteSchema.parse(raw);
   return withActor(db, actor, async (tx) => {
     await requirePerm(tx, workspaceId, 'team.manage', 'Your role does not allow inviting people.');
+    // Companies keep a card on file to add team members.
+    if (opts.cardRequired) await requireCardForTeam(tx, workspaceId);
     if (!(await canAssign(tx, workspaceId, input.roleId)))
       throw new AppError('forbidden', 'You cannot give a role with more access than your own.');
     const [existing] = (await tx.execute(sql`

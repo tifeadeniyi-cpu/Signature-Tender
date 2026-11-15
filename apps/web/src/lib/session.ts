@@ -20,6 +20,7 @@ import { db } from './db';
 import { safeNextPath } from './next-path';
 
 export const WORKSPACE_COOKIE = 'st_ws';
+export const WORKSPACE_HEADER = 'x-st-workspace';
 
 export const getSession = cache(async () => auth().api.getSession({ headers: await headers() }));
 
@@ -50,7 +51,10 @@ export const requireWorkspace = cache(async (): Promise<AppContext> => {
   const actor = { userId: user.id };
   const workspaces = await listMyWorkspaces(db(), actor);
   if (workspaces.length === 0) redirect('/onboarding');
-  const preferred = (await cookies()).get(WORKSPACE_COOKIE)?.value;
+  // The mobile app sends its choice in a header; the website uses a cookie. Either way it is only
+  // a preference: membership is checked below.
+  const preferred =
+    (await headers()).get(WORKSPACE_HEADER) ?? (await cookies()).get(WORKSPACE_COOKIE)?.value;
   const chosen = workspaces.find((w) => w.id === preferred) ?? workspaces[0]!;
   try {
     const membership = await getMembership(db(), actor, chosen.id);
@@ -68,6 +72,8 @@ export async function requestMeta() {
   return {
     ipAddress: h.get('x-forwarded-for')?.split(',')[0]?.trim() ?? h.get('x-real-ip') ?? null,
     userAgent: h.get('user-agent'),
+    // Vercel's edge geolocates the IP; used for a signer's time zone when the device sends none.
+    ipTimeZone: h.get('x-vercel-ip-timezone'),
   };
 }
 

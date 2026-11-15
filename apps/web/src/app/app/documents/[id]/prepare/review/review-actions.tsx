@@ -1,7 +1,7 @@
 'use client';
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Send } from 'lucide-react';
+import { PenLine, Send } from 'lucide-react';
 import type { DocumentStatus } from '@st/core';
 import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/feedback';
@@ -13,6 +13,7 @@ import {
 } from '../../../actions';
 
 export function ReviewActions({
+  selfSign = false,
   documentId,
   canEdit,
   ready,
@@ -22,6 +23,8 @@ export function ReviewActions({
   liveNote,
   notice,
 }: {
+  /** "Sign it yourself": the sender is the only signer, so the button signs instead of sending. */
+  selfSign?: boolean;
   documentId: string;
   canEdit: boolean;
   ready: boolean;
@@ -104,7 +107,16 @@ export function ReviewActions({
                   })
                 }
               >
-                <Send className="size-4" aria-hidden /> Send for signature
+                {selfSign ? (
+                  <>
+                    <PenLine className="size-4" aria-hidden />{' '}
+                    {liveNote?.startsWith('Free') ? 'Sign now' : 'Pay and sign now'}
+                  </>
+                ) : (
+                  <>
+                    <Send className="size-4" aria-hidden /> Send for signature
+                  </>
+                )}
               </Button>
               <p id="send-live-note" className="text-xs">
                 {status !== 'ready_to_send' ? 'Mark the document ready to send first.' : liveNote}
@@ -126,7 +138,15 @@ export function ReviewActions({
                   })
                 }
               >
-                <Send className="size-4" aria-hidden /> Send test request
+                {selfSign ? (
+                  <>
+                    <PenLine className="size-4" aria-hidden /> Sign a test copy now
+                  </>
+                ) : (
+                  <>
+                    <Send className="size-4" aria-hidden /> Send test request
+                  </>
+                )}
               </Button>
               <p id="send-test-note" className="text-xs">
                 {status !== 'ready_to_send'
