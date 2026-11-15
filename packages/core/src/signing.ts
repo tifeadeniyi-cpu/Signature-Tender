@@ -160,6 +160,8 @@ export interface SendOptions {
    * Required for live requests; recorded with the notice version and how it was given.
    */
   specializedAck?: { source: 'sender' | 'api' };
+  /** API sends never spend referral credits. Defaults to web. */
+  channel?: 'web' | 'api';
 }
 
 export interface SpecializedNotice {
@@ -550,6 +552,7 @@ export async function sendForSignature(
             workspaceId: doc.workspace_id,
             requestId,
             userId: actor.userId,
+            channel: opts.channel ?? 'web',
           });
       if (bucket) {
         invitations = await dispatch(tx, req!, actor.userId, meta);

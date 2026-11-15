@@ -567,7 +567,9 @@ export async function getCreditBalance(db: Database, p: ApiPrincipal) {
       sql`select st_has_permission(${p.workspaceId}::uuid, 'billing.manage') as ok`,
     )) as unknown as { ok: boolean }[];
     if (!ok?.ok) throw new AppError('forbidden', 'The member behind this key cannot view billing.');
-    return getBalances(tx, p.workspaceId);
+    const b = await getBalances(tx, p.workspaceId);
+    // Referral credits (Give 1, Get 2) pay for web sends only, so the API cannot spend them.
+    return { ...b, available: b.available - b.referral };
   });
 }
 

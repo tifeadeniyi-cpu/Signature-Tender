@@ -1,5 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
-import type { NotificationDispatchResult } from '@st/core';
+import { releaseDueReferralRewards, type NotificationDispatchResult } from '@st/core';
+import { db } from '@/lib/db';
+import { sendReferralNotices } from '@/lib/referrals';
 import { env } from '@/lib/env';
 import { dispatchNotifications } from '@/lib/notifications';
 
@@ -16,6 +18,7 @@ function authorized(req: Request) {
 
 /**
  * Scheduled sweep: sends queued notifications and retries failed sends whose backoff has passed.
+ * Also pays Give 1, Get 2 referrer rewards whose settlement hold has passed.
  * Called by Vercel Cron with `Authorization: Bearer $CRON_SECRET`; refused without it.
  */
 export async function GET(req: Request) {
@@ -28,7 +31,16 @@ export async function GET(req: Request) {
     if (batch.length < 25) break;
   }
   const count = (s: string) => results.filter((r) => r.status === s).length;
+  let referralRewards = 0;
+  try {
+    const notices = await releaseDueReferralRewards(db());
+    referralRewards = notices.length;
+    await sendReferralNotices(notices);
+  } catch (err) {
+    console.error('Referral reward release failed', err);
+  }
   return Response.json({
+    referralRewards,
     processed: results.length,
     sent: count('sent'),
     retrying: count('retrying'),

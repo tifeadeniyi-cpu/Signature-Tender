@@ -223,9 +223,15 @@ export default async function BillingPage({
             >
               {o.complimentary
                 ? 'Founder workspace: sending is free.'
-                : o.balances.allowance > 0
-                  ? `${o.balances.allowance} from this month's allowance, ${o.balances.purchased} purchased`
-                  : `${o.balances.purchased} purchased`}
+                : [
+                    o.balances.allowance > 0
+                      ? `${o.balances.allowance} from this month's allowance`
+                      : null,
+                    o.balances.referral > 0 ? `${o.balances.referral} referral` : null,
+                    `${o.balances.purchased} purchased`,
+                  ]
+                    .filter(Boolean)
+                    .join(', ')}
             </Stat>
             <Stat label="Requests sent this month" value={String(o.usage.sentThisMonth)}>
               Test requests are not counted.
@@ -395,6 +401,43 @@ export default async function BillingPage({
               Purchased credits never expire.
             </Stat>
           </div>
+          <Card className="p-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h2 className="font-display text-lg">Referral Credits</h2>
+                <p className="mt-1 text-sm">
+                  From Give 1, Get 2. Used before purchased credits on documents sent from the
+                  website (not the API). No cash value; they never expire.
+                </p>
+              </div>
+              <Link
+                href="/app/referrals"
+                className="inline-flex h-10 items-center rounded-lg border border-border bg-white px-4 text-sm font-semibold text-heading hover:bg-blush"
+              >
+                Earn More Credits
+              </Link>
+            </div>
+            <dl className="mt-4 grid grid-cols-3 gap-4 text-center sm:max-w-md">
+              <div>
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-text">
+                  Available
+                </dt>
+                <dd className="mt-1 font-display text-2xl text-heading">{o.balances.referral}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-text">
+                  Used
+                </dt>
+                <dd className="mt-1 font-display text-2xl text-heading">{o.referral.used}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-text">
+                  Earned
+                </dt>
+                <dd className="mt-1 font-display text-2xl text-heading">{o.referral.earned}</dd>
+              </div>
+            </dl>
+          </Card>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
             {o.prices.map((p) => {
               const savings =

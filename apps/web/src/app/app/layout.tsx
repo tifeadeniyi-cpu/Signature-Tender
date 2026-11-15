@@ -1,5 +1,11 @@
 import { cookies } from 'next/headers';
-import { formatMoney, getConfigValue, hasPermission, hasSentDocument } from '@st/core';
+import {
+  formatMoney,
+  getConfigValue,
+  getReferralProgram,
+  hasPermission,
+  hasSentDocument,
+} from '@st/core';
 import { listLibrary } from '@st/core/studio/server';
 import { AppSidebar } from '@/components/shell/sidebar';
 import { SIDEBAR_COOKIE, visibleNav } from '@/components/shell/nav';
@@ -26,7 +32,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const appEnv = env().APP_ENV;
   const studio = await studioSettings().catch(() => null);
   const studioOn = Boolean(studio?.enabled);
-  const nav = visibleNav(ctx.membership.permissions, studioOn);
+  const referralsOn = await getReferralProgram(db())
+    .then((p) => p.live)
+    .catch(() => false);
+  const nav = visibleNav(ctx.membership.permissions, studioOn, referralsOn);
   // Offer Signature Studio only to people who have not bought a design yet.
   const owns = studioOn
     ? (await listLibrary(db(), ctx.user.id).catch(() => [])).some((d) => d.access === 'active')
