@@ -7,13 +7,13 @@ export type SignStep = 1 | 2 | 3 | 4;
 const STEPS = ['Review', 'Sign', 'Complete'] as const;
 
 /**
- * Recipient header: burgundy bar, reversed logo, the Review → Sign → Complete progress, and an
+ * Recipient header: navy bar, reversed logo, the Review → Sign → Complete progress, and an
  * optional actions slot (Help, Save & Exit). `step` 4 means every stage is complete.
  */
 export function SignHeader({ step, actions }: { step: SignStep; actions?: React.ReactNode }) {
   return (
     <header
-      style={{ backgroundColor: '#5b0a1c' }}
+      style={{ backgroundColor: '#0d1b33' }}
       className="relative z-40 flex h-14 shrink-0 items-center gap-3 px-3 text-white sm:h-16 sm:px-5"
     >
       <Image
@@ -44,7 +44,7 @@ export function SignHeader({ step, actions }: { step: SignStep; actions?: React.
                       'flex size-7 items-center justify-center rounded-full text-sm font-semibold',
                       state === 'upcoming'
                         ? 'border border-white/60 text-white/80'
-                        : 'bg-white text-[#5b0a1c]',
+                        : 'bg-white text-[#0d1b33]',
                     )}
                   >
                     {state === 'done' ? <Check className="size-4" aria-hidden /> : n}
