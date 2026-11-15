@@ -357,8 +357,32 @@ For documents only you need to sign. **Sign it yourself** (Documents page, dashb
 - Price: a flat **$0.99** per document from config `billing.self_sign_price` (`{ amountCents, currency }`; minimum 50 cents), kept out of the prices table so it never appears as a credit pack.
 - It never buys or spends a credit: the request waits for its own Stripe payment (`priceCode: self_sign`, `credits: 0`), and once paid it is sent without a credit hold. Workspaces with unlimited signing and test requests are free.
 - After payment, the return page opens signing directly (`/app/documents/[id]/sign-now` issues a fresh link to the signed-in sender only). Nobody is emailed, including you. The document page shows **Sign now** while it waits for your signature.
-- Paying needs the billing permission, like any request payment.
+- Anyone who can create documents can pay for their own self-sign document; other request payments still need the billing permission.
 - Tests: `packages/core/test/self-sign.test.ts` (no credit used, $0.99 checkout, paid send, owner-only link, other requests unaffected); `apps/web/e2e/self-sign.spec.ts` (test mode) and `self-sign-paid.spec.ts` (Stripe stand-in).
+
+## Mobile app (iOS and Android): Phase 1 done
+
+A native app in `apps/mobile` (Expo SDK 58, React Native, Expo Router), for senders and signers. It talks to the same server and account as the website; see `apps/mobile/README.md` for running, testing and shipping it.
+
+- **Sign-in:** Better Auth's Expo plugin on the server (`expo()`), with the app's scheme `signaturetender://` as a trusted origin. The session cookie lives in the phone's secure storage and travels in a Cookie header, so every permission check is the website's own. Two-step codes and backup codes work.
+- **Server endpoints** (`apps/web/src/app/api/mobile`): `GET /api/mobile/me` (profile, workspaces, permissions), `POST /api/mobile/requests/[rid]/remind` and `/cancel` (the same core services as the drawer; JSON only, so a cross-site form cannot trigger them). The app also uses `/api/documents/board` and `/api/documents/[id]/summary`. The workspace is chosen with the `x-st-workspace` header and checked against membership.
+- **Screens:** Home (status counts, waiting on signers, recent), Documents (the Kanban board one status at a time, with search, sort, date range, paging), Document details (progress, recipients, activity, certificate; remind, cancel, download and share the package, signed copy or certificate), Sign (open a signing link), Account (workspace switcher, sign out).
+- **Signing** uses the website's signing page inside the app, limited to Signature Tender's signing pages; other links open in the browser.
+- **Universal links:** `/.well-known/apple-app-site-association` (from `APPLE_TEAM_ID`) and `/.well-known/assetlinks.json` (from `ANDROID_APP_CERT_SHA256`) let email signing links open the app. Both stay empty until set.
+- **Tests:** `apps/web/e2e/mobile-api.spec.ts` (sign-in through the app's origin, an unknown origin refused, board and drawer data, JSON-only changes, remind, cancel, outsiders refused, link files). In the app: Jest component tests for the document card, Documents tab, document details (actions, remind, cancel, download) and the signing-link form. CI has a separate `mobile` job.
+- Not verified on a device in this environment: the app's JavaScript builds for iOS and Android (`expo export`), and the checks above pass. The first device run needs a development build.
+
+### Mobile phase 2: Planned
+
+| Feature                                 | Notes                                                                                                                               |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Native document sending                 | Pick a PDF or photo, add recipients, place fields on the page, send. Replaces the in-app browser.                                   |
+| Native signing                          | Sign with a finger, using the same consent, evidence and certificate steps.                                                         |
+| Awaiting my signature                   | Requests where the signed-in person is a recipient, across senders. Needs a server endpoint that issues fresh signing links safely. |
+| Push notifications                      | Signed, declined, completed and reminder events, using Expo push tokens stored per device.                                          |
+| Sign in with Google, Apple and passkeys | Through the Expo plugin's browser flow.                                                                                             |
+| Workspace creation in the app           | Today new accounts finish setup on the website.                                                                                     |
+| Store listings                          | Screenshots, privacy labels, review account; needs the Apple and Google developer accounts.                                         |
 
 ## Phase 10: Document management actions: Planned
 
