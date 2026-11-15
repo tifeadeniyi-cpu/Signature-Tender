@@ -47,7 +47,7 @@ test('staff admin is a 404 for customers and opens for staff', async ({ page }) 
     await expect(page.getByText(/Staff administration needs two-factor sign-in/)).toBeVisible();
     await sql`update "user" set two_factor_enabled = true where email = ${email}`;
     await page.goto('/admin');
-    await expect(page.getByRole('heading', { name: 'Platform overview' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Platform Command Center' })).toBeVisible();
     await page.getByRole('link', { name: 'Organizations', exact: true }).first().click();
     await page.getByLabel('Name or workspace id').fill('Plain Studio');
     await page.getByRole('button', { name: 'Search' }).click();
@@ -86,7 +86,13 @@ test('admin roles limit what staff see; the founder sees the audit trail', async
     await page.locator('summary', { hasText: 'Open account menu' }).click();
     await expect(page.getByRole('link', { name: 'Staff admin' })).toBeVisible();
     await page.goto('/admin');
-    await expect(page.getByRole('heading', { name: 'Platform overview' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Platform Command Center' })).toBeVisible();
+    // Analysts see platform numbers but not revenue, on the page or in the export.
+    await expect(page.getByText('Total Users')).toBeVisible();
+    await expect(page.getByText('Total Revenue')).toHaveCount(0);
+    const analystCsv = await (await page.request.get('/admin/export?range=last_30_days')).text();
+    expect(analystCsv).toContain('Registered users');
+    expect(analystCsv).not.toMatch(/revenue/i);
     const nav = page.getByRole('navigation', { name: 'Admin' });
     await expect(nav.getByRole('link', { name: 'Audit Trail' })).toHaveCount(0);
     // Hidden links are not the only protection: the page itself refuses.
@@ -98,6 +104,23 @@ test('admin roles limit what staff see; the founder sees the audit trail', async
     await page.locator('summary', { hasText: 'Open account menu' }).click();
     await page.getByRole('link', { name: 'Founder admin' }).click();
     await expect(page).toHaveURL(/\/admin$/);
+    await expect(page.getByText('Total Revenue')).toBeVisible();
+    await page.getByLabel('Date range').selectOption('this_year');
+    await expect(page).toHaveURL(/range=this_year/);
+    await expect(
+      page.getByRole('heading', { name: 'Document Status (All Organizations)' }),
+    ).toBeVisible();
+    const download = page.waitForEvent('download');
+    await page.getByRole('link', { name: 'Export report' }).click();
+    const file = await download;
+    expect(file.suggestedFilename()).toMatch(/^command-center-.*\.csv$/);
+    const csv = await (await page.request.get('/admin/export?range=this_year')).text();
+    expect(csv).toMatch(/revenue/i);
+    expect(csv).not.toContain('@');
+    const exports = await sql<{ n: number }[]>`
+      select count(*)::int as n from audit_events
+      where actor_user_id = ${id} and action = 'admin.report_exported'`;
+    expect(exports[0]?.n ?? 0).toBeGreaterThanOrEqual(2);
     await page
       .getByRole('navigation', { name: 'Admin' })
       .getByRole('link', { name: 'Audit Trail' })

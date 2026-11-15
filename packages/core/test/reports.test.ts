@@ -32,6 +32,9 @@ import {
   recordAdminDenied,
   listAdminAudit,
   listAdminStaff,
+  getCommandCenter,
+  resolvePeriod,
+  pctChange,
 } from '../src';
 import { APP_URL, OWNER_URL } from './env';
 import { makeUser, addMember, makePdf } from './helpers';
@@ -350,5 +353,65 @@ describe('admin roles and the audit trail', () => {
     await refused(owner_.db.execute(sql`delete from audit_events where id = ${row!.id}`));
     await refused(owner_.db.execute(sql`truncate audit_events`));
     await expect(db.execute(sql`delete from audit_events where id = ${row!.id}`)).rejects.toThrow();
+  });
+});
+
+describe('command center', () => {
+  it('resolves periods in UTC with an equal-length comparison', () => {
+    const now = new Date('2026-11-15T10:00:00Z');
+    const p = resolvePeriod({}, now);
+    expect(p.range).toBe('30d');
+    expect(p.to.toISOString()).toBe('2026-11-16T00:00:00.000Z');
+    expect(p.from.toISOString()).toBe('2026-10-17T00:00:00.000Z');
+    expect(p.cmpTo).toEqual(p.from);
+    expect(p.to.getTime() - p.from.getTime()).toBe(p.cmpTo!.getTime() - p.cmpFrom!.getTime());
+    expect(p.bucket).toBe('day');
+    const lm = resolvePeriod({ range: 'last_month', compare: 'prev_year' }, now);
+    expect([lm.from.toISOString(), lm.to.toISOString()]).toEqual([
+      '2026-10-01T00:00:00.000Z',
+      '2026-11-01T00:00:00.000Z',
+    ]);
+    expect(lm.cmpFrom!.toISOString()).toBe('2025-10-01T00:00:00.000Z');
+    expect(resolvePeriod({ range: 'this_year', compare: 'none' }, now)).toMatchObject({
+      cmpFrom: null,
+      bucket: 'month',
+    });
+    // A bad custom range falls back to the default instead of failing.
+    expect(
+      resolvePeriod({ range: 'custom', from: '2026-11-10', to: '2026-11-01' }, now).range,
+    ).toBe('30d');
+    expect(pctChange(5, 0)).toBeNull();
+    expect(pctChange(15, 10)).toBe(50);
+  });
+
+  it('returns aggregates only, statuses that sum to the cohort, and revenue only for finance roles', async () => {
+    const founder = await makeUser('cc_founder');
+    const analyst = await makeUser('cc_analyst');
+    await owner_.db.execute(
+      sql`insert into platform_admins (user_id, role) values (${founder}, 'founder'), (${analyst}, 'analyst')`,
+    );
+    const p = resolvePeriod({ range: 'this_year' });
+    const c = await getCommandCenter(db, { userId: founder }, p);
+    expect(c.kpi.users_total).toBeGreaterThan(0);
+    expect(c.kpi.orgs_total).toBeGreaterThan(0);
+    const s = c.doc_status;
+    expect(s.completed + s.pending + s.declined + s.expired + s.cancelled + s.failed).toBe(s.total);
+    expect(s.total).toBe(c.kpi.docs_sent);
+    expect(c.doc_types.reduce((n, t) => n + t.count, 0)).toBeLessThanOrEqual(s.total);
+    expect(c.revenue).not.toBeNull();
+    expect(c.security.audit_append_only).toBe(true);
+    expect(c.growth.length).toBeGreaterThan(0);
+    const last = c.growth[c.growth.length - 1]!;
+    expect(last.users_total).toBe(c.kpi.users_total);
+    // No customer names, emails or document titles in the payload.
+    const json = JSON.stringify(c);
+    expect(json).not.toContain('@example.test');
+    expect(json).not.toContain('Lease');
+    const a = await getCommandCenter(db, { userId: analyst }, p);
+    expect(a.revenue).toBeNull();
+    expect(a.audit).toBeNull();
+    await expect(getCommandCenter(db, { userId: owner }, p)).rejects.toMatchObject({
+      code: 'forbidden',
+    });
   });
 });
