@@ -28,6 +28,50 @@ export async function hasStrongSignIn(db: Database, userId: string): Promise<boo
   return Boolean(r?.ok);
 }
 
+/** What the admin portal lets a staff member do, from their role (st_admin_role_permissions). */
+export type AdminPermission =
+  | 'analytics.view'
+  | 'revenue.view'
+  | 'audit.view'
+  | 'security.view'
+  | 'system.view'
+  | 'support.view'
+  | 'access.view'
+  | 'settings.manage'
+  | 'operations.manage';
+
+export interface AdminAccess {
+  role: string | null;
+  permissions: AdminPermission[];
+}
+
+/** The signed-in staff member's role and permissions; an empty set for everyone else. */
+export async function getAdminAccess(db: Database, actor: ActorContext): Promise<AdminAccess> {
+  const [r] = (await withActor(db, actor, (tx) =>
+    tx.execute(sql`select st_admin_role() as role, st_admin_permissions() as permissions`),
+  )) as unknown as { role: string | null; permissions: string[] | null }[];
+  return {
+    role: r?.role ?? null,
+    permissions: (r?.permissions ?? []) as AdminPermission[],
+  };
+}
+
+export async function isFounder(db: Database, userId: string): Promise<boolean> {
+  return (await getAdminAccess(db, { userId })).role === 'founder';
+}
+
+/** Records a refused attempt to open part of the admin portal, in its own transaction. */
+export async function recordAdminDenied(
+  db: Database,
+  actor: ActorContext,
+  view: string,
+  permission: string | null,
+) {
+  await withActor(db, actor, (tx) =>
+    tx.execute(sql`select st_admin_record_denied(${view}, ${permission ?? ''})`),
+  );
+}
+
 async function call<T>(db: Database, actor: ActorContext, q: ReturnType<typeof sql>): Promise<T> {
   try {
     return (await withActor(db, actor, (tx) => tx.execute(q))) as unknown as T;
@@ -155,4 +199,95 @@ export async function getAdminOperations(
     sql`select st_admin_operations(${Math.min(Math.max(limit, 1), 200)}) as o`,
   );
   return r!.o;
+}
+
+export const AUDIT_CATEGORIES = [
+  'admin_access',
+  'authentication',
+  'security',
+  'configuration',
+  'operations',
+  'payments',
+  'platform',
+] as const;
+export type AuditCategory = (typeof AUDIT_CATEGORIES)[number];
+
+export interface AdminAuditRow {
+  id: string;
+  seq: number;
+  occurred_at: Date;
+  actor: string;
+  actor_role: string;
+  category: AuditCategory;
+  action: string;
+  target_type: string | null;
+  target_ref: string | null;
+  outcome: string;
+  risk: 'low' | 'medium' | 'high';
+  details: Record<string, unknown>;
+}
+
+const auditFilter = z.object({
+  from: z.coerce.date().nullable().catch(null),
+  to: z.coerce.date().nullable().catch(null),
+  category: z.enum(AUDIT_CATEGORIES).nullable().catch(null),
+  q: z.string().trim().max(120).catch(''),
+  page: z.coerce.number().int().min(1).max(10_000).catch(1),
+});
+export interface AdminAuditFilter {
+  from?: Date | string | null;
+  to?: Date | string | null;
+  category?: AuditCategory | null;
+  q?: string;
+  page?: number;
+}
+
+/**
+ * The admin audit trail: platform-level events, newest first. Customers show as opaque
+ * references and their event details are withheld; staff event details have secrets redacted.
+ */
+export async function listAdminAudit(
+  db: Database,
+  actor: ActorContext,
+  filter: AdminAuditFilter = {},
+  pageSize = 50,
+): Promise<{ rows: AdminAuditRow[]; total: number; page: number; pageSize: number }> {
+  const f = auditFilter.parse({
+    from: filter.from ?? null,
+    to: filter.to ?? null,
+    category: filter.category ?? null,
+    q: filter.q ?? '',
+    page: filter.page ?? 1,
+  });
+  const rows = await call<(AdminAuditRow & { total: number })[]>(
+    db,
+    actor,
+    sql`select * from st_admin_audit_log(${f.from?.toISOString() ?? null}::timestamptz,
+          ${f.to?.toISOString() ?? null}::timestamptz, ${f.category ?? ''}, ${f.q},
+          ${pageSize}, ${(f.page - 1) * pageSize})`,
+  );
+  return {
+    rows: rows.map(({ total: _t, ...r }) => ({ ...r, seq: Number(r.seq) })),
+    total: Number(rows[0]?.total ?? 0),
+    page: f.page,
+    pageSize,
+  };
+}
+
+export interface AdminStaffRow {
+  user_id: string;
+  name: string;
+  email: string;
+  role: string;
+  note: string;
+  granted_at: Date;
+  strong_sign_in: boolean;
+  passkeys: number;
+  last_sign_in: Date | null;
+}
+
+/** Everyone with staff access, their role and whether they sign in with more than a password. */
+export async function listAdminStaff(db: Database, actor: ActorContext): Promise<AdminStaffRow[]> {
+  const rows = await call<AdminStaffRow[]>(db, actor, sql`select * from st_admin_staff()`);
+  return rows.map((r) => ({ ...r, passkeys: Number(r.passkeys) }));
 }

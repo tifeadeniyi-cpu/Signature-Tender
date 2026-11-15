@@ -1,7 +1,7 @@
 /**
  * Where to go after signing in or verifying an email. Only invitation links, document-claim
- * links, Signature Studio pages and the signed-in API documentation are accepted, so the `next`
- * parameter can never be used to send people to another site or an arbitrary page.
+ * links, Signature Studio pages, the signed-in API documentation and the staff portal are accepted,
+ * so the `next` parameter can never be used to send people to another site or an arbitrary page.
  */
 export function safeNextPath(next: string | null | undefined): string | null {
   if (!next) return null;
@@ -15,6 +15,7 @@ export function safeNextPath(next: string | null | undefined): string | null {
   if (new RegExp(`^/signature-studio/return\\?p=${UUID}$`, 'i').test(next)) return next;
   if (new RegExp(`^/signature-studio/(design|receipt|checkout)/${UUID}$`, 'i').test(next))
     return next;
+  if (next === '/admin') return next;
   return null;
 }
 

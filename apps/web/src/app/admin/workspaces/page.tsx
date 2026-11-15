@@ -1,6 +1,6 @@
 import { listAdminWorkspaces } from '@st/core';
 import { db } from '@/lib/db';
-import { requireStaff } from '@/lib/session';
+import { requireAdmin } from '@/lib/session';
 import { buttonClass } from '@/components/ui/button';
 import { Badge } from '@/components/ui/feedback';
 
@@ -16,7 +16,7 @@ export default async function AdminWorkspacesPage({
 }: {
   searchParams: Promise<{ q?: string }>;
 }) {
-  const user = await requireStaff();
+  const { user } = await requireAdmin('analytics.view', 'workspaces');
   const q = (await searchParams).q ?? '';
   const rows = await listAdminWorkspaces(db(), { userId: user.id }, q, 100);
   return (

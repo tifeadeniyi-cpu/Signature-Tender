@@ -2,7 +2,7 @@
 import { revalidatePath } from 'next/cache';
 import { AppError, setIntegrationAvailability, type Availability } from '@st/core';
 import { db } from '@/lib/db';
-import { requireStaff } from '@/lib/session';
+import { requireAdmin } from '@/lib/session';
 
 const STATES = ['available', 'beta', 'coming_soon', 'maintenance', 'unavailable'];
 
@@ -10,7 +10,7 @@ export async function setAvailabilityAction(
   _prev: unknown,
   form: FormData,
 ): Promise<{ ok: boolean; message: string }> {
-  const staff = await requireStaff();
+  const { user: staff } = await requireAdmin('settings.manage', 'integrations');
   const provider = String(form.get('provider') ?? '');
   const raw = String(form.get('availability') ?? '');
   const availability =

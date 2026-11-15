@@ -1,5 +1,12 @@
 import { cookies } from 'next/headers';
-import { formatMoney, getConfigValue, hasPermission, hasSentDocument } from '@st/core';
+import {
+  formatMoney,
+  getConfigValue,
+  hasPermission,
+  hasSentDocument,
+  isFounder,
+  isPlatformAdmin,
+} from '@st/core';
 import { listLibrary } from '@st/core/studio/server';
 import { AppSidebar } from '@/components/shell/sidebar';
 import { SIDEBAR_COOKIE, visibleNav } from '@/components/shell/nav';
@@ -34,6 +41,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const studioPrice =
     studioOn && !owns && studio ? formatMoney(studio.priceCents, studio.currency) : null;
   const cta = canCreate || studioPrice ? { returning, canCreate, studioPrice } : null;
+  const staff = await isPlatformAdmin(db(), { userId: ctx.user.id }).catch(() => false);
+  const staffLink = staff
+    ? {
+        href: '/admin',
+        label: (await isFounder(db(), ctx.user.id).catch(() => false))
+          ? 'Founder admin'
+          : 'Staff admin',
+      }
+    : null;
   return (
     <div className="flex min-h-dvh">
       <AppSidebar
@@ -51,7 +67,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             customer documents.
           </div>
         ) : null}
-        <Topbar ctx={ctx} supportEmail={supportEmail} nav={nav} cta={cta} />
+        <Topbar ctx={ctx} supportEmail={supportEmail} nav={nav} cta={cta} staffLink={staffLink} />
         <main id="main" className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:py-8">
           {children}
         </main>

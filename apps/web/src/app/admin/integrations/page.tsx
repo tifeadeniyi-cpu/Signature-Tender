@@ -1,14 +1,14 @@
 import { CONNECTORS, getAvailabilityOverrides, getIntegrationAdminOverview } from '@st/core';
 import { Card } from '@/components/ui/card';
 import { db } from '@/lib/db';
-import { requireStaff } from '@/lib/session';
+import { requireAdmin } from '@/lib/session';
 import { oauthClientFor } from '@/lib/integrations';
 import { AvailabilityForm } from './availability-form';
 
 export const metadata = { title: 'Integrations' };
 
 export default async function AdminIntegrationsPage() {
-  const staff = await requireStaff();
+  const { user: staff } = await requireAdmin('settings.manage', 'integrations');
   const [overview, overrides] = await Promise.all([
     getIntegrationAdminOverview(db(), { userId: staff.id }),
     getAvailabilityOverrides(db()),
