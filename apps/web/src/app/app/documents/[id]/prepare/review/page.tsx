@@ -6,6 +6,7 @@ import {
   isFeatureEnabled,
   hasPermission,
   getSendQuote,
+  isSelfSignRecipients,
   formatMoney,
   DOCUMENT_TYPES,
   RECIPIENT_ROLES,
@@ -18,6 +19,7 @@ import { PrepareHeader } from '@/components/documents/prepare-header';
 import { Card } from '@/components/ui/card';
 import { colorFor } from '@/components/documents/colors';
 import { ReviewActions } from './review-actions';
+import { selfSignPriceLabel } from '@/lib/self-sign';
 
 export const metadata = { title: 'Review' };
 
@@ -43,13 +45,21 @@ export default async function ReviewStep({ params }: { params: Promise<{ id: str
     canSend && liveSending
       ? await getSendQuote(db(), { userId: data.user.id }, doc.workspaceId)
       : null;
-  const liveNote = quote
-    ? quote.balances.unlimited
-      ? 'Free to send. This workspace has unlimited signing.'
-      : quote.balances.available > 0
-        ? `Uses 1 credit. Your workspace has ${quote.balances.available} available.`
-        : `You have no credits. After you press send you can pay ${formatMoney(quote.price.amountCents, quote.price.currency)} for this request${quote.canBuy ? '' : ' (a workspace owner or admin must pay)'}. Nothing is emailed until payment is confirmed.`
-    : null;
+  // Sign it yourself: you are the only signer. A flat price per document; no credit is used.
+  const selfSign = isSelfSignRecipients(recipients, data.user.email);
+  const selfPrice = selfSign ? await selfSignPriceLabel() : null;
+  const liveNote =
+    quote && selfSign
+      ? quote.balances.unlimited
+        ? 'Free: this workspace has unlimited signing. You sign straight away.'
+        : `${selfPrice} for this document, paid at checkout. You sign straight after. No credit is used.`
+      : quote
+        ? quote.balances.unlimited
+          ? 'Free to send. This workspace has unlimited signing.'
+          : quote.balances.available > 0
+            ? `Uses 1 credit. Your workspace has ${quote.balances.available} available.`
+            : `You have no credits. After you press send you can pay ${formatMoney(quote.price.amountCents, quote.price.currency)} for this request${quote.canBuy ? '' : ' (a workspace owner or admin must pay)'}. Nothing is emailed until payment is confirmed.`
+        : null;
 
   const edit = (step: string) => (
     <Link
@@ -178,6 +188,7 @@ export default async function ReviewStep({ params }: { params: Promise<{ id: str
               ) : null}
             </p>
             <ReviewActions
+              selfSign={selfSign}
               documentId={id}
               canEdit={data.canEdit}
               ready={issues.length === 0}

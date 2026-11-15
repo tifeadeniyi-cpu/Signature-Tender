@@ -90,7 +90,8 @@ test.describe('Product page', () => {
     await page.goto('/product');
     await page.getByRole('button', { name: 'Open menu' }).click();
     const menu = page.getByRole('dialog', { name: 'Menu' });
-    await expect(menu.getByRole('link', { name: 'API documentation' })).toBeVisible();
+    await expect(menu.getByRole('link', { name: 'Get your documents' })).toBeVisible();
+    await expect(menu.getByRole('link', { name: 'API documentation' })).toHaveCount(0);
     await expect(menu.getByRole('link', { name: 'Product' })).toHaveAttribute('aria-current', 'page');
     await page.keyboard.press('Escape');
     await expect(menu).toBeHidden();

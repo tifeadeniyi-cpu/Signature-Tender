@@ -70,7 +70,10 @@ export default async function DevelopersPage({
           title="API keys"
           description="Keys let your own software use Signature Tender. A key acts as you, limited to its scopes and to this workspace. Treat it like a password."
           action={
-            <Link href="/developers" className="text-sm font-semibold text-primary hover:underline">
+            <Link
+              href="/app/api-docs"
+              className="text-sm font-semibold text-primary hover:underline"
+            >
               API documentation
             </Link>
           }

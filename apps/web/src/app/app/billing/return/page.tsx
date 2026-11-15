@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { CircleCheck, Clock, CircleAlert } from 'lucide-react';
 import { formatMoney, getCheckoutStatus } from '@st/core';
 import { db } from '@/lib/db';
@@ -29,6 +30,13 @@ export default async function CheckoutReturn({
   const paid =
     status && ['paid', 'partially_refunded', 'refunded', 'disputed'].includes(status.status);
   const failed = status && ['failed', 'expired'].includes(status.status);
+  // Sign it yourself: once paid and ready, go straight to signing.
+  const selfReady =
+    paid &&
+    status.selfSign &&
+    status.documentId &&
+    (status.requestStatus === 'sent' || status.requestStatus === 'in_progress');
+  if (selfReady) redirect(`/app/documents/${status.documentId}/sign-now`);
 
   return (
     <div className="mx-auto max-w-xl py-8">
@@ -48,12 +56,15 @@ export default async function CheckoutReturn({
             <p className="mt-2 text-sm">
               {status.kind === 'subscription'
                 ? 'Your plan is active. Your monthly requests appear as soon as Stripe sends the first invoice.'
-                : status.kind === 'request'
-                  ? status.requestStatus === 'sent' || status.requestStatus === 'in_progress'
-                    ? 'Your request has been sent and recipients have been emailed.'
-                    : 'Your credit is ready. Open the document to send it.'
-                  : `${status.credits} ${status.credits === 1 ? 'credit has' : 'credits have'} been added to your workspace.`}
+                : status.kind === 'request' && status.selfSign
+                  ? 'Getting your document ready to sign…'
+                  : status.kind === 'request'
+                    ? status.requestStatus === 'sent' || status.requestStatus === 'in_progress'
+                      ? 'Your request has been sent and recipients have been emailed.'
+                      : 'Your credit is ready. Open the document to send it.'
+                    : `${status.credits} ${status.credits === 1 ? 'credit has' : 'credits have'} been added to your workspace.`}
             </p>
+            {status.kind === 'request' && status.selfSign ? <AutoRefresh /> : null}
           </>
         ) : failed ? (
           <>
