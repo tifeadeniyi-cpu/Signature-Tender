@@ -334,6 +334,21 @@ Clicking a row, a document name or its View link on `/app/documents` opens a rig
 
 - Actions the backend does not support yet are not shown in the drawer. They are planned in Phase 10 below.
 
+## Documents Kanban board: Done
+
+A Kanban view on the Documents page, next to the list. The Kanban / List switch is remembered per browser (cookie `st_docs_view`); the list stays the default.
+
+- **Columns come from the real status.** Each document sits in one column, based on its latest signing request: Drafts (no request yet, or waiting for payment or dispatch), Sent (`sent`, nobody has opened it), In Progress (`in_progress`, `awaiting_approval`, `finalization_failed`), Completed, Declined / Expired (one column; each card keeps its own status), and Cancelled (its own column, collapsed by default). There is no second status field: `loadBoard` in `packages/core/src/board.ts` maps the canonical status to a column in SQL.
+- **Nothing on the board changes a status.** Dragging a card to another column only shows "Document status updates automatically based on signing activity." with a next step. "Add document" appears only in Drafts.
+- **Cards** show the type, reference, recipients (initials, with signed and declined marked), the date that matters for the column, the due date while open, and for In Progress "2 of 3 signed" with a progress bar (required signers completed / total required signers).
+- **Card menu** (portal, so columns never clip it; arrow keys, Home, End, Escape): actions differ by column and are shown only when the document page's own permission rules allow them. Reminders and archiving run in place; cancelling opens the existing drawer, where the reason is asked for. Completed cards offer the complete package, the signed agreement only, and the Certificate of Completion (opens in the browser via `?view=1`).
+- **Clicking a card** opens the existing details drawer.
+- **Filters** are shared with the list and kept in the address bar: debounced search (title, reference, recipient name or email), recipient (all, assigned to me, sent by me, a specific recipient), date range on last activity (7, 30, 90 days, this year, custom), type, owner, and sort (within each column, stable on ties). Status cards above the board focus one column.
+- **Large workspaces:** counts are filtered totals from one grouped query; each column loads 15 cards and pages with "Load more".
+- **Live updates:** the board re-reads every 30 seconds while the tab is visible, when the tab regains focus and when the drawer closes, never while a menu or the drawer is open. A card that changes column is announced to screen readers.
+- Columns collapse one at a time or all at once (cookie `st_board_collapsed`). On phones the columns swipe sideways, with chips to jump to a status.
+- Tests: `packages/core/test/library.test.ts` (board grouping, counts, filters, paging, access) and `apps/web/e2e/documents-board.spec.ts`.
+
 ## Phase 10: Document management actions: Planned
 
 Adds the actions left out of the documents drawer. Each one appears in the drawer only when the server allows it, and every change is recorded in the evidence or audit log.
@@ -348,6 +363,11 @@ Adds the actions left out of the documents drawer. Each one appears in the drawe
 | Tags and folders            | Overview summary, list filters | Workspace-level folders and tags with library filters. Changing them never changes a sent or completed document and is recorded in the audit log.                                                   |
 | Supporting attachments      | Files tab                      | Extra files added to a draft for recipients to read. They can be replaced or deleted only while the document is a draft and are locked once it is sent.                                             |
 | First-page thumbnail        | Overview preview card          | Page 1 rendered to an image when a PDF is uploaded, served through the same access checks as the file. Replaces the drawn page.                                                                     |
+| Board: folders on cards     | Kanban cards, header           | Once folders exist, cards show the folder in place of the document type, and a New Folder button joins the header.                                                                                  |
+| Board: Sign a Document      | Documents header               | A flow for signing your own document without sending it. The header button appears once the flow exists.                                                                                            |
+| Board: rename and duplicate | Draft card menu                | Rename a draft and duplicate as a new request, through the same rules as Duplicate a document.                                                                                                      |
+| Board: bulk actions         | Kanban, multi-select           | Select several cards for safe bulk actions only (archive closed documents, remind open requests). Never a bulk status change.                                                                       |
+| Board: manual card order    | Kanban columns                 | Drag to reorder within a column, stored per user apart from status, with a keyboard alternative.                                                                                                    |
 
 ### Tests to add
 
