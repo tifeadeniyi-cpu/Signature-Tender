@@ -52,7 +52,31 @@ export function signingEventRef(
 import { consumeHold, reserveCredit, restoreOnCancel } from './billing';
 import { enqueueCompletionNotifications } from './notifications';
 
-type Meta = { ipAddress?: string | null; userAgent?: string | null };
+type Meta = {
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  /** Time zone of the request's IP address, from the hosting edge (used if the device sends none). */
+  ipTimeZone?: string | null;
+};
+
+/** A real IANA zone name, or null. Unlike validTimeZone, never falls back to UTC. */
+export function ianaZoneOrNull(tz: string | null | undefined): string | null {
+  if (!tz || tz.length > 64 || !/^[A-Za-z_]+(?:\/[A-Za-z0-9_+-]+)*$|^UTC$/.test(tz)) return null;
+  try {
+    return new Intl.DateTimeFormat('en-US', { timeZone: tz }).resolvedOptions().timeZone;
+  } catch {
+    return null;
+  }
+}
+
+/** The signer's zone: what their device reported, else the zone of their IP address. */
+export function signerTimeZone(device: string | null | undefined, ip: string | null | undefined) {
+  const d = ianaZoneOrNull(device);
+  if (d) return { timeZone: d, source: 'device' as const };
+  const i = ianaZoneOrNull(ip);
+  if (i) return { timeZone: i, source: 'ip' as const };
+  return null;
+}
 type RequestRow = typeof schema.signingRequests.$inferSelect;
 type RecipientRow = typeof schema.requestRecipients.$inferSelect;
 export type RequestStatus = RequestRow['status'];
@@ -845,6 +869,8 @@ export interface SignerView {
   canDownloadSigned: boolean;
   /** When this recipient completed their part, if they have. */
   signedAt: Date | null;
+  /** The signer's recorded time zone, once they have signed. */
+  signerTimeZone: string | null;
   /** Every acting recipient has completed. The signed copy may still be in preparation. */
   allPartiesDone: boolean;
 }
@@ -892,6 +918,7 @@ function toView(
     canDownloadSigned:
       request.status === 'completed' && settings.allowDownload && Boolean(request.signedFileId),
     signedAt: r.signedAt,
+    signerTimeZone: r.timeZone ?? null,
     allPartiesDone: request.status === 'completed' || allPartiesDone,
   };
 }
@@ -1568,6 +1595,8 @@ const completeSchema = z.object({
   intent: z.literal(true, { message: 'Confirm that you intend to sign.' }),
   /** The version the signer reviewed; a mismatch means the document changed under them. */
   documentVersion: z.string().length(64).optional(),
+  /** The signer's device time zone (Intl), for their signing time on the stamp. */
+  timeZone: z.string().max(64).optional(),
   values: z
     .array(
       z.object({
@@ -1657,7 +1686,14 @@ export async function completeSigning(
       if (!fields.some((f) => f.id === v.fieldId))
         throw new AppError('invalid', 'A value was sent for a field that is not yours.');
     const now = new Date();
-    const signedDate = now.toISOString().slice(0, 10);
+    const zone = signerTimeZone(data.timeZone, meta.ipTimeZone);
+    // "Date signed" is the signer's own calendar date, not the server's.
+    const signedDate = new Intl.DateTimeFormat('en-CA', {
+      timeZone: zone?.timeZone ?? 'UTC',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(now);
     const settings = documentSettingsSchema.parse(request.settings);
 
     for (const f of fields) {
@@ -1698,6 +1734,8 @@ export async function completeSigning(
         signedAt: now,
         signedIp: meta.ipAddress ?? null,
         signedUserAgent: meta.userAgent ?? null,
+        timeZone: zone?.timeZone ?? null,
+        timeZoneSource: zone?.source ?? null,
         // The verified session is kept until it expires (SESSION_HOURS), so the signer can open
         // the completed document without a second code. Signing actions still refuse a signed
         // recipient, so it grants read access only.
@@ -1723,8 +1761,11 @@ export async function completeSigning(
         ),
         consentedAt: recipient.consentedAt.toISOString(),
         sourceSha256: request.sourceSha256,
+        timeZone: zone?.timeZone ?? null,
+        timeZoneSource: zone?.source ?? null,
       },
-      ...meta,
+      ipAddress: meta.ipAddress,
+      userAgent: meta.userAgent,
     });
 
     const all = await tx
@@ -1908,7 +1949,8 @@ export async function finalizeRequest(
                   name: r.name,
                   role: r.role,
                   signedAt: r.signedAt,
-                  timeZone: block.timeZone,
+                  // Each signer's own zone when known; older signings keep the request's zone.
+                  timeZone: r.timeZone ?? block.timeZone,
                   format: block.format,
                 }
               : null,

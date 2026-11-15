@@ -31,6 +31,28 @@ const fmtTime = new Intl.DateTimeFormat('en-US', {
   timeZone: 'UTC',
 });
 
+/** The signer's completion time in their own time zone (UTC if it was not recorded). */
+function signedTime(at: Date, zone: string | null) {
+  try {
+    return new Intl.DateTimeFormat('en-US', {
+      dateStyle: 'long',
+      timeStyle: 'short',
+      timeZone: zone ?? 'UTC',
+    })
+      .format(at)
+      .concat(' ', zoneLabel(at, zone ?? 'UTC'));
+  } catch {
+    return `${fmtTime.format(at)} UTC`;
+  }
+}
+function zoneLabel(at: Date, zone: string) {
+  return (
+    new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'short' })
+      .formatToParts(at)
+      .find((p) => p.type === 'timeZoneName')?.value ?? zone
+  );
+}
+
 function Shell({ children, test }: { children: React.ReactNode; test?: boolean }) {
   return (
     <div className="mx-auto w-full max-w-xl px-4 py-8">
@@ -285,7 +307,7 @@ function Success({ view, token }: { view: SignerView; token: string }) {
         {view.signedAt ? (
           <>
             <dt>Completed</dt>
-            <dd className="text-heading">{fmtTime.format(view.signedAt)} UTC</dd>
+            <dd className="text-heading">{signedTime(view.signedAt, view.signerTimeZone)}</dd>
           </>
         ) : null}
         <dt>Status</dt>
