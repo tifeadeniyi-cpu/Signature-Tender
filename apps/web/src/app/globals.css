@@ -81,23 +81,3 @@
   }
 }
 
-/* The spec's burgundy palette (Primary Burgundy, Wine, Rose Gold, Blush, Ivory, Slate), scoped to
-   the recipient completed-document, claim and My Documents pages. Redefining the tokens here makes
-   every utility inside (bg-primary, text-heading, ...) use burgundy without touching other pages. */
-.brand-burgundy {
-  --color-primary: #5b0a1c;
-  --color-primary-hover: #7f1d3a;
-  --color-primary-dark: #430515;
-  --color-primary-surface: #f6e8ec;
-  --color-rose-gold: #e6b8a7;
-  --color-blush: #f9e4e8;
-  --color-ivory: #fff9f7;
-  --color-slate-text: #4b5563;
-  --color-heading: #270f17;
-  --color-border: #e9dde0;
-  --shadow-card: 0 1px 2px rgb(39 15 23 / 0.04), 0 4px 16px rgb(39 15 23 / 0.06);
-  color: var(--color-slate-text);
-}
-.brand-burgundy :focus-visible {
-  outline-color: #7f1d3a;
-}

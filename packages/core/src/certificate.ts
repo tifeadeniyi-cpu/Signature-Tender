@@ -35,6 +35,7 @@ export interface EvidenceRecipient {
   authMethod: string;
   authenticatedAt: Date | null;
   signedAt: Date | null;
+  timeZone?: string | null;
 }
 
 export interface EvidenceSignature {
@@ -80,6 +81,7 @@ export function certificateSigners(
         doneAt: r.signedAt!,
         statusLabel: DONE_LABEL[r.role] ?? 'Completed',
         eventRef: eventRefOf(r.id),
+        timeZone: r.timeZone ?? null,
       };
     });
 }

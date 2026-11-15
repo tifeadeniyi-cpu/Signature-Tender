@@ -37,7 +37,9 @@ async function checkout(input: CheckoutInput, returnPath: string): Promise<Billi
     const plan = await beginCheckout(db(), actor, workspaceId, input);
     try {
       let customer = plan.customerId;
-      if (!customer) {
+      // Someone paying for their own self-signing without billing access: no workspace customer
+      // is created for them; Stripe takes their email for the receipt.
+      if (!customer && plan.canLinkCustomer) {
         const c = await stripe().customers.create(
           {
             name: plan.workspaceName,
@@ -54,7 +56,7 @@ async function checkout(input: CheckoutInput, returnPath: string): Promise<Billi
       const session = await stripe().checkout.sessions.create(
         {
           mode: plan.mode,
-          customer,
+          ...(customer ? { customer } : { customer_email: plan.customerEmail || undefined }),
           client_reference_id: plan.paymentId,
           line_items: [
             {
@@ -171,6 +173,11 @@ export async function saveCardAction(
     return { ok: false, message: 'We could not open Stripe. Please try again.' };
   }
   redirect(url);
+}
+
+/** Opens Stripe Checkout for one request straight away (used right after "Sign it yourself"). */
+export async function startRequestCheckout(requestId: string): Promise<BillingActionState> {
+  return checkout({ kind: 'request', requestId }, '/app/documents');
 }
 
 export async function payForRequestAction(

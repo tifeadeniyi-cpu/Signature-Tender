@@ -3,6 +3,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { schema, withActor, type Database, type ActorContext } from '@st/db';
 import { AppError } from './errors';
 import { recordAudit } from './audit';
+import { CONNECTORS } from './connectors/registry';
 import { createApiKey, revokeApiKey, type ApiScope } from './api';
 import {
   createSlackEndpoint,
@@ -15,14 +16,13 @@ import {
 type Meta = { ipAddress?: string | null; userAgent?: string | null };
 
 /**
- * The integrations catalogue. Only entries with `available: true` can be connected; the rest are
- * listed so people can see what is planned, and are labelled as not available. Nothing here is
- * shown as working unless the connection code exists (spec Part 22).
+ * Legacy shape of the catalogue, used by the Phase 7 Integrations page. The catalogue itself lives in
+ * connectors/registry.ts; only partner and Slack connectors are connected through this file.
  */
 export interface IntegrationInfo {
   key: string;
   name: string;
-  category: 'Partner apps' | 'Storage' | 'Productivity' | 'Communication' | 'CRM' | 'Payments';
+  category: string;
   description: string;
   available: boolean;
   /** `api`: the partner calls our API with a key. `slack`: we post messages to a Slack webhook. */
@@ -40,101 +40,21 @@ const PARTNER_SCOPES: ApiScope[] = [
   'embedded:sign',
 ];
 
-export const INTEGRATIONS: IntegrationInfo[] = [
-  {
-    key: 'beam_artist',
-    name: 'Beam Artist',
-    category: 'Partner apps',
-    description:
-      'Send booking agreements and contracts for signature from Beam Artist and get status back by webhook.',
-    available: true,
-    kind: 'api',
-    scopes: PARTNER_SCOPES,
-  },
-  {
-    key: 'jectstack',
-    name: 'Jectstack',
-    category: 'Partner apps',
-    description:
-      'Send project agreements for signature from Jectstack and keep a reference to the signed record.',
-    available: true,
-    kind: 'api',
-    scopes: PARTNER_SCOPES,
-  },
-  {
-    key: 'google_workspace',
-    name: 'Google Workspace',
-    category: 'Productivity',
-    description: 'Sign in and contacts from Google Workspace.',
-    available: false,
-  },
-  {
-    key: 'google_drive',
-    name: 'Google Drive',
-    category: 'Storage',
-    description: 'Import documents and save signed copies to Drive.',
-    available: false,
-  },
-  {
-    key: 'microsoft_365',
-    name: 'Microsoft 365',
-    category: 'Productivity',
-    description: 'Sign in and contacts from Microsoft 365.',
-    available: false,
-  },
-  {
-    key: 'onedrive',
-    name: 'OneDrive',
-    category: 'Storage',
-    description: 'Import documents and save signed copies to OneDrive.',
-    available: false,
-  },
-  {
-    key: 'dropbox',
-    name: 'Dropbox',
-    category: 'Storage',
-    description: 'Import documents and save signed copies to Dropbox.',
-    available: false,
-  },
-  {
-    key: 'box',
-    name: 'Box',
-    category: 'Storage',
-    description: 'Import documents and save signed copies to Box.',
-    available: false,
-  },
-  {
-    key: 'slack',
-    name: 'Slack',
-    category: 'Communication',
-    description:
-      'Post to a Slack channel when documents are sent, signed, completed, declined, expired or cancelled. Uses a Slack incoming webhook; messages carry the document title and a link, never its contents.',
-    available: true,
-    kind: 'slack',
-  },
-  {
-    key: 'salesforce',
-    name: 'Salesforce',
-    category: 'CRM',
-    description: 'Send agreements from Salesforce records.',
-    available: false,
-  },
-  {
-    key: 'jira',
-    name: 'Jira',
-    category: 'Productivity',
-    description: 'Link signing requests to Jira issues.',
-    available: false,
-  },
-  {
-    key: 'stripe',
-    name: 'Stripe',
-    category: 'Payments',
-    description: 'Collect payment from recipients as part of signing.',
-    available: false,
-    note: 'Signature Tender uses Stripe for its own billing. Connecting your own Stripe account is not available yet.',
-  },
-];
+export const INTEGRATIONS: IntegrationInfo[] = CONNECTORS.map((c) => ({
+  key: c.key,
+  name: c.name,
+  category: c.category,
+  description: c.description,
+  available:
+    c.implemented && (c.auth.type === 'partner_api_key' || c.auth.type === 'slack_webhook'),
+  kind:
+    c.auth.type === 'partner_api_key'
+      ? 'api'
+      : c.auth.type === 'slack_webhook'
+        ? 'slack'
+        : undefined,
+  scopes: c.auth.type === 'partner_api_key' ? PARTNER_SCOPES : undefined,
+}));
 
 export function getIntegration(key: string) {
   return INTEGRATIONS.find((i) => i.key === key);
@@ -164,7 +84,12 @@ export async function listConnections(db: Database, actor: ActorContext, workspa
         schema.webhookEndpoints,
         eq(schema.webhookEndpoints.id, schema.integrationConnections.webhookEndpointId),
       )
-      .where(eq(schema.integrationConnections.workspaceId, workspaceId)),
+      .where(
+        and(
+          eq(schema.integrationConnections.workspaceId, workspaceId),
+          sql`${schema.integrationConnections.externalAccountId} is null`,
+        ),
+      ),
   );
 }
 
@@ -196,6 +121,7 @@ async function saveConnection(
       })
       .onConflictDoUpdate({
         target: [schema.integrationConnections.workspaceId, schema.integrationConnections.provider],
+        targetWhere: sql`${schema.integrationConnections.externalAccountId} is null`,
         set: { status: 'active', apiKeyId, webhookEndpointId, updatedAt: new Date() },
       });
     await recordAudit(tx, {
@@ -239,6 +165,7 @@ export async function connectIntegration(
         and(
           eq(schema.integrationConnections.workspaceId, workspaceId),
           eq(schema.integrationConnections.provider, info.key),
+          sql`${schema.integrationConnections.externalAccountId} is null`,
         ),
       );
     return c;
@@ -299,6 +226,7 @@ export async function disconnectIntegration(
         and(
           eq(schema.integrationConnections.workspaceId, workspaceId),
           eq(schema.integrationConnections.provider, provider),
+          sql`${schema.integrationConnections.externalAccountId} is null`,
         ),
       );
     if (!c || c.status !== 'active')

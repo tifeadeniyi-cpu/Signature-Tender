@@ -42,6 +42,8 @@ async function dispatchPaid(requestId: string, dispatchAs: string) {
       { liveSendingEnabled: await liveSendingEnabled() },
       { userAgent: 'Stripe webhook' },
     );
+    // Sign it yourself: the sender opens signing from the return page; no email to themselves.
+    if (sent.selfSign) return;
     await sendInvitations(sent.invitations, {
       title: sent.title,
       senderName: sent.senderName,
