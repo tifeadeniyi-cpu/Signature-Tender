@@ -1,6 +1,7 @@
 import { MarketingHeader, MarketingFooter } from '@/components/marketing';
 import { JsonLd } from '@/components/json-ld';
 import { organizationJsonLd } from '@/lib/seo';
+import { VisitBeacon } from '@/components/analytics/measure';
 
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -9,6 +10,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
       <MarketingHeader />
       <main id="main">{children}</main>
       <MarketingFooter />
+      <VisitBeacon />
     </>
   );
 }

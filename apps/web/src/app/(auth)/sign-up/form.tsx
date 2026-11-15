@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/feedback';
 import { SocialButtons, type SocialProviderId } from '@/components/auth/social-buttons';
 import { applyReferralCodeAction } from './actions';
+import { withSignupSource } from '@/components/analytics/measure';
 
 export function SignUpForm({
   defaultEmail,
@@ -76,7 +77,7 @@ export function SignUpForm({
             name: String(fd.get('name')).trim(),
             email,
             password: String(fd.get('password')),
-            callbackURL: nextFromLocation() ?? '/onboarding',
+            callbackURL: withSignupSource(nextFromLocation() ?? '/onboarding'),
           });
           setBusy(false);
           if (err) return setError(err.message || 'Could not create your account.');

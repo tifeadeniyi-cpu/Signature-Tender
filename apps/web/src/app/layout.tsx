@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { DM_Serif_Display, Inter } from 'next/font/google';
 import { headers } from 'next/headers';
+import { SignupSourceRecorder } from '@/components/analytics/measure';
 import './globals.css';
 import { BRAND_ICONS } from '@/lib/brand-assets';
 import { OG_IMAGES, SITE_NAME, siteUrl } from '@/lib/seo';
@@ -76,6 +77,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           Skip to content
         </a>
         {children}
+        <SignupSourceRecorder />
       </body>
     </html>
   );

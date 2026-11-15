@@ -2,6 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { BRAND_ASSETS } from '@/lib/brand-assets';
+import { VisitBeacon } from '@/components/analytics/measure';
 
 // Password reset, two-step and email-check screens stay out of search. Sign-in and sign-up opt in.
 export const metadata: Metadata = { robots: { index: false, follow: true } };
@@ -33,6 +34,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           Privacy
         </Link>
       </p>
+      <VisitBeacon />
     </div>
   );
 }

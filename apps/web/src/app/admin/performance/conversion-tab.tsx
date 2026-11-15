@@ -6,12 +6,13 @@ import {
   Building2,
   CircleSlash,
   RotateCcw,
+  MousePointerClick,
 } from 'lucide-react';
-import { getPerfConversion, rate } from '@st/core';
+import { getPerfConversion, getPerfMeasurement, ppChange, rate } from '@st/core';
 import { db } from '@/lib/db';
 import { Kpi } from '@/components/admin/kpi';
 import { Funnel, NotTracked, Panel } from '@/components/admin/charts';
-import { fmtTime, nf, pct } from '../sections';
+import { Stat, TrackedSince, fmtTime, nf, pct } from '../sections';
 import type { TabProps } from './page';
 
 const monthLabel = (iso: string) =>
@@ -19,8 +20,16 @@ const monthLabel = (iso: string) =>
     new Date(iso),
   );
 
-export async function ConversionTab({ p, userId }: TabProps) {
-  const c = await getPerfConversion(db(), { userId }, p);
+export async function ConversionTab({ p, userId, cmp }: TabProps) {
+  const [c, m] = await Promise.all([
+    getPerfConversion(db(), { userId }, p),
+    getPerfMeasurement(db(), { userId }, p),
+  ]);
+  const v = m.visits;
+  const rn = m.renewals;
+  const renewRate = rate(rn.renewed, rn.due);
+  const renewRateCmp = rn.due_cmp ? rate(rn.renewed_cmp ?? 0, rn.due_cmp) : null;
+  const renewChange = ppChange(renewRate, renewRateCmp);
   const fu = c.funnel;
   const sf = c.studio_funnel;
   const pf = c.paid_funnel;
@@ -38,9 +47,24 @@ export async function ConversionTab({ p, userId }: TabProps) {
         aria-label="Conversion numbers"
         className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4"
       >
-        <NotTracked
+        <Kpi
           label="Visitor-to-Registration"
-          reason="Website visits aren't counted, so there's no visitor base to divide by."
+          value={
+            !v.conv_visits
+              ? 'No visits yet'
+              : v.conv_users > v.conv_visits
+                ? 'Not enough visits'
+                : pct(rate(v.conv_users, v.conv_visits))
+          }
+          icon={<MousePointerClick className="size-5" />}
+          change={null}
+          compareLabel={null}
+          sub={
+            v.conv_visits
+              ? `${nf(v.conv_users)} accounts from ${nf(v.conv_visits)} visits`
+              : 'Visit counting has just started'
+          }
+          info="Accounts created ÷ website visits, both counted from the later of the period start and the day visit counting began. Visits from browsers that ask not to be tracked aren't counted, so this rate runs slightly high. Not shown while there are more accounts than counted visits (for example, just after counting began)."
         />
         <Kpi
           label="Registration-to-Activation"
@@ -131,7 +155,10 @@ export async function ConversionTab({ p, userId }: TabProps) {
           <Funnel
             caption="Sign-up conversion funnel"
             steps={[
-              { label: 'Website visit', value: null },
+              {
+                label: 'Website visit',
+                value: v.since && new Date(v.since) <= p.from ? v.total : null,
+              },
               { label: 'Registered', value: fu.registered },
               { label: 'Joined a workspace', value: fu.workspace },
               { label: 'Created a document', value: fu.document_created },
@@ -265,7 +292,7 @@ export async function ConversionTab({ p, userId }: TabProps) {
       <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
         <Panel
           title="Subscriptions now"
-          info="Current state from billing; history isn't kept, so this is not limited to the selected period."
+          info="Current state from billing, not limited to the selected period. Changes during the period are under Subscription Changes."
         >
           <dl className="grid grid-cols-3 gap-2 text-sm">
             {[
@@ -280,18 +307,44 @@ export async function ConversionTab({ p, userId }: TabProps) {
             ))}
           </dl>
         </Panel>
-        <NotTracked
-          label="Renewal Rate"
-          reason="Renewals aren't stored separately from the current subscription state."
-        />
+        <Panel
+          title="Renewal Rate"
+          info="Renewals due = subscription renewal invoices first raised in the period. Renewed = paid, including after a failed first attempt. Recorded from Stripe as it happens; earlier paid renewals were carried over from invoice history."
+        >
+          <TrackedSince since={rn.since} what="Subscription events" />
+          <dl className="grid grid-cols-2 gap-2">
+            <Stat
+              label="Renewal rate"
+              value={rn.due ? pct(renewRate) : 'None due'}
+              note={
+                renewChange != null && cmp
+                  ? `${renewChange > 0 ? '+' : ''}${renewChange.toFixed(1)} pp vs. ${cmp.toLowerCase()}`
+                  : `${nf(rn.renewed)} of ${nf(rn.due)} renewed`
+              }
+            />
+            <Stat
+              label="Failed first try"
+              value={nf(rn.failed)}
+              note={`${nf(rn.recovered)} paid later`}
+            />
+          </dl>
+        </Panel>
         <NotTracked
           label="Re-engagement"
           reason="Win-back campaigns aren't tracked; see Recovered Customers for organizations that came back."
         />
-        <NotTracked
-          label="Visitor Funnel Step"
-          reason="Website visits will need privacy-friendly page analytics before they can join the funnel."
-        />
+        <Panel
+          title="Subscription Changes"
+          info="Subscription lifecycle events in the selected period, recorded from Stripe as they happen."
+        >
+          <TrackedSince since={rn.since} what="Subscription events" />
+          <dl className="grid grid-cols-2 gap-2">
+            <Stat label="Started" value={nf(rn.started)} />
+            <Stat label="Ended" value={nf(rn.ended)} />
+            <Stat label="Cancellation requested" value={nf(rn.cancel_requested)} />
+            <Stat label="Cancellation withdrawn" value={nf(rn.cancel_withdrawn)} />
+          </dl>
+        </Panel>
       </div>
     </>
   );

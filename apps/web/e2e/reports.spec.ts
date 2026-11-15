@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import postgres from 'postgres';
 import { signUpWithWorkspace } from './auth';
+import { latestLinkFor } from './mail';
 
 const OWNER =
   process.env.TEST_DATABASE_URL_OWNER ??
@@ -189,6 +190,22 @@ test('Platform Performance: every tab works for the founder, and roles still lim
     // The founder sees the sanitized failure list.
     await expect(page.getByRole('heading', { name: 'Processing Failures' })).toBeVisible();
 
+    // Privacy-first measures replace the "not tracked" tiles.
+    await tabs.getByRole('link', { name: 'Growth' }).click();
+    await expect(page.getByRole('heading', { name: 'Website Visits' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Acquisition Sources' })).toBeVisible();
+    await page.getByRole('link', { name: 'Landing pages' }).click();
+    await expect(page).toHaveURL(/acq=pages/);
+    await tabs.getByRole('link', { name: 'Engagement' }).click();
+    await expect(page.getByRole('heading', { name: 'Time in the App' })).toBeVisible();
+    await tabs.getByRole('link', { name: 'Conversion & Retention' }).click();
+    await expect(page.getByRole('heading', { name: 'Renewal Rate' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^Subscription Changes/ })).toBeVisible();
+    const conv = await (
+      await page.request.get('/admin/performance/export?tab=conversion&range=this_year')
+    ).text();
+    expect(conv).toContain('Renewals due');
+
     // Exports keep the tab and filters and are logged; no emails in the file.
     const csv = await (
       await page.request.get('/admin/performance/export?tab=delivery&range=this_year')
@@ -216,6 +233,74 @@ test('Platform Performance: every tab works for the founder, and roles still lim
     expect((await page.request.get('/admin/performance/export?tab=growth')).status()).toBe(404);
   } finally {
     await sql`delete from platform_admins where user_id = ${id}`;
+    await sql.end();
+  }
+});
+
+test('website visits and sign-up sources are counted as coarse categories only', async ({
+  page,
+}) => {
+  // A visit from a search engine adds one to the "pricing / search" count, and nothing else.
+  const sql = postgres(OWNER, { max: 1, onnotice: () => {} });
+  const count = async (page_: string, source: string) => {
+    const [r] = await sql<{ n: number }[]>`
+      select coalesce(sum(visits), 0)::int as n from site_visits_daily
+      where page = ${page_} and source = ${source}`;
+    return r!.n;
+  };
+  const start = await count('pricing', 'search');
+  const visit = page.waitForResponse((r) => r.url().endsWith('/api/t/visit'));
+  await page.goto('/pricing', { referer: 'https://www.google.com/search?q=private+words' });
+  await visit;
+  await expect.poll(() => count('pricing', 'search')).toBe(start + 1);
+
+  // Moving within the site or reloading doesn't add a visit.
+  let extra = 0;
+  page.on('request', (r) => {
+    if (r.url().endsWith('/api/t/visit')) extra += 1;
+  });
+  await page.reload();
+  await page.waitForLoadState('networkidle');
+  expect(extra).toBe(0);
+
+  // The endpoint ignores other sites and requests that ask not to be tracked.
+  const homeSearch = await count('home', 'search');
+  const cross = await page.request.post('/api/t/visit', {
+    headers: { origin: 'https://evil.example', 'sec-fetch-site': 'cross-site' },
+    data: { page: 'home', source: 'search' },
+  });
+  expect(cross.status()).toBe(204);
+  const gpc = await page.request.post('/api/t/visit', {
+    headers: { 'sec-fetch-site': 'same-origin', 'sec-gpc': '1' },
+    data: { page: 'home', source: 'search' },
+  });
+  expect(gpc.status()).toBe(204);
+  expect(await count('home', 'search')).toBe(homeSearch);
+
+  // Signing up from that kind of visit records the source category on the new account.
+  const email = `e2e-src-${Date.now()}@example.test`;
+  const second = page.waitForRequest((r) => r.url().endsWith('/api/t/visit'));
+  await page.goto('/sign-up', { referer: 'https://www.linkedin.com/feed/' });
+  await second;
+  await page.getByLabel('Full name').fill('Source Person');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill('correct-horse-battery-staple');
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page.getByRole('heading', { name: 'Check your email' })).toBeVisible();
+  const recorded = page.waitForRequest((r) => r.url().endsWith('/api/t/source'));
+  await page.goto(await latestLinkFor(email, 'Verify your email'));
+  await recorded;
+  await expect(page).not.toHaveURL(/st_src=/);
+  try {
+    await expect
+      .poll(async () => {
+        const rows = await sql<{ source: string }[]>`
+          select a.source from user_acquisition a join "user" u on u.id = a.user_id
+          where u.email = ${email}`;
+        return rows[0]?.source ?? null;
+      })
+      .toBe('social');
+  } finally {
     await sql.end();
   }
 });

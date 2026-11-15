@@ -44,7 +44,12 @@ test.describe('Product page', () => {
 
   test('demos work in the browser without saving anything', async ({ page }) => {
     const posts: string[] = [];
-    page.on('request', (r) => r.method() !== 'GET' && posts.push(r.url()));
+    // The anonymous visit counter (page group and source only) is the one expected post.
+    page.on('request', (r) => {
+      if (r.method() === 'GET') return;
+      if (r.url().endsWith('/api/t/visit')) expect(r.postData() ?? '').not.toContain('Casey');
+      else posts.push(r.url());
+    });
     await page.goto('/product');
     await page.getByRole('link', { name: 'Explore Features' }).click();
     await expect(page).toHaveURL(/#features$/);
