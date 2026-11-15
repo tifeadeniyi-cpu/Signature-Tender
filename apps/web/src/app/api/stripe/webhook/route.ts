@@ -40,6 +40,8 @@ async function dispatchPaid(requestId: string, dispatchAs: string) {
       { liveSendingEnabled: await liveSendingEnabled() },
       { userAgent: 'Stripe webhook' },
     );
+    // Sign it yourself: the sender opens signing from the return page; no email to themselves.
+    if (sent.selfSign) return;
     await sendInvitations(sent.invitations, {
       title: sent.title,
       senderName: sent.senderName,
@@ -76,14 +78,21 @@ async function studioCompleted(s: Stripe.Checkout.Session) {
   });
   if (out.action === 'refund_duplicate' && out.paymentIntentId) {
     await stripe().refunds.create(
-      { payment_intent: out.paymentIntentId, reason: 'duplicate', metadata: { st_purchase_id: out.purchaseId } },
+      {
+        payment_intent: out.paymentIntentId,
+        reason: 'duplicate',
+        metadata: { st_purchase_id: out.purchaseId },
+      },
       { idempotencyKey: `studio-duplicate-refund:${out.purchaseId}` },
     );
     return true;
   }
   if (out.action === 'refund_duplicate') return true;
   if (out.action === 'none') return out.reason !== 'unknown_session';
-  await recordStudioEvent(db(), 'purchase_completed', { userId: out.userId, designId: out.designId }).catch(() => undefined);
+  await recordStudioEvent(db(), 'purchase_completed', {
+    userId: out.userId,
+    designId: out.designId,
+  }).catch(() => undefined);
   try {
     await generateStudioAssets(db(), studioDeps(), out.purchaseId, await studioSettings());
   } catch (err) {
@@ -103,7 +112,8 @@ async function handle(event: Stripe.Event) {
       const out = await applyCheckoutCompleted(db(), checkoutFacts(event.data.object));
       if (out.action === 'dispatch') await dispatchPaid(out.requestId, out.dispatchAs);
       // Sessions without our metadata are matched by their id instead.
-      if (out.action === 'none' && out.reason === 'unknown_session') await studioCompleted(event.data.object);
+      if (out.action === 'none' && out.reason === 'unknown_session')
+        await studioCompleted(event.data.object);
       return;
     }
     case 'checkout.session.expired':

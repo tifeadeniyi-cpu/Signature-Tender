@@ -5,10 +5,16 @@ import { PageHeader } from '@/components/ui/page-header';
 import { PermissionDenied } from '@/components/ui/feedback';
 import { Stepper } from '@/components/documents/stepper';
 import { UploadForm } from './upload-form';
+import { selfSignPriceLabel } from '@/lib/self-sign';
 
 export const metadata = { title: 'New document' };
 
-export default async function NewDocumentPage() {
+export default async function NewDocumentPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ self?: string }>;
+}) {
+  const selfSign = (await searchParams).self === '1';
   const { membership } = await requireWorkspace();
   if (!hasPermission(membership.permissions, 'documents.create'))
     return <PermissionDenied what="create documents" />;
@@ -16,13 +22,18 @@ export default async function NewDocumentPage() {
   return (
     <div>
       <PageHeader
-        title="New document"
-        description="Upload a PDF. You'll add signers and place fields next."
+        title={selfSign ? 'Sign a document yourself' : 'New document'}
+        description={
+          selfSign
+            ? `Upload a PDF, place your signature and sign it now. ${await selfSignPriceLabel()} per document, with a Certificate of Completion. Nobody else is involved.`
+            : "Upload a PDF. You'll add signers and place fields next."
+        }
       />
       <Stepper current="document" />
       <UploadForm
         maxMb={maxMb}
         types={DOCUMENT_TYPES.map((t) => ({ value: t.value, label: t.label }))}
+        selfSign={selfSign}
       />
     </div>
   );

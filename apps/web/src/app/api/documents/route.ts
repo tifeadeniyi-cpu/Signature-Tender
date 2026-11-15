@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import { headers, cookies } from 'next/headers';
-import { createDocumentFromUpload, getConfigValue, listMyWorkspaces, AppError } from '@st/core';
+import {
+  createDocumentFromUpload,
+  getConfigValue,
+  listMyWorkspaces,
+  saveRecipients,
+  AppError,
+} from '@st/core';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { storage } from '@/lib/storage';
@@ -9,7 +15,10 @@ import { requestMeta, WORKSPACE_COOKIE } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 
-/** Multipart upload: file (PDF), title, documentType. Creates a draft document in the current workspace. */
+/**
+ * Multipart upload: file (PDF), title, documentType, and selfSign=1 for "Sign it yourself".
+ * Creates a draft document in the current workspace.
+ */
 export async function POST(req: Request) {
   try {
     const session = await auth().api.getSession({ headers: await headers() });
@@ -45,6 +54,27 @@ export async function POST(req: Request) {
       { maxBytes: maxMb * 1024 * 1024, maxPages },
       await requestMeta(),
     );
+    // Sign it yourself: you are the only signer, so the signers step is skipped.
+    if (form.get('selfSign') === '1')
+      await saveRecipients(
+        db(),
+        actor,
+        id,
+        {
+          signingOrderEnabled: false,
+          recipients: [
+            {
+              name: session.user.name || session.user.email,
+              email: session.user.email,
+              role: 'signer',
+              signingOrder: 1,
+              authMethod: 'email_link',
+            },
+          ],
+        },
+        { maxSigners: 5 },
+        await requestMeta(),
+      );
     return NextResponse.json({ id }, { status: 201 });
   } catch (err) {
     return apiError(err);

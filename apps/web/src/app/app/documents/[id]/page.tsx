@@ -12,6 +12,7 @@ import {
   getRequestBilling,
   formatMoney,
   getDocumentRecord,
+  isSelfSignRecipients,
 } from '@st/core';
 import { cn } from '@/lib/cn';
 import { ArchiveButton } from '@/components/documents/library-buttons';
@@ -75,10 +76,10 @@ export default async function DocumentPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ checkout?: string; tab?: string }>;
+  searchParams: Promise<{ checkout?: string; tab?: string; selfsign?: string }>;
 }) {
   const { id } = await params;
-  const { checkout, tab: rawTab } = await searchParams;
+  const { checkout, tab: rawTab, selfsign } = await searchParams;
   const tab: Tab = TABS.some(([t]) => t === rawTab) ? (rawTab as Tab) : 'overview';
   const { user, membership } = await requireWorkspace();
   const actor = { userId: user.id };
@@ -119,6 +120,10 @@ export default async function DocumentPage({
   const open = !['completed', 'declined', 'expired', 'cancelled'].includes(r.status);
   const needsPayment = r.status === 'awaiting_payment' || r.status === 'payment_processing';
   const billing = needsPayment ? await getRequestBilling(db(), actor, r.id) : null;
+  // Sign it yourself: your own document waiting for your signature.
+  const selfSign = r.sentBy === user.id && isSelfSignRecipients(recipients, user.email);
+  const awaitingMe =
+    selfSign && ['sent', 'in_progress'].includes(r.status) && recipients[0]?.status !== 'signed';
   const [paymentsOn, liveOn] = needsPayment
     ? await Promise.all([paymentsAvailable(), liveSendingEnabled()])
     : [false, false];
@@ -178,6 +183,29 @@ export default async function DocumentPage({
           <StatusBadge status={doc.document.status} requestStatus={r.status} isTest={r.isTest} />
         }
       />
+      {awaitingMe ? (
+        <Card className="mb-6 border-gold">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="font-display text-xl">Ready for your signature</h2>
+              <p className="mt-1 text-sm">
+                This document is paid for and waiting for you to sign it.
+              </p>
+            </div>
+            {/* A plain link: opening it issues a fresh signing link, so it is never prefetched. */}
+            <a href={`/app/documents/${id}/sign-now`} className={buttonClass('gold', 'md')}>
+              Sign now
+            </a>
+          </div>
+        </Card>
+      ) : null}
+      {selfsign ? (
+        <Alert tone={selfsign === 'conflict' ? 'info' : 'error'} className="mb-4">
+          {selfsign === 'conflict'
+            ? 'This document is not ready to sign yet, or it has already been signed.'
+            : 'Only the person who prepared this document can sign it here.'}
+        </Alert>
+      ) : null}
       {r.isTest ? (
         <Alert tone="warning" className="mb-4">
           This is a test request. It is free, marked TEST on every page and email, and is not for
@@ -197,6 +225,7 @@ export default async function DocumentPage({
           paymentsOn={paymentsOn}
           liveOn={liveOn}
           cancelled={checkout === 'cancelled'}
+          selfSign={billing.selfSign}
         />
       ) : null}
       {r.status === 'finalization_failed' ? (
