@@ -221,11 +221,11 @@ export function DeveloperAPISection() {
             </div>
             <div className="mt-8 flex flex-wrap gap-3">
               <TrackedLink
-                href="/developers"
+                href={`/sign-in?next=${encodeURIComponent('/app/api-docs')}`}
                 event="api_docs_clicked"
                 className="inline-flex h-12 items-center gap-2 rounded-xl bg-primary px-6 font-semibold text-white hover:bg-primary-hover"
               >
-                Explore API Documentation <ArrowRight className="size-4" aria-hidden />
+                Sign In for API Documentation <ArrowRight className="size-4" aria-hidden />
               </TrackedLink>
               <TrackedLink
                 href="#integrations"

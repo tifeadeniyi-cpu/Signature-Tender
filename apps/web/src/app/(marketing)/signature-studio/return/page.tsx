@@ -15,8 +15,9 @@ export const metadata = { title: 'Confirming payment', robots: { index: false } 
  */
 export default async function ReturnPage({ searchParams }: { searchParams: Promise<{ p?: string }> }) {
   const session = await getSession();
-  if (!session?.user.emailVerified) redirect('/sign-in');
   const { p } = await searchParams;
+  if (!session?.user.emailVerified)
+    redirect(p ? `/sign-in?next=${encodeURIComponent(`/signature-studio/return?p=${p}`)}` : '/sign-in');
   const status = p ? await getStudioCheckoutStatus(db(), session.user.id, p) : null;
   if (!status) notFound();
   if (status.status === 'paid') redirect(`/signature-studio/design/${status.designId}?new=1`);

@@ -13,6 +13,7 @@ import {
   Download,
   TimerOff,
   Eye,
+  PenLine,
 } from 'lucide-react';
 import {
   searchLibrary,
@@ -89,6 +90,9 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
             <>
               <ButtonLink href="/app/documents/new" variant="gold">
                 <Plus className="size-4" aria-hidden /> Send document
+              </ButtonLink>
+              <ButtonLink href="/app/documents/new?self=1" variant="secondary">
+                <PenLine className="size-4" aria-hidden /> Sign it yourself
               </ButtonLink>
               <ButtonLink href="/app/templates" variant="secondary">
                 <LayoutTemplate className="size-4" aria-hidden /> Templates

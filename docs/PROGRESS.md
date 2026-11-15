@@ -349,6 +349,17 @@ A Kanban view on the Documents page, next to the list. The Kanban / List switch 
 - Columns collapse one at a time or all at once (cookie `st_board_collapsed`). On phones the columns swipe sideways, with chips to jump to a status.
 - Tests: `packages/core/test/library.test.ts` (board grouping, counts, filters, paging, access) and `apps/web/e2e/documents-board.spec.ts`.
 
+## Sign it yourself ($0.99): Done
+
+For documents only you need to sign. **Sign it yourself** (Documents page, dashboard "Sign a Document" and "Upload & Sign") uploads the PDF, adds you as the only signer, skips the signers step, and after you place your fields takes you straight into signing. The completed document and Certificate of Completion are the same as any request.
+
+- A request is "self-signing" when its one recipient is a signer with the sender's own email (`isSelfSignRecipients`).
+- Price: a flat **$0.99** per document from config `billing.self_sign_price` (`{ amountCents, currency }`; minimum 50 cents), kept out of the prices table so it never appears as a credit pack.
+- It never buys or spends a credit: the request waits for its own Stripe payment (`priceCode: self_sign`, `credits: 0`), and once paid it is sent without a credit hold. Workspaces with unlimited signing and test requests are free.
+- After payment, the return page opens signing directly (`/app/documents/[id]/sign-now` issues a fresh link to the signed-in sender only). Nobody is emailed, including you. The document page shows **Sign now** while it waits for your signature.
+- Anyone who can create documents can pay for their own self-sign document; other request payments still need the billing permission.
+- Tests: `packages/core/test/self-sign.test.ts` (no credit used, $0.99 checkout, paid send, owner-only link, other requests unaffected); `apps/web/e2e/self-sign.spec.ts` (test mode) and `self-sign-paid.spec.ts` (Stripe stand-in).
+
 ## Mobile app (iOS and Android): Phase 1 done
 
 A native app in `apps/mobile` (Expo SDK 58, React Native, Expo Router), for senders and signers. It talks to the same server and account as the website; see `apps/mobile/README.md` for running, testing and shipping it.

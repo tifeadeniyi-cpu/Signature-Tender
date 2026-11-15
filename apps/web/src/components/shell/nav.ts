@@ -11,6 +11,7 @@ import {
   PenLine,
   Receipt,
   ChartColumn,
+  BookOpen,
   type LucideIcon,
 } from 'lucide-react';
 import type { PermissionKey } from '@st/core';
@@ -64,6 +65,7 @@ export const NAV_ITEMS: NavItem[] = [
     anyOf: ['documents.view_own', 'documents.view_all'],
   },
   { href: '/app/integrations', label: 'Integrations', icon: Plug },
+  { href: '/app/api-docs', label: 'API Docs', icon: BookOpen },
   { href: '/app/settings', label: 'Settings', icon: Settings },
 ];
 

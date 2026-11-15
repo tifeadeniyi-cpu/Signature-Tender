@@ -18,6 +18,7 @@ import {
   AppError,
 } from '@st/core';
 import { db } from '@/lib/db';
+import { paymentsAvailable } from '@/lib/billing';
 import { requireUser, requireWorkspace, requestMeta, WORKSPACE_COOKIE } from '@/lib/session';
 import { toFormError, type ActionState } from '@/lib/action-result';
 import { sendTeamInvitation } from '@/lib/team-mail';
@@ -50,6 +51,8 @@ export async function inviteAction(_prev: ActionState, fd: FormData): Promise<Ac
         expiresInDays: Number(str(fd, 'expiresInDays') || 7),
       },
       await requestMeta(),
+      // While payments are live, companies need a card on file to add people.
+      { cardRequired: await paymentsAvailable() },
     );
     await sendTeamInvitation(mail);
   }, `Invitation sent to ${email.trim().toLowerCase()}.`);

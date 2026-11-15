@@ -308,9 +308,7 @@ export function SigningWorkflowsSpotlight() {
           { label: 'Automatic reminders', soon: true },
         ]}
       />
-      <Cta href="/developers#endpoints" event="api_docs_clicked">
-        Explore Signing Workflows
-      </Cta>
+      <Cta href="#how-it-works">Explore Signing Workflows</Cta>
     </FeatureSpotlight>
   );
 }

@@ -22,7 +22,6 @@ const FOOTER: { title: string; links: [string, string][] }[] = [
   {
     title: 'Resources',
     links: [
-      ['API documentation', '/developers'],
       ['FAQ', '/product#faq'],
       ['Get your documents', '/retrieve'],
       ['Verify a certificate', '/verify'],

@@ -20,7 +20,7 @@ export default async function SignUpPage({
     <SignUpForm
       defaultEmail={email}
       claim={Boolean(next?.startsWith('/claim/'))}
-      studio={next === '/signature-studio/continue'}
+      studio={Boolean(next?.startsWith('/signature-studio/'))}
       providers={enabledSocialProviders()}
     />
   );
