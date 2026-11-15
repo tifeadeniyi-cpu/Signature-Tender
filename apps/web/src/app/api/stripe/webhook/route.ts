@@ -8,7 +8,9 @@ import {
   applyReversal,
   applySubscription,
   claimStripeEvent,
+  clearCardOnFile,
   finishStripeEvent,
+  recordCardOnFile,
   sendPaidRequest,
 } from '@st/core';
 import { db } from '@/lib/db';
@@ -101,10 +103,43 @@ async function studioCompleted(s: Stripe.Checkout.Session) {
   return true;
 }
 
+/**
+ * A company saved its card (setup-mode checkout). Recorded only for the workspace whose Stripe
+ * customer it is; the card also becomes the customer's default for invoices.
+ */
+async function cardSaved(s: Stripe.Checkout.Session) {
+  const workspaceId = s.metadata?.st_workspace_id;
+  const customerId = id(s.customer);
+  const setupId = id(s.setup_intent);
+  if (!workspaceId || !customerId || !setupId) return;
+  const si = await stripe().setupIntents.retrieve(setupId, { expand: ['payment_method'] });
+  const pm = typeof si.payment_method === 'object' ? si.payment_method : null;
+  if (si.status !== 'succeeded' || !pm) return;
+  const ok = await recordCardOnFile(db(), {
+    workspaceId,
+    customerId,
+    paymentMethodId: pm.id,
+    brand: pm.card?.brand ?? null,
+    last4: pm.card?.last4 ?? null,
+  });
+  if (ok)
+    await stripe().customers.update(customerId, {
+      invoice_settings: { default_payment_method: pm.id },
+    });
+}
+
 async function handle(event: Stripe.Event) {
   switch (event.type) {
+    case 'payment_method.detached':
+      await clearCardOnFile(db(), event.data.object.id);
+      return;
     case 'checkout.session.completed':
     case 'checkout.session.async_payment_succeeded': {
+      if (event.data.object.mode === 'setup') {
+        if (event.data.object.metadata?.st_purpose === 'card_on_file')
+          await cardSaved(event.data.object);
+        return;
+      }
       if (isStudio(event.data.object)) {
         await studioCompleted(event.data.object);
         return;
