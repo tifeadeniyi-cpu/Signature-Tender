@@ -19,10 +19,18 @@ page view is written to the audit log as `admin.viewed`.
 Staff are granted by hand with the database owner role. The app's own role cannot read or
 change the list.
 
+Each staff member has a role: `founder`, `finance`, `support`, `security`, `technical` or `analyst`.
+A grant without a role gives `analyst` (read-only analytics). What each role can open is listed on
+the Admin Access page and in `docs/founder-admin/architecture.md`.
+
 ```sql
 -- Grant (the person must already have a verified account)
-insert into platform_admins (user_id, note)
-select id, 'Operations, granted by <name>' from "user" where email = '<their email>';
+insert into platform_admins (user_id, note, role)
+select id, 'Operations, granted by <name>', 'technical' from "user" where email = '<their email>';
+
+-- Change a role
+update platform_admins set role = 'finance'
+where user_id = (select id from "user" where email = '<their email>');
 
 -- Remove
 delete from platform_admins
@@ -34,7 +42,14 @@ Run these against the right branch in Neon (SQL editor, as the owner). Keep the 
 ## Sign-in requirement
 
 Staff must have two-factor sign-in or a passkey on their account. Without one, opening `/admin` sends
-them to Sign-in and security with an explanation.
+them to Sign-in and security with an explanation. Staff sessions last 12 hours; after that the
+portal asks them to sign in again.
+
+## Audit log
+
+`audit_events` is append-only for everyone: triggers refuse UPDATE, DELETE and TRUNCATE, including
+for the database owner. The Audit Trail page (`/admin/audit`, founder and security roles) lists
+platform-level events: staff page views, refused access attempts and configuration changes.
 
 ## Regularly
 

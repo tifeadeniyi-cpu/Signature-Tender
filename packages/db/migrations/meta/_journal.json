@@ -183,6 +183,20 @@
       "when": 1794553092811,
       "tag": "0025_integrations_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1794708429903,
+      "tag": "0026_founder_admin",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1794708430903,
+      "tag": "0027_founder_admin_rls",
+      "breakpoints": true
     }
   ]
 }

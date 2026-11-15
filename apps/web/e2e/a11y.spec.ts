@@ -71,10 +71,17 @@ test('staff pages have no WCAG 2.2 AA violations found by axe', async ({ page })
     { max: 1, onnotice: () => {} },
   );
   try {
-    await sql`insert into platform_admins (user_id, note) select id, 'axe' from "user" where email = ${email}`;
+    await sql`insert into platform_admins (user_id, note, role) select id, 'axe', 'founder' from "user" where email = ${email}`;
     const found = [...(await scan(page, '/app/settings/security?staff=1'))];
     await sql`update "user" set two_factor_enabled = true where email = ${email}`;
-    for (const p of ['/admin', '/admin/workspaces', '/admin/workspaces?q=Axe', '/admin/operations'])
+    for (const p of [
+      '/admin',
+      '/admin/workspaces',
+      '/admin/workspaces?q=Axe',
+      '/admin/operations',
+      '/admin/audit',
+      '/admin/access',
+    ])
       found.push(...(await scan(page, p)));
     if (found.length) console.log(JSON.stringify(found, null, 2));
     expect(found).toEqual([]);

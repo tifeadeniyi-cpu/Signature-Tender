@@ -1,4 +1,4 @@
-import { getConfigValue, formatMoney } from '@st/core';
+import { getConfigValue, formatMoney, isFounder, isPlatformAdmin } from '@st/core';
 import { listLibrary } from '@st/core/studio/server';
 import { Sidebar } from '@/components/shell/sidebar';
 import { visibleNav } from '@/components/shell/nav';
@@ -25,6 +25,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     studioOn && !owns && studio
       ? ({ kind: 'studio', price: formatMoney(studio.priceCents, studio.currency) } as const)
       : ({ kind: 'create' } as const);
+  const staff = await isPlatformAdmin(db(), { userId: ctx.user.id }).catch(() => false);
+  const staffLink = staff
+    ? {
+        href: '/admin',
+        label: (await isFounder(db(), ctx.user.id).catch(() => false))
+          ? 'Founder admin'
+          : 'Staff admin',
+      }
+    : null;
   return (
     <div className="flex min-h-dvh">
       <Sidebar allowed={allowed} promo={promo} />
@@ -38,7 +47,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             customer documents.
           </div>
         ) : null}
-        <Topbar ctx={ctx} supportEmail={supportEmail} allowed={allowed} />
+        <Topbar ctx={ctx} supportEmail={supportEmail} allowed={allowed} staffLink={staffLink} />
         <main id="main" className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:py-8">
           {children}
         </main>

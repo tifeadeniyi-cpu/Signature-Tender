@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { formatMoney, getAdminOverview, type RevenueRow } from '@st/core';
 import { db } from '@/lib/db';
-import { requireStaff } from '@/lib/session';
+import { requireAdmin } from '@/lib/session';
 import { Card, CardHeader, StatCard } from '@/components/ui/card';
 import { BarChart } from '@/components/reports/bar-chart';
 
@@ -58,7 +58,7 @@ function Revenue({ title, rows }: { title: string; rows: RevenueRow[] }) {
 }
 
 export default async function AdminOverviewPage() {
-  const user = await requireStaff();
+  const { user } = await requireAdmin('analytics.view', 'overview');
   const o = await getAdminOverview(db(), { userId: user.id });
   const n = (v: number) => Number(v).toLocaleString('en-US');
   return (

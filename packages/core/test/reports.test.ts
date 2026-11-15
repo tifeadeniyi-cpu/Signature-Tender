@@ -28,6 +28,10 @@ import {
   getAdminOverview,
   listAdminWorkspaces,
   getAdminOperations,
+  getAdminAccess,
+  recordAdminDenied,
+  listAdminAudit,
+  listAdminStaff,
 } from '../src';
 import { APP_URL, OWNER_URL } from './env';
 import { makeUser, addMember, makePdf } from './helpers';
@@ -284,5 +288,67 @@ describe('internal administration', () => {
     await owner_.db.execute(sql`update "user" set two_factor_enabled = true where id = ${staff}`);
     expect(await hasStrongSignIn(db, staff)).toBe(true);
     await owner_.db.execute(sql`update "user" set two_factor_enabled = false where id = ${staff}`);
+  });
+});
+
+describe('admin roles and the audit trail', () => {
+  it('limits each role to its permissions, in the database as well as the app', async () => {
+    const analyst = await makeUser('rep_analyst');
+    const founder = await makeUser('rep_founder');
+    await owner_.db.execute(sql`insert into platform_admins (user_id) values (${analyst})`);
+    await owner_.db.execute(
+      sql`insert into platform_admins (user_id, role) values (${founder}, 'founder')`,
+    );
+    // A grant without a role gets read-only analytics.
+    expect(await getAdminAccess(db, { userId: analyst })).toEqual({
+      role: 'analyst',
+      permissions: ['analytics.view'],
+    });
+    expect((await getAdminAccess(db, { userId: founder })).permissions).toContain('audit.view');
+    expect(await getAdminAccess(db, { userId: owner })).toEqual({ role: null, permissions: [] });
+    // Direct calls are refused too, not just hidden in the UI.
+    await expect(listAdminAudit(db, { userId: analyst })).rejects.toMatchObject({
+      code: 'forbidden',
+    });
+    await expect(listAdminStaff(db, { userId: analyst })).rejects.toMatchObject({
+      code: 'forbidden',
+    });
+    await expect(listAdminAudit(db, { userId: owner })).rejects.toMatchObject({
+      code: 'forbidden',
+    });
+    // An invalid role cannot be stored.
+    await expect(
+      owner_.db.execute(sql`update platform_admins set role = 'god' where user_id = ${analyst}`),
+    ).rejects.toThrow();
+
+    await recordAdminDenied(db, { userId: owner }, '/admin/audit', 'audit.view');
+    const log = await listAdminAudit(db, { userId: founder }, { q: 'admin.access_denied' });
+    const denied = log.rows.find((r) => r.actor_role === 'customer');
+    expect(denied).toMatchObject({ category: 'security', risk: 'high', outcome: 'denied' });
+    // Customers appear only as an opaque reference, with no details.
+    expect(denied!.actor).toMatch(/^User [0-9A-F]{8}$/);
+    expect(denied!.details).toEqual({});
+    expect(JSON.stringify(log.rows)).not.toContain(owner);
+    const staffRows = await listAdminStaff(db, { userId: founder });
+    expect(staffRows.find((r) => r.user_id === founder)).toMatchObject({ role: 'founder' });
+  });
+
+  it('keeps the audit log append-only, even for the database owner', async () => {
+    const refused = async (q: Promise<unknown>) => {
+      const err = await q.then(
+        () => null,
+        (e: Error & { cause?: Error }) => e,
+      );
+      expect(String(err?.cause?.message ?? err?.message)).toMatch(/append-only/);
+    };
+    const [row] = (await owner_.db.execute(
+      sql`select id from audit_events order by seq desc limit 1`,
+    )) as unknown as { id: string }[];
+    await refused(
+      owner_.db.execute(sql`update audit_events set action = 'x' where id = ${row!.id}`),
+    );
+    await refused(owner_.db.execute(sql`delete from audit_events where id = ${row!.id}`));
+    await refused(owner_.db.execute(sql`truncate audit_events`));
+    await expect(db.execute(sql`delete from audit_events where id = ${row!.id}`)).rejects.toThrow();
   });
 });
