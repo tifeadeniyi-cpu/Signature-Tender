@@ -218,6 +218,13 @@
       "when": 1794708430903,
       "tag": "0030_founder_admin_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1794709435020,
+      "tag": "0031_command_center",
+      "breakpoints": true
     }
   ]
 }
