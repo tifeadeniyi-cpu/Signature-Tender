@@ -51,7 +51,7 @@ export default async function SignerCompletedPage({
   } catch (err) {
     if (!(err instanceof AppError) || err.code !== 'not_found') throw err;
     return (
-      <div className="brand-burgundy bg-ivory">
+      <div className="bg-ivory">
         {header}
         <div className="mx-auto flex max-w-lg flex-col gap-4 px-4 py-10">
           <h1 className="font-display text-3xl">This link has expired</h1>
@@ -72,7 +72,7 @@ export default async function SignerCompletedPage({
 
   if (result.state === 'verify')
     return (
-      <div className="brand-burgundy bg-ivory">
+      <div className="bg-ivory">
         {header}
         <RecipientVerifyForm token={token} title={result.title} maskedEmail={result.maskedEmail} />
       </div>
@@ -82,7 +82,7 @@ export default async function SignerCompletedPage({
   const source = { kind: 'signer' as const, token };
   const base = `/api/sign/${token}/completed`;
   return (
-    <div className="brand-burgundy bg-ivory">
+    <div className="bg-ivory">
       {header}
       <CompletedPage
         view={view}

@@ -57,7 +57,14 @@ export const libraryQuery = z.object({
   sentTo: dateStr,
   completedFrom: dateStr,
   completedTo: dateStr,
-  sort: z.enum(['activity', 'title', 'sent', 'expires', 'created']).catch('activity'),
+  /** Last-activity window shared by the list and the board; `custom` uses `from` and `to`. */
+  range: z.enum(['any', '7d', '30d', '90d', 'year', 'custom']).catch('any'),
+  from: dateStr,
+  to: dateStr,
+  /** `me`: I'm a recipient. `sent`: I sent it. `email`: a specific recipient, given in `rcpt`. */
+  recipient: z.enum(['all', 'me', 'sent', 'email']).catch('all'),
+  rcpt: z.string().trim().max(320).optional().default(''),
+  sort: z.enum(['activity', 'title', 'sent', 'expires', 'created', 'completed']).catch('activity'),
   dir: z.enum(['asc', 'desc']).catch('desc'),
   page: z.coerce.number().int().min(1).max(10_000).catch(1),
 });
@@ -86,6 +93,54 @@ export interface LibraryRow {
   canDownload: boolean;
 }
 
+/** The library's row source: each document joined to its latest signing request. */
+export const LIBRARY_FROM = sql`from documents d
+      left join lateral (select * from signing_requests sr where sr.document_id = d.id
+                         order by sr.created_at desc limit 1) lr on true`;
+
+/** Search and filter conditions shared by the list and the board. Visibility is still RLS. */
+export function libraryWhere(
+  f: z.output<typeof libraryQuery>,
+  actor: ActorContext,
+  workspaceId: string,
+) {
+  const conds = [sql`d.workspace_id = ${workspaceId}::uuid`, sql`d.deleted_at is null`];
+  if (f.q) {
+    const like = `%${f.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+    // The short reference shown in the documents drawer, e.g. ST-1A2B3C4D or #ST-1A2B3C4D.
+    const ref = /^#?ST-([0-9a-f]{8})$/i.exec(f.q)?.[1]?.toLowerCase() ?? null;
+    conds.push(sql`(d.title ilike ${like}
+      or d.id::text = ${f.q.toLowerCase()}
+      or (${ref}::text is not null and d.id::text like ${ref ? `${ref}%` : ''})
+      or exists (select 1 from document_recipients r where r.document_id = d.id
+                 and (r.name ilike ${like} or r.email ilike ${like})))`);
+  }
+  if (f.type) conds.push(sql`d.document_type = ${f.type}`);
+  if (f.owner === 'me') conds.push(sql`d.created_by = ${actor.userId}`);
+  if (f.sentFrom) conds.push(sql`lr.sent_at >= ${f.sentFrom}::date`);
+  if (f.sentTo) conds.push(sql`lr.sent_at < (${f.sentTo}::date + 1)`);
+  if (f.completedFrom) conds.push(sql`lr.completed_at >= ${f.completedFrom}::date`);
+  if (f.completedTo) conds.push(sql`lr.completed_at < (${f.completedTo}::date + 1)`);
+  const activity = sql`greatest(d.updated_at, coalesce(lr.updated_at, d.updated_at))`;
+  const days = { '7d': 7, '30d': 30, '90d': 90 } as Record<string, number>;
+  if (days[f.range])
+    conds.push(sql`${activity} >= now() - make_interval(days => ${days[f.range]})`);
+  if (f.range === 'year') conds.push(sql`${activity} >= date_trunc('year', now())`);
+  if (f.range === 'custom') {
+    if (f.from) conds.push(sql`${activity} >= ${f.from}::date`);
+    if (f.to) conds.push(sql`${activity} < (${f.to}::date + 1)`);
+  }
+  const mine = sql`(select lower(u.email) from "user" u where u.id = ${actor.userId})`;
+  if (f.recipient === 'me')
+    conds.push(sql`exists (select 1 from document_recipients r where r.document_id = d.id
+                 and lower(r.email) = ${mine})`);
+  if (f.recipient === 'sent') conds.push(sql`lr.sent_by = ${actor.userId}`);
+  if (f.recipient === 'email' && f.rcpt)
+    conds.push(sql`exists (select 1 from document_recipients r where r.document_id = d.id
+                 and lower(r.email) = ${f.rcpt.toLowerCase()})`);
+  return sql.join(conds, sql` and `);
+}
+
 /** Searches the workspace library with tabs, filters, sorting and pagination. */
 export async function searchLibrary(
   db: Database,
@@ -96,27 +151,8 @@ export async function searchLibrary(
   if (!uuid.safeParse(workspaceId).success) throw new AppError('not_found', 'Workspace not found');
   const f = libraryQuery.parse(raw);
   return withActor(db, actor, async (tx) => {
-    const conds = [sql`d.workspace_id = ${workspaceId}::uuid`, sql`d.deleted_at is null`];
-    if (f.q) {
-      const like = `%${f.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
-      // The short reference shown in the documents drawer, e.g. ST-1A2B3C4D or #ST-1A2B3C4D.
-      const ref = /^#?ST-([0-9a-f]{8})$/i.exec(f.q)?.[1]?.toLowerCase() ?? null;
-      conds.push(sql`(d.title ilike ${like}
-        or d.id::text = ${f.q.toLowerCase()}
-        or (${ref}::text is not null and d.id::text like ${ref ? `${ref}%` : ''})
-        or exists (select 1 from document_recipients r where r.document_id = d.id
-                   and (r.name ilike ${like} or r.email ilike ${like})))`);
-    }
-    if (f.type) conds.push(sql`d.document_type = ${f.type}`);
-    if (f.owner === 'me') conds.push(sql`d.created_by = ${actor.userId}`);
-    if (f.sentFrom) conds.push(sql`lr.sent_at >= ${f.sentFrom}::date`);
-    if (f.sentTo) conds.push(sql`lr.sent_at < (${f.sentTo}::date + 1)`);
-    if (f.completedFrom) conds.push(sql`lr.completed_at >= ${f.completedFrom}::date`);
-    if (f.completedTo) conds.push(sql`lr.completed_at < (${f.completedTo}::date + 1)`);
-    const where = sql.join(conds, sql` and `);
-    const from = sql`from documents d
-      left join lateral (select * from signing_requests sr where sr.document_id = d.id
-                         order by sr.created_at desc limit 1) lr on true`;
+    const where = libraryWhere(f, actor, workspaceId);
+    const from = LIBRARY_FROM;
 
     const countRows = (await tx.execute(sql`
       select ${BUCKET_SQL} as bucket, count(*)::int as n ${from} where ${where} group by 1
@@ -140,6 +176,7 @@ export async function searchLibrary(
       sent: sql`lr.sent_at ${dir} nulls last`,
       expires: sql`lr.expires_at ${dir} nulls last`,
       created: sql`d.created_at ${dir}`,
+      completed: sql`lr.completed_at ${dir} nulls last`,
     }[f.sort];
     const offset = (f.page - 1) * LIBRARY_PAGE_SIZE;
     const rows = (await tx.execute(sql`
