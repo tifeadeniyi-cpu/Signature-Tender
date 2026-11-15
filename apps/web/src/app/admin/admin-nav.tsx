@@ -15,6 +15,7 @@ import {
   ChevronRight,
   CircleDashed,
   type LucideIcon,
+  ChartColumn,
 } from 'lucide-react';
 import { BRAND_ASSETS } from '@/lib/brand-assets';
 import { cn } from '@/lib/cn';
@@ -22,6 +23,12 @@ import { cn } from '@/lib/cn';
 /** Each section names the permission it needs; the server passes the viewer's permissions. */
 const SECTIONS: { href: string; label: string; icon: LucideIcon; permission: string }[] = [
   { href: '/admin', label: 'Command Center', icon: LayoutDashboard, permission: 'analytics.view' },
+  {
+    href: '/admin/performance',
+    label: 'Platform Performance',
+    icon: ChartColumn,
+    permission: 'analytics.view',
+  },
   {
     href: '/admin/workspaces',
     label: 'Organizations',
@@ -131,7 +138,7 @@ export function AdminSidebar({ permissions, label }: { permissions: string[]; la
   return (
     <aside
       className={cn(
-        'sticky top-0 hidden h-dvh shrink-0 flex-col bg-primary py-5 transition-[width] duration-200 lg:flex',
+        'sticky top-0 hidden h-dvh shrink-0 flex-col bg-primary py-5 transition-[width] duration-200 lg:flex print:hidden',
         collapsed ? 'w-20 px-3' : 'w-64 px-4',
       )}
     >

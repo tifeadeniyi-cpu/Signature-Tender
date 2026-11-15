@@ -143,3 +143,79 @@ test('admin roles limit what staff see; the founder sees the audit trail', async
     await sql.end();
   }
 });
+
+test('Platform Performance: every tab works for the founder, and roles still limit what shows', async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  const email = await signUpWithWorkspace(page, 'Perf Person', 'Perf Studio');
+  const sql = postgres(OWNER, { max: 1, onnotice: () => {} });
+  const [u] = await sql<{ id: string }[]>`select id from "user" where email = ${email}`;
+  const id = u!.id;
+  try {
+    await sql`insert into platform_admins (user_id, note, role) values (${id}, 'e2e', 'founder')`;
+    await sql`update "user" set two_factor_enabled = true where id = ${id}`;
+    await page.goto('/admin');
+    await page
+      .getByRole('navigation', { name: 'Admin' })
+      .getByRole('link', { name: 'Platform Performance' })
+      .click();
+    await expect(page.getByRole('heading', { name: 'Platform Performance' })).toBeVisible();
+    const tabs = page.getByRole('navigation', { name: 'Platform Performance sections' });
+    await expect(tabs.getByRole('link', { name: 'Overview' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    await expect(page.getByRole('heading', { name: 'Key Trends & Insights' })).toBeVisible();
+    // Document Status stays a donut.
+    await expect(
+      page.getByRole('img', { name: 'Status of live requests sent in the period' }),
+    ).toBeVisible();
+
+    // Filters carry across tabs through the URL.
+    await page.getByLabel('Date range').selectOption('this_year');
+    await expect(page).toHaveURL(/range=this_year/);
+    for (const [name, heading] of [
+      ['Growth', 'User Acquisition'],
+      ['Engagement', 'Active Users Over Time'],
+      ['Feature Usage', 'Feature Adoption'],
+      ['Conversion & Retention', 'Monthly Cohort Retention'],
+      ['Delivery & Operations', 'Document Processing Volume'],
+    ] as const) {
+      await tabs.getByRole('link', { name }).click();
+      await expect(page.getByRole('heading', { name: heading })).toBeVisible();
+      await expect(page).toHaveURL(/range=this_year/);
+    }
+    // The founder sees the sanitized failure list.
+    await expect(page.getByRole('heading', { name: 'Processing Failures' })).toBeVisible();
+
+    // Exports keep the tab and filters and are logged; no emails in the file.
+    const csv = await (
+      await page.request.get('/admin/performance/export?tab=delivery&range=this_year')
+    ).text();
+    expect(csv).toContain('Delivery & Operations');
+    expect(csv).not.toContain('@');
+    const overview = await (await page.request.get('/admin/performance/export?range=30d')).text();
+    expect(overview).toContain('Key trends and insights');
+    const logged = await sql<{ n: number }[]>`
+      select count(*)::int as n from audit_events
+      where actor_user_id = ${id} and action = 'admin.report_exported'`;
+    expect(logged[0]?.n ?? 0).toBeGreaterThanOrEqual(2);
+
+    // An analyst can open the tabs but not the failure list or revenue.
+    await sql`update platform_admins set role = 'analyst' where user_id = ${id}`;
+    await page.goto('/admin/performance?tab=delivery');
+    await expect(page.getByRole('heading', { name: 'Document Processing Volume' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Processing Failures' })).toHaveCount(0);
+    await page.goto('/admin/performance');
+    await expect(page.getByText('Total Revenue')).toHaveCount(0);
+
+    // Support staff have no analytics access at all.
+    await sql`update platform_admins set role = 'support' where user_id = ${id}`;
+    expect((await page.goto('/admin/performance'))?.status()).toBe(404);
+    expect((await page.request.get('/admin/performance/export?tab=growth')).status()).toBe(404);
+  } finally {
+    await sql`delete from platform_admins where user_id = ${id}`;
+    await sql.end();
+  }
+});

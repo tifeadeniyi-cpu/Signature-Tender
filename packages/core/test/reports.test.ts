@@ -35,6 +35,16 @@ import {
   getCommandCenter,
   resolvePeriod,
   pctChange,
+  getPerfGrowth,
+  getPerfEngagement,
+  getPerfFeatures,
+  getPerfConversion,
+  getPerfDelivery,
+  buildInsights,
+  perfCsv,
+  ppChange,
+  parsePerfTab,
+  type CommandCenter,
 } from '../src';
 import { APP_URL, OWNER_URL } from './env';
 import { makeUser, addMember, makePdf } from './helpers';
@@ -413,5 +423,219 @@ describe('command center', () => {
     await expect(getCommandCenter(db, { userId: owner }, p)).rejects.toMatchObject({
       code: 'forbidden',
     });
+  });
+});
+
+describe('platform performance', () => {
+  it('checks the role on every tab and keeps each tab internally consistent', async () => {
+    const founder = await makeUser('pp_founder');
+    const analyst = await makeUser('pp_analyst');
+    const technical = await makeUser('pp_tech');
+    await owner_.db.execute(
+      sql`insert into platform_admins (user_id, role) values (${founder}, 'founder'), (${analyst}, 'analyst'), (${technical}, 'technical')`,
+    );
+    const p = resolvePeriod({ range: 'this_year' });
+    const f = { userId: founder };
+
+    // Customers (even workspace owners) get nothing from any tab.
+    for (const get of [
+      getPerfGrowth,
+      getPerfEngagement,
+      getPerfFeatures,
+      getPerfConversion,
+      getPerfDelivery,
+    ])
+      await expect(get(db, { userId: owner }, p)).rejects.toMatchObject({ code: 'forbidden' });
+
+    const g = await getPerfGrowth(db, f, p);
+    const last = g.series[g.series.length - 1]!;
+    expect(last.users_total).toBe(g.kpi.users_total);
+    expect(last.orgs_total).toBe(g.kpi.orgs_total);
+    // New per interval adds up to new in the period; cumulative differs from new.
+    expect(g.series.reduce((n, s) => n + s.users_new, 0)).toBe(g.kpi.users_new);
+    expect(g.series.reduce((n, s) => n + s.orgs_new, 0)).toBe(g.kpi.orgs_new);
+    expect(g.kpi.users_start + g.kpi.users_new).toBe(g.kpi.users_total);
+    expect(g.kpi.orgs_paid).toBeLessThanOrEqual(g.kpi.orgs_total);
+
+    const e = await getPerfEngagement(db, f, p);
+    const fr = e.frequency;
+    // Every registered person is in exactly one activity group.
+    expect(fr.daily + fr.several_weekly + fr.weekly + fr.occasional + fr.inactive).toBe(
+      e.kpi.registered,
+    );
+    expect(e.kpi.wau).toBeLessThanOrEqual(e.kpi.mau);
+    expect(e.kpi.feature_users).toBeLessThanOrEqual(e.kpi.active_users);
+
+    const ft = await getPerfFeatures(db, f, p);
+    expect(ft.rows.map((r) => r.feature).sort()).toEqual(
+      ['api', 'contacts', 'create', 'integrations', 'send', 'studio', 'team', 'templates'].sort(),
+    );
+    // Adoption counts distinct people, so no feature has more users than eligible people.
+    for (const r of ft.rows) {
+      expect(r.users).toBeLessThanOrEqual(ft.eligible);
+      expect(r.returning_users).toBeLessThanOrEqual(r.users);
+      expect(r.events).toBeGreaterThanOrEqual(r.users);
+    }
+    expect(ft.rows.find((r) => r.feature === 'send')!.users).toBeGreaterThan(0);
+
+    const cv = await getPerfConversion(db, f, p);
+    expect(cv.funnel.document_sent).toBeLessThanOrEqual(cv.funnel.registered);
+    expect(cv.funnel.repeat).toBeLessThanOrEqual(cv.funnel.document_sent);
+    expect(cv.paid_funnel.repeat).toBeLessThanOrEqual(cv.paid_funnel.paid);
+    // Retention only counts people who have passed the whole window.
+    expect(cv.retention.d30_eligible).toBeLessThanOrEqual(cv.retention.d7_eligible);
+    expect(cv.retention.d7_eligible).toBeLessThanOrEqual(cv.retention.d1_eligible);
+    expect(cv.retention.d1).toBeLessThanOrEqual(cv.retention.d1_eligible);
+    expect(cv.cohorts).toHaveLength(6);
+    for (const row of cv.cohorts) if (row.size < 5) expect(row.retained).toBeNull();
+
+    const d = await getPerfDelivery(db, f, p);
+    const s = d.status;
+    expect(s.completed + s.pending + s.declined + s.expired + s.cancelled + s.failed).toBe(s.total);
+    expect(s.total).toBe(d.kpi.sent);
+    expect(d.series.reduce((n, x) => n + x.sent, 0)).toBe(d.kpi.sent);
+    expect(d.failures).not.toBeNull();
+
+    // Sanitized and aggregate only: no emails, names or titles anywhere.
+    const json = JSON.stringify([g, e, ft, cv, d]);
+    expect(json).not.toContain('@example.test');
+    expect(json).not.toContain('Lease');
+
+    // The failure list is for technical, security and founder roles only.
+    expect((await getPerfDelivery(db, { userId: analyst }, p)).failures).toBeNull();
+    expect((await getPerfDelivery(db, { userId: technical }, p)).failures).not.toBeNull();
+  });
+
+  it('only calls out changes with a comparison, enough data and a real threshold', () => {
+    const p = resolvePeriod({ range: '30d', compare: 'previous' });
+    const base = {
+      kpi: {
+        users_total: 100,
+        users_new: 30,
+        users_new_cmp: 20,
+        orgs_total: 40,
+        orgs_new: 5,
+        orgs_new_cmp: 5,
+        orgs_active: 10,
+        docs_sent: 40,
+        docs_sent_cmp: 40,
+        docs_sent_total: 200,
+        docs_completed: 30,
+        docs_completed_cmp: 25,
+        cohort_completed: 30,
+        cohort_completed_cmp: 20,
+        designs_new: 4,
+        designs_new_cmp: 4,
+        studio_purchases: 1,
+        studio_purchases_cmp: 1,
+      },
+      growth: [],
+      doc_status: {
+        completed: 0,
+        pending: 0,
+        declined: 0,
+        expired: 0,
+        cancelled: 0,
+        failed: 0,
+        total: 0,
+      },
+      doc_types: [],
+      features: { active_users: 0, rows: [] },
+      studio: { sessions: 3, sessions_cmp: 2, designs: 4, designs_purchased: 1, downloads: 0 },
+      revenue: {
+        totals: [
+          {
+            currency: 'USD',
+            gross: 1200,
+            refunded: 0,
+            disputed: 0,
+            net: 1200,
+            gross_cmp: 1000,
+            net_cmp: 1000,
+          },
+        ],
+        by_kind: [],
+        series: [],
+      },
+      activity: [],
+      audit: null,
+      security: {
+        staff: 1,
+        staff_strong: 1,
+        denied: 0,
+        audit_append_only: true,
+        production_signing: false,
+      },
+      health: {
+        finalization_failed: 0,
+        webhooks_total: 0,
+        webhooks_ok: 0,
+        webhooks_dead: 0,
+        emails_total: 0,
+        emails_ok: 0,
+        emails_bounced: 0,
+        emails_failed: 0,
+        stripe_unprocessed: 0,
+        sync_failed: 0,
+      },
+      generated_at: new Date().toISOString(),
+    } as CommandCenter;
+    const ids = (c: CommandCenter, per = p) =>
+      buildInsights(c, per, (t) => `/t/${t}`).map((i) => i.id);
+
+    // +50% sign-ups, +25pp completion, +20% revenue.
+    expect(ids(base)).toEqual(['growth_up', 'completion_up', 'revenue_up']);
+    // Small samples produce no headline.
+    expect(
+      ids({
+        ...base,
+        kpi: { ...base.kpi, users_new: 6, users_new_cmp: 4, docs_sent: 5, docs_sent_cmp: 5 },
+      }),
+    ).toEqual(['revenue_up']);
+    // No comparison period, no change claims.
+    expect(ids(base, resolvePeriod({ range: '30d', compare: 'none' }))).toEqual([]);
+    // A rise in failures is never good news, and problems come first.
+    const bad = { ...base, health: { ...base.health, finalization_failed: 2, webhooks_dead: 1 } };
+    expect(ids(bad).slice(0, 2)).toEqual(['finalization_failures', 'webhooks_dead']);
+    expect(ids(bad).length).toBeLessThanOrEqual(5);
+    // Revenue changes need a non-zero baseline; analysts (no revenue) get no revenue insight.
+    expect(ids({ ...base, revenue: null })).not.toContain('revenue_up');
+
+    expect(ppChange(30, 25)).toBe(5);
+    expect(ppChange(null, 25)).toBeNull();
+    expect(pctChange(5, 0)).toBeNull();
+    expect(parsePerfTab('delivery')).toBe('delivery');
+    expect(parsePerfTab('../etc')).toBe('overview');
+  });
+
+  it('exports aggregates with the period in the header', () => {
+    const p = resolvePeriod({ range: '7d' });
+    const rows = perfCsv(
+      'engagement',
+      {
+        kpi: {
+          active_users: 1,
+          active_users_cmp: null,
+          dau_avg: 1,
+          wau: 1,
+          mau: 1,
+          active_days: 1,
+          signins: 1,
+          returning: null,
+          registered: 2,
+          orgs_active: 1,
+          orgs_active_cmp: null,
+          feature_users: 1,
+          period_days: 7,
+        },
+        series: [{ start: p.from.toISOString(), active_users: 1, signins: 1, orgs_active: 1 }],
+        frequency: { daily: 0, several_weekly: 0, weekly: 0, occasional: 1, inactive: 1 },
+        by_plan: [],
+        generated_at: 'now',
+      },
+      p,
+    );
+    expect(rows[0]![0]).toContain('Engagement');
+    expect(rows[1]).toEqual(['Period (UTC)', p.from.toISOString(), p.to.toISOString()]);
   });
 });

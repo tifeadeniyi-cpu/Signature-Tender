@@ -27,6 +27,7 @@ export * from './integrations';
 export * from './reports';
 export * from './admin';
 export * from './admin-analytics';
+export * from './admin-performance';
 export * from './notifications';
 export * from './completed';
 export * from './signature-block/index';
