@@ -352,6 +352,49 @@ describe('cancellation policy', () => {
   });
 });
 
+describe('complimentary (founder) workspace', () => {
+  it('sends without credits or payment, and refuses checkout', async () => {
+    const wsF = (await createWorkspace(db, { userId: owner }, { name: 'Founder WS' })).id;
+    const o = createDb(OWNER_URL, { max: 1 });
+    await o.db.execute(sql`
+      insert into app_config (key, value, description)
+      values ('billing.complimentary_workspaces', jsonb_build_array(${wsF}::text), 'test')
+      on conflict (key) do update
+        set value = app_config.value || jsonb_build_array(${wsF}::text)`);
+    try {
+      expect(await balance(wsF)).toMatchObject({ available: 0, unlimited: true });
+      const a = await sendForSignature(db, storage, { userId: owner }, await readyDoc(wsF), LIVE);
+      const b = await sendForSignature(db, storage, { userId: owner }, await readyDoc(wsF), LIVE);
+      expect(a.status).toBe('sent');
+      expect(b.status).toBe('sent');
+      expect(a.invitations.length).toBe(1);
+      const ledger = await o.db
+        .select()
+        .from(schema.creditLedger)
+        .where(sql`${schema.creditLedger.workspaceId} = ${wsF}`);
+      expect(ledger).toEqual([]);
+      // Cancelling gives nothing back because nothing was spent.
+      await cancelRequest(db, { userId: owner }, a.requestId, 'Wrong file');
+      expect(await balance(wsF)).toMatchObject({ available: 0, unlimited: true });
+      expect((await getBillingOverview(db, { userId: owner }, wsF)).complimentary).toBe(true);
+      await expect(
+        beginCheckout(db, { userId: owner }, wsF, { kind: 'credits', priceCode: 'bundle_5' }),
+      ).rejects.toMatchObject({ code: 'conflict' });
+      // Other workspaces still pay.
+      expect((await balance()).unlimited).toBe(false);
+    } finally {
+      await o.db.execute(sql`
+        update app_config set value = value - ${wsF}::text
+        where key = 'billing.complimentary_workspaces'`);
+      await o.close();
+    }
+    // Taking the workspace off the list turns normal billing back on.
+    expect((await balance(wsF)).unlimited).toBe(false);
+    const c = await sendForSignature(db, storage, { userId: owner }, await readyDoc(wsF), LIVE);
+    expect(c.status).toBe('awaiting_payment');
+  });
+});
+
 describe('subscriptions', () => {
   it('grants the monthly allowance, spends it first, and expires it at the next period', async () => {
     const ws6 = (await createWorkspace(db, { userId: owner }, { name: 'Sub WS' })).id;

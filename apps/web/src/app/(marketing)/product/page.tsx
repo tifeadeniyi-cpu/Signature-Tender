@@ -189,7 +189,7 @@ export default async function ProductPage() {
       <ProductHero startHref={startHref} priceLabel={singleLabel} signatureFont={signatureFont} />
       <ProductFeatureGrid />
       <DocumentPreparationSpotlight startHref={startHref} signatureFont={signatureFont} />
-      <SignatureStudioSpotlight families={SIGNATURE_FAMILIES} startHref={startHref} />
+      <SignatureStudioSpotlight families={SIGNATURE_FAMILIES} />
       <SigningWorkflowsSpotlight />
       <DocumentManagementSpotlight documentsHref={appLink(signedIn, '/app/documents')} />
       <SecurityFeatures />

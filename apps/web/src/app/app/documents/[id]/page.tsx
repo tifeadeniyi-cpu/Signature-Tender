@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { Download, FileCheck2, Pencil, Archive as ArchiveIcon } from 'lucide-react';
 import {
+  getSignatureSeals,
   getDocument,
   getRequestsForDocument,
   hasPermission,
@@ -11,6 +12,7 @@ import {
   getRequestBilling,
   formatMoney,
   getDocumentRecord,
+  isSelfSignRecipients,
 } from '@st/core';
 import { cn } from '@/lib/cn';
 import { ArchiveButton } from '@/components/documents/library-buttons';
@@ -25,6 +27,7 @@ import { buttonClass } from '@/components/ui/button';
 import { StatusBadge } from '@/components/documents/status-badge';
 import { colorFor } from '@/components/documents/colors';
 import { RequestActions } from './request-actions';
+import { verifyIntegrityAction } from '../actions';
 import { EVENT_LABELS } from '@/components/documents/event-labels';
 import { PaymentCard } from './payment-card';
 import { liveSendingEnabled, paymentsAvailable } from '@/lib/billing';
@@ -73,10 +76,10 @@ export default async function DocumentPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ checkout?: string; tab?: string }>;
+  searchParams: Promise<{ checkout?: string; tab?: string; selfsign?: string }>;
 }) {
   const { id } = await params;
-  const { checkout, tab: rawTab } = await searchParams;
+  const { checkout, tab: rawTab, selfsign } = await searchParams;
   const tab: Tab = TABS.some(([t]) => t === rawTab) ? (rawTab as Tab) : 'overview';
   const { user, membership } = await requireWorkspace();
   const actor = { userId: user.id };
@@ -92,6 +95,10 @@ export default async function DocumentPage({
   const [current, ...older] = requests;
   const { request: r, recipients } = current!;
   const record = await getDocumentRecord(db(), actor, id);
+  const seals =
+    r.status === 'completed'
+      ? await getSignatureSeals(db(), actor, id, r.id).catch(() => null)
+      : null;
   // Picks up any completion email still queued or waiting for a retry (no-op when none are due).
   if (r.status === 'completed') dispatchAfterResponse(r.id);
   const archived = Boolean(record.document.archivedAt);
@@ -113,6 +120,10 @@ export default async function DocumentPage({
   const open = !['completed', 'declined', 'expired', 'cancelled'].includes(r.status);
   const needsPayment = r.status === 'awaiting_payment' || r.status === 'payment_processing';
   const billing = needsPayment ? await getRequestBilling(db(), actor, r.id) : null;
+  // Sign it yourself: your own document waiting for your signature.
+  const selfSign = r.sentBy === user.id && isSelfSignRecipients(recipients, user.email);
+  const awaitingMe =
+    selfSign && ['sent', 'in_progress'].includes(r.status) && recipients[0]?.status !== 'signed';
   const [paymentsOn, liveOn] = needsPayment
     ? await Promise.all([paymentsAvailable(), liveSendingEnabled()])
     : [false, false];
@@ -172,6 +183,29 @@ export default async function DocumentPage({
           <StatusBadge status={doc.document.status} requestStatus={r.status} isTest={r.isTest} />
         }
       />
+      {awaitingMe ? (
+        <Card className="mb-6 border-gold">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="font-display text-xl">Ready for your signature</h2>
+              <p className="mt-1 text-sm">
+                This document is paid for and waiting for you to sign it.
+              </p>
+            </div>
+            {/* A plain link: opening it issues a fresh signing link, so it is never prefetched. */}
+            <a href={`/app/documents/${id}/sign-now`} className={buttonClass('gold', 'md')}>
+              Sign now
+            </a>
+          </div>
+        </Card>
+      ) : null}
+      {selfsign ? (
+        <Alert tone={selfsign === 'conflict' ? 'info' : 'error'} className="mb-4">
+          {selfsign === 'conflict'
+            ? 'This document is not ready to sign yet, or it has already been signed.'
+            : 'Only the person who prepared this document can sign it here.'}
+        </Alert>
+      ) : null}
       {r.isTest ? (
         <Alert tone="warning" className="mb-4">
           This is a test request. It is free, marked TEST on every page and email, and is not for
@@ -191,6 +225,7 @@ export default async function DocumentPage({
           paymentsOn={paymentsOn}
           liveOn={liveOn}
           cancelled={checkout === 'cancelled'}
+          selfSign={billing.selfSign}
         />
       ) : null}
       {r.status === 'finalization_failed' ? (
@@ -247,6 +282,8 @@ export default async function DocumentPage({
                   <PreviewOnDemand
                     src={`/api/documents/${id}/versions/${previewFile.id}?view=1`}
                     label={previewFile.kind === 'signed' ? 'signed copy' : 'document'}
+                    seals={previewFile.kind === 'signed' ? seals : null}
+                    checkIntegrity={verifyIntegrityAction}
                   />
                 ) : null}
               </Card>
@@ -428,10 +465,31 @@ export default async function DocumentPage({
                 <FileCheck2 className="size-5 text-success" aria-hidden /> Completed
               </h2>
               <p className="mt-1 text-sm">{when(r.completedAt)}</p>
+              {r.certificateNumber && r.verificationRef ? (
+                <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+                  <dt className="text-slate-text">Certificate</dt>
+                  <dd className="font-mono text-xs text-heading">{r.certificateNumber}</dd>
+                  <dt className="text-slate-text">Verify</dt>
+                  <dd>
+                    <a
+                      href={`/verify?ref=${r.verificationRef}`}
+                      className="font-mono text-xs font-semibold text-primary underline"
+                    >
+                      {r.verificationRef}
+                    </a>
+                  </dd>
+                </dl>
+              ) : null}
               <div className="mt-4 flex flex-col gap-2">
                 <a
-                  href={`/api/requests/${r.id}/file?kind=signed`}
+                  href={`/api/requests/${r.id}/file?kind=package`}
                   className={buttonClass('primary')}
+                >
+                  <Download className="size-4" aria-hidden /> Download complete package
+                </a>
+                <a
+                  href={`/api/requests/${r.id}/file?kind=signed`}
+                  className={buttonClass('secondary')}
                 >
                   <Download className="size-4" aria-hidden /> Download signed copy
                 </a>
@@ -441,6 +499,10 @@ export default async function DocumentPage({
                 >
                   <Download className="size-4" aria-hidden /> Download certificate
                 </a>
+                <p className="text-xs">
+                  The complete package is the signed agreement followed by its Certificate of
+                  Completion.
+                </p>
               </div>
             </Card>
           ) : null}

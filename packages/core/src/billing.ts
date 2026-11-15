@@ -23,6 +23,15 @@ import { getConfigValue } from './config';
 
 type Meta = { ipAddress?: string | null; userAgent?: string | null };
 export type CreditBucket = 'purchased' | 'allowance';
+/** How a send was paid for. `complimentary` spends nothing (see isComplimentary). */
+export type SendCredit = CreditBucket | 'complimentary';
+
+/**
+ * app_config key listing workspaces that sign for free with no limit (the founder workspace). The
+ * value is a JSON array of workspace ids. Only the database owner can change app_config, so no
+ * customer can put their own workspace on the list. Removing an id turns normal billing back on.
+ */
+export const COMPLIMENTARY_WORKSPACES_KEY = 'billing.complimentary_workspaces';
 
 const uuid = z.string().uuid();
 const ACTIVE_SUB = ['active', 'trialing', 'past_due'];
@@ -54,6 +63,18 @@ export interface Balances {
   purchased: number;
   available: number;
   reserved: number;
+  /** True for a complimentary workspace: sends never need a credit. */
+  unlimited: boolean;
+}
+
+/** Whether this workspace signs for free, without credits or payment. */
+export async function isComplimentary(tx: Tx, workspaceId: string): Promise<boolean> {
+  const ids = await getConfigValue<unknown>(
+    tx as unknown as Database,
+    COMPLIMENTARY_WORKSPACES_KEY,
+    [],
+  );
+  return Array.isArray(ids) && ids.includes(workspaceId);
 }
 
 export async function getBalances(tx: Tx, workspaceId: string): Promise<Balances> {
@@ -76,17 +97,24 @@ export async function getBalances(tx: Tx, workspaceId: string): Promise<Balances
     );
   const allowance = Math.max(0, rows.find((r) => r.bucket === 'allowance')?.total ?? 0);
   const purchased = Math.max(0, rows.find((r) => r.bucket === 'purchased')?.total ?? 0);
-  return { allowance, purchased, available: allowance + purchased, reserved: held?.n ?? 0 };
+  return {
+    allowance,
+    purchased,
+    available: allowance + purchased,
+    reserved: held?.n ?? 0,
+    unlimited: await isComplimentary(tx, workspaceId),
+  };
 }
 
 /**
  * Sets one credit aside for a request, spending the expiring allowance before purchased credits.
- * Returns the bucket used, or null when the workspace has no credit available.
+ * Returns the bucket used, `complimentary` for a workspace that signs for free (nothing is
+ * spent or held), or null when the workspace has no credit available.
  */
 export async function reserveCredit(
   tx: Tx,
   input: { workspaceId: string; requestId: string; userId: string },
-): Promise<CreditBucket | null> {
+): Promise<SendCredit | null> {
   await lockCredits(tx, input.workspaceId);
   const [existing] = await tx
     .select()
@@ -94,6 +122,7 @@ export async function reserveCredit(
     .where(eq(schema.creditHolds.requestId, input.requestId));
   if (existing && existing.status !== 'restored') return existing.bucket;
   const b = await getBalances(tx, input.workspaceId);
+  if (b.unlimited) return 'complimentary';
   const bucket: CreditBucket | null =
     b.allowance > 0 ? 'allowance' : b.purchased > 0 ? 'purchased' : null;
   if (!bucket) return null;
@@ -254,6 +283,78 @@ export async function priceForOneRequest(tx: Tx, workspaceId: string): Promise<R
 }
 
 // ---------------------------------------------------------------------------------------------
+// Sign it yourself: a request whose only recipient is its sender
+
+/** The flat price for signing your own document. Set `billing.self_sign_price` to change it. */
+export const SELF_SIGN_DEFAULT_PRICE = { amountCents: 99, currency: 'USD' };
+export const SELF_SIGN_PRICE_CODE = 'self_sign';
+
+/** True when the sender is the one and only recipient, and they sign. */
+export function isSelfSignRecipients(
+  recipients: { email: string; role: string }[],
+  senderEmail: string | null | undefined,
+) {
+  return (
+    recipients.length === 1 &&
+    recipients[0]!.role === 'signer' &&
+    Boolean(senderEmail) &&
+    recipients[0]!.email.trim().toLowerCase() === senderEmail!.trim().toLowerCase()
+  );
+}
+
+export async function isSelfSignRequest(tx: Tx, requestId: string) {
+  const [req] = await tx
+    .select({ senderEmail: schema.signingRequests.senderEmail })
+    .from(schema.signingRequests)
+    .where(eq(schema.signingRequests.id, requestId));
+  if (!req) return false;
+  const recips = await tx
+    .select({ email: schema.requestRecipients.email, role: schema.requestRecipients.role })
+    .from(schema.requestRecipients)
+    .where(eq(schema.requestRecipients.requestId, requestId));
+  return isSelfSignRecipients(recips, req.senderEmail);
+}
+
+/** The signed-in person sent this self-signing request (so they may pay for it). */
+async function isOwnSelfSign(tx: Tx, requestId: string, userId: string) {
+  if (!uuid.safeParse(requestId).success) return false;
+  const [req] = await tx
+    .select({ sentBy: schema.signingRequests.sentBy })
+    .from(schema.signingRequests)
+    .where(eq(schema.signingRequests.id, requestId));
+  return req?.sentBy === userId && (await isSelfSignRequest(tx, requestId));
+}
+
+export async function selfSignPrice(tx: Tx): Promise<RequestPrice> {
+  const [row] = await tx
+    .select()
+    .from(schema.appConfig)
+    .where(eq(schema.appConfig.key, 'billing.self_sign_price'));
+  const v = (row?.value ?? {}) as { amountCents?: unknown; currency?: unknown };
+  const amountCents =
+    Number.isInteger(v.amountCents) && (v.amountCents as number) >= 50
+      ? (v.amountCents as number)
+      : SELF_SIGN_DEFAULT_PRICE.amountCents;
+  const currency = typeof v.currency === 'string' ? v.currency : SELF_SIGN_DEFAULT_PRICE.currency;
+  return { amountCents, currency, source: 'single', planCode: SELF_SIGN_PRICE_CODE };
+}
+
+/** A self-signing request is paid for once its own $0.99 payment has been confirmed by Stripe. */
+export async function hasPaidSelfSign(tx: Tx, requestId: string) {
+  const [p] = await tx
+    .select({ id: schema.payments.id })
+    .from(schema.payments)
+    .where(
+      and(
+        eq(schema.payments.requestId, requestId),
+        eq(schema.payments.priceCode, SELF_SIGN_PRICE_CODE),
+        eq(schema.payments.status, 'paid'),
+      ),
+    );
+  return Boolean(p);
+}
+
+// ---------------------------------------------------------------------------------------------
 // Overview for the Billing & Credits page
 
 export async function getBillingOverview(db: Database, actor: ActorContext, workspaceId: string) {
@@ -348,6 +449,7 @@ export async function getBillingOverview(db: Database, actor: ActorContext, work
 
     return {
       canManage,
+      complimentary: balances.unlimited,
       account: acct
         ? {
             planCode: acct.planCode,
@@ -425,6 +527,8 @@ export interface CheckoutPlan {
   planCode: string | null;
   requestId: string | null;
   documentId: string | null;
+  /** Paid by the person signing it themselves, who may not manage the workspace's billing. */
+  canLinkCustomer: boolean;
 }
 
 /**
@@ -440,7 +544,12 @@ export async function beginCheckout(
   if (!uuid.safeParse(workspaceId).success) throw new AppError('not_found', 'Workspace not found');
   const input = checkoutInput.parse(raw);
   return withActor(db, actor, async (tx) => {
-    await requireBillingManager(tx, workspaceId);
+    // Billing managers pay for anything. Anyone may pay $0.99 for a document they sign themselves.
+    const ownSelfSign =
+      input.kind === 'request' && (await isOwnSelfSign(tx, input.requestId, actor.userId));
+    if (!ownSelfSign) await requireBillingManager(tx, workspaceId);
+    if (await isComplimentary(tx, workspaceId))
+      throw new AppError('conflict', 'This workspace signs for free, so there is nothing to pay.');
     const acct = await accountRow(tx, workspaceId);
     const [ws] = await tx
       .select({ name: schema.workspaces.name })
@@ -493,20 +602,35 @@ export async function beginCheckout(
       )) as unknown as { ok: boolean }[];
       if (!canSend?.ok)
         throw new AppError('forbidden', 'Your role does not allow sending this document.');
-      const price = await priceForOneRequest(tx, workspaceId);
+      // Signing your own document is a flat fee that never buys or uses a credit.
+      const self = await isSelfSignRequest(tx, req.id);
+      const price = self ? await selfSignPrice(tx) : await priceForOneRequest(tx, workspaceId);
       documentId = req.documentId;
-      plan = {
-        name: `Signature Tender: signing request`,
-        description: `Send "${req.title.slice(0, 120)}" for signature. Includes up to five signers.`,
-        amountCents: price.amountCents,
-        currency: price.currency,
-      };
+      plan = self
+        ? {
+            name: 'Signature Tender: sign it yourself',
+            description: `Sign "${req.title.slice(0, 120)}" yourself, with a Certificate of Completion.`,
+            amountCents: price.amountCents,
+            currency: price.currency,
+          }
+        : {
+            name: `Signature Tender: signing request`,
+            description: `Send "${req.title.slice(0, 120)}" for signature. Includes up to five signers.`,
+            amountCents: price.amountCents,
+            currency: price.currency,
+          };
       values = {
         workspaceId,
         kind: 'request',
-        description: `Signing request: ${req.title.slice(0, 120)}`,
-        priceCode: price.source === 'single' ? 'single_request' : `overage:${price.planCode}`,
-        credits: 1,
+        description: self
+          ? `Sign it yourself: ${req.title.slice(0, 120)}`
+          : `Signing request: ${req.title.slice(0, 120)}`,
+        priceCode: self
+          ? SELF_SIGN_PRICE_CODE
+          : price.source === 'single'
+            ? 'single_request'
+            : `overage:${price.planCode}`,
+        credits: self ? 0 : 1,
         amountCents: price.amountCents,
         currency: price.currency,
         requestId: req.id,
@@ -560,6 +684,7 @@ export async function beginCheckout(
       planCode: values.planCode ?? null,
       requestId: values.requestId ?? null,
       documentId,
+      canLinkCustomer: !ownSelfSign || (await permitted(tx, workspaceId, 'billing.manage')),
     };
   });
 }
@@ -783,7 +908,7 @@ export async function applyCheckoutCompleted(
       .for('update');
     if (!p) return { action: 'none', reason: 'unknown_session' };
 
-    if (f.customerId) {
+    if (f.customerId && p.priceCode !== SELF_SIGN_PRICE_CODE) {
       await tx
         .insert(schema.billingAccounts)
         .values({ workspaceId: p.workspaceId, stripeCustomerId: f.customerId })
@@ -1181,7 +1306,9 @@ export async function getRequestBilling(db: Database, actor: ActorContext, reque
       .from(schema.signingRequests)
       .where(eq(schema.signingRequests.id, requestId));
     if (!req) return null;
-    const canManage = await permitted(tx, req.workspaceId, 'billing.manage');
+    const selfSignOwn = await isOwnSelfSign(tx, requestId, actor.userId);
+    // The sender of a self-signing request can pay its $0.99 even without billing access.
+    const canManage = selfSignOwn || (await permitted(tx, req.workspaceId, 'billing.manage'));
     const canSee = canManage || (await permitted(tx, req.workspaceId, 'documents.send'));
     const [hold] = canSee
       ? await tx
@@ -1189,10 +1316,16 @@ export async function getRequestBilling(db: Database, actor: ActorContext, reque
           .from(schema.creditHolds)
           .where(eq(schema.creditHolds.requestId, requestId))
       : [];
+    const selfSign = await isSelfSignRequest(tx, requestId);
     return {
       canManage,
+      selfSign,
       balances: canSee ? await getBalances(tx, req.workspaceId) : null,
-      price: canSee ? await priceForOneRequest(tx, req.workspaceId) : null,
+      price: canSee
+        ? selfSign
+          ? await selfSignPrice(tx)
+          : await priceForOneRequest(tx, req.workspaceId)
+        : null,
       hold: hold ? { bucket: hold.bucket, status: hold.status } : null,
     };
   });
@@ -1229,6 +1362,7 @@ export async function getCheckoutStatus(db: Database, actor: ActorContext, sessi
       currency: p.currency,
       documentId,
       requestStatus,
+      selfSign: p.priceCode === SELF_SIGN_PRICE_CODE,
     };
   });
 }
@@ -1242,5 +1376,118 @@ export async function getSendQuote(db: Database, actor: ActorContext, workspaceI
       price: await priceForOneRequest(tx, workspaceId),
       canBuy: await permitted(tx, workspaceId, 'billing.manage'),
     };
+  });
+}
+
+// ---------------------------------------------------------------------------------------------
+// Card on file (required to add team members)
+
+export const CARD_REQUIRED_MESSAGE =
+  'Add a card on file for this workspace before adding team members.';
+
+export interface CardOnFile {
+  /** False for workspaces that sign for free: they never need a card. */
+  required: boolean;
+  /** A saved card, or an active subscription (which always has one). */
+  hasCard: boolean;
+  brand: string | null;
+  last4: string | null;
+}
+
+export async function cardOnFile(tx: Tx, workspaceId: string): Promise<CardOnFile> {
+  const [row] = (await tx.execute(
+    sql`select has_card, brand, last4 from st_workspace_card(${workspaceId}::uuid)`,
+  )) as unknown as { has_card: boolean; brand: string | null; last4: string | null }[];
+  return {
+    required: !(await isComplimentary(tx, workspaceId)),
+    hasCard: Boolean(row?.has_card),
+    brand: row?.brand ?? null,
+    last4: row?.last4 ?? null,
+  };
+}
+
+export async function getCardOnFile(db: Database, actor: ActorContext, workspaceId: string) {
+  if (!uuid.safeParse(workspaceId).success) throw new AppError('not_found', 'Workspace not found');
+  return withActor(db, actor, (tx) => cardOnFile(tx, workspaceId));
+}
+
+/** Blocks adding people until the company has a card on file. */
+export async function requireCardForTeam(tx: Tx, workspaceId: string) {
+  const c = await cardOnFile(tx, workspaceId);
+  if (c.required && !c.hasCard) throw new AppError('conflict', CARD_REQUIRED_MESSAGE);
+}
+
+/** What Stripe needs to open Checkout in setup mode to save the company's card. */
+export async function beginCardSetup(db: Database, actor: ActorContext, workspaceId: string) {
+  if (!uuid.safeParse(workspaceId).success) throw new AppError('not_found', 'Workspace not found');
+  return withActor(db, actor, async (tx) => {
+    await requireBillingManager(tx, workspaceId);
+    const acct = await accountRow(tx, workspaceId);
+    const [ws] = await tx
+      .select({ name: schema.workspaces.name })
+      .from(schema.workspaces)
+      .where(eq(schema.workspaces.id, workspaceId));
+    const [me] = await tx
+      .select({ email: schema.user.email })
+      .from(schema.user)
+      .where(eq(schema.user.id, actor.userId));
+    return {
+      customerId: acct?.stripeCustomerId ?? null,
+      customerEmail: me?.email ?? '',
+      workspaceName: ws?.name ?? '',
+    };
+  });
+}
+
+export interface CardFacts {
+  workspaceId: string;
+  customerId: string;
+  paymentMethodId: string;
+  brand: string | null;
+  last4: string | null;
+}
+
+/**
+ * Stripe confirmed a saved card (setup-mode checkout). Recorded only for the workspace whose
+ * Stripe customer it belongs to. Safe to repeat.
+ */
+export async function recordCardOnFile(db: Database, f: CardFacts) {
+  if (!uuid.safeParse(f.workspaceId).success) return false;
+  return withBillingSystem(db, async (tx) => {
+    const rows = await tx
+      .update(schema.billingAccounts)
+      .set({
+        cardPaymentMethodId: f.paymentMethodId,
+        cardBrand: f.brand?.slice(0, 20) ?? null,
+        cardLast4: f.last4 && /^\d{4}$/.test(f.last4) ? f.last4 : null,
+        cardSavedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(schema.billingAccounts.workspaceId, f.workspaceId),
+          eq(schema.billingAccounts.stripeCustomerId, f.customerId),
+        ),
+      )
+      .returning({ id: schema.billingAccounts.workspaceId });
+    return rows.length > 0;
+  });
+}
+
+/** The saved card was removed in Stripe: the workspace no longer has it on file. */
+export async function clearCardOnFile(db: Database, paymentMethodId: string) {
+  return withBillingSystem(db, async (tx) => {
+    const rows = await tx
+      .update(schema.billingAccounts)
+      .set({
+        cardPaymentMethodId: null,
+        cardBrand: null,
+        cardLast4: null,
+        cardSavedAt: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.billingAccounts.cardPaymentMethodId, paymentMethodId))
+      .returning({ id: schema.billingAccounts.workspaceId });
+    return rows.length > 0;
   });
 }

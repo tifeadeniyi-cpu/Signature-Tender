@@ -5,6 +5,7 @@ import {
   bundleSavingsPercent,
   formatMoney,
   getBillingOverview,
+  getCardOnFile,
   getConfigValue,
   reconcileCredits,
 } from '@st/core';
@@ -12,6 +13,7 @@ import { db } from '@/lib/db';
 import { requireWorkspace } from '@/lib/session';
 import { paymentsAvailable } from '@/lib/billing';
 import { stripeLiveMode } from '@/lib/stripe';
+import { SaveCardButton } from '@/components/billing/save-card-button';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardHeader } from '@/components/ui/card';
 import { Alert, Badge } from '@/components/ui/feedback';
@@ -92,13 +94,16 @@ export default async function BillingPage({
     throw err;
   }
   const paymentsOn = await paymentsAvailable();
+  const card = await getCardOnFile(db(), actor, workspaceId).catch(() => null);
   const supportEmail = await getConfigValue(db(), 'support.email', 'support@signaturetender.com');
-  const canBuy = o.canManage && paymentsOn;
-  const notice = !paymentsOn
-    ? 'Online payments are not switched on yet. These are the launch prices; no charge can be made.'
-    : !o.canManage
-      ? 'Only workspace owners and admins can buy credits or change plans.'
-      : null;
+  const canBuy = o.canManage && paymentsOn && !o.complimentary;
+  const notice = o.complimentary
+    ? null
+    : !paymentsOn
+      ? 'Online payments are not switched on yet. These are the launch prices; no charge can be made.'
+      : !o.canManage
+        ? 'Only workspace owners and admins can buy credits or change plans.'
+        : null;
   const single = o.prices.find((p) => p.code === 'single_request');
 
   return (
@@ -146,11 +151,45 @@ export default async function BillingPage({
 
       {tab === 'overview' ? (
         <div className="flex flex-col gap-6">
+          {card && card.required && o.canManage && paymentsOn ? (
+            <Card>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-text">
+                    Card on file
+                  </p>
+                  <p className="mt-1 text-lg font-semibold text-heading">
+                    {card.brand && card.last4
+                      ? `${card.brand[0]!.toUpperCase()}${card.brand.slice(1)} ending ${card.last4}`
+                      : card.hasCard
+                        ? 'On file with your subscription'
+                        : 'No card on file'}
+                  </p>
+                  <p className="mt-1 text-sm">
+                    Needed to add team members. Saving a card does not charge it.
+                  </p>
+                </div>
+                <SaveCardButton
+                  returnPath="/app/billing"
+                  label={card.brand ? 'Replace card' : 'Add a card'}
+                  variant={card.hasCard ? 'secondary' : 'primary'}
+                />
+              </div>
+            </Card>
+          ) : null}
           <Card>
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-text">
               Current billing model
             </p>
-            {o.isSubscribed && o.plan ? (
+            {o.complimentary ? (
+              <>
+                <p className="mt-1 font-display text-3xl">Founder workspace</p>
+                <p className="mt-1 text-sm">
+                  Unlimited signing requests at no charge. Sending never uses credits and there is
+                  nothing to pay.
+                </p>
+              </>
+            ) : o.isSubscribed && o.plan ? (
               <>
                 <p className="mt-1 font-display text-3xl">{o.plan.name} plan</p>
                 <p className="mt-1 text-sm">
@@ -178,10 +217,15 @@ export default async function BillingPage({
             )}
           </Card>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Stat label="Available credits" value={String(o.balances.available)}>
-              {o.balances.allowance > 0
-                ? `${o.balances.allowance} from this month's allowance, ${o.balances.purchased} purchased`
-                : `${o.balances.purchased} purchased`}
+            <Stat
+              label="Available credits"
+              value={o.complimentary ? 'Unlimited' : String(o.balances.available)}
+            >
+              {o.complimentary
+                ? 'Founder workspace: sending is free.'
+                : o.balances.allowance > 0
+                  ? `${o.balances.allowance} from this month's allowance, ${o.balances.purchased} purchased`
+                  : `${o.balances.purchased} purchased`}
             </Stat>
             <Stat label="Requests sent this month" value={String(o.usage.sentThisMonth)}>
               Test requests are not counted.

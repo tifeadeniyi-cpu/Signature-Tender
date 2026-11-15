@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { Mail, ShieldCheck, UserCheck, UserMinus, Users, UsersRound } from 'lucide-react';
-import { getTeam, PERMISSIONS, AppError } from '@st/core';
+import { getTeam, getCardOnFile, hasPermission, PERMISSIONS, AppError } from '@st/core';
+import { paymentsAvailable } from '@/lib/billing';
+import { SaveCardButton } from '@/components/billing/save-card-button';
 import { db } from '@/lib/db';
 import { requireWorkspace } from '@/lib/session';
 import { PageHeader } from '@/components/ui/page-header';
@@ -31,9 +33,9 @@ const STATUS = {
 export default async function TeamPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; card?: string }>;
 }) {
-  const { tab: raw } = await searchParams;
+  const { tab: raw, card: cardParam } = await searchParams;
   const tab: Tab = TABS.some(([t]) => t === raw) ? (raw as Tab) : 'all';
   const { user, membership } = await requireWorkspace();
   let team;
@@ -53,6 +55,12 @@ export default async function TeamPage({
       </div>
     );
   }
+  // Companies keep a card on file to add team members (while payments are live).
+  const card = team.canManage
+    ? await getCardOnFile(db(), { userId: user.id }, membership.workspace.id)
+    : null;
+  const cardNeeded = Boolean(card?.required && !card.hasCard && (await paymentsAvailable()));
+  const canBilling = hasPermission(membership.permissions, 'billing.manage');
   const assignable = team.roles
     .filter((r) => r.assignable)
     .map((r) => ({ id: r.id, name: r.name }));
@@ -70,7 +78,7 @@ export default async function TeamPage({
         title="Team"
         description="Manage your team, roles, access, and signing permissions."
         actions={
-          team.canManage ? (
+          team.canManage && !cardNeeded ? (
             <InviteForm
               roles={assignable}
               groups={team.groups.map((g) => ({ id: g.id, name: g.name }))}
@@ -78,6 +86,33 @@ export default async function TeamPage({
           ) : null
         }
       />
+      {cardParam === 'saved' ? (
+        <Alert tone={cardNeeded ? 'info' : 'success'} className="mb-4">
+          {cardNeeded
+            ? 'Thanks. Stripe is confirming your card; refresh in a moment to invite your team.'
+            : 'Card saved. You can now invite team members.'}
+        </Alert>
+      ) : null}
+      {team.canManage && cardNeeded ? (
+        <Card className="mb-6 border-gold">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="max-w-xl">
+              <h2 className="font-display text-xl">Add a card to invite your team</h2>
+              <p className="mt-1 text-sm">
+                Companies keep a card on file before adding team members. Saving a card does not
+                charge it. It is used only for payments your workspace makes.
+              </p>
+            </div>
+            {canBilling ? (
+              <SaveCardButton returnPath="/app/team" variant="gold" />
+            ) : (
+              <p className="text-sm font-semibold text-heading">
+                Ask a workspace owner or admin to add a card in Billing.
+              </p>
+            )}
+          </div>
+        </Card>
+      ) : null}
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-6">
         <StatCard
           label="Total members"

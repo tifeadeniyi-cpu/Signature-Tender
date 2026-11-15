@@ -8,6 +8,7 @@ import {
   verifySigningCode,
   giveConsent,
   adoptSignature,
+  saveSigningProgress,
   completeSigning,
   finalizeRequest,
   declineSigning,
@@ -18,7 +19,9 @@ import { db } from '@/lib/db';
 import { storage } from '@/lib/storage';
 import { env } from '@/lib/env';
 import { dispatchAfterResponse } from '@/lib/notifications';
-import { requestMeta } from '@/lib/session';
+import { getSession, requestMeta } from '@/lib/session';
+import { purchasedDesignPng } from '@st/core/studio/server';
+import { studioDeps, studioSettings } from '@/lib/studio';
 import { signCookieName, readSignSession } from '@/lib/sign-session';
 import {
   sendInvitations,
@@ -121,7 +124,9 @@ export async function consentAction(
 export async function adoptAction(
   token: string,
   input: Parameters<typeof adoptSignature>[3],
-): Promise<{ ok: true; id: string; dataUrl: string } | { ok: false; message: string }> {
+): Promise<
+  { ok: true; id: string; dataUrl: string; applied: string[] } | { ok: false; message: string }
+> {
   try {
     const r = await adoptSignature(
       db(),
@@ -133,6 +138,82 @@ export async function adoptAction(
     return { ok: true, ...r };
   } catch (err) {
     return fail(err);
+  }
+}
+
+/**
+ * Adopts one of the signer's purchased Signature Studio designs. Only when they are signed in
+ * with a verified email that matches this recipient; the design is checked against their
+ * entitlement on the server. It then goes through the normal adoption (consent, this signing
+ * session, audit trail) and costs nothing extra.
+ */
+export async function adoptStudioDesignAction(
+  token: string,
+  input: { kind: 'signature' | 'initials'; designId: string; applyTo?: string[] },
+): Promise<
+  { ok: true; id: string; dataUrl: string; applied: string[] } | { ok: false; message: string }
+> {
+  try {
+    const session = await getSession();
+    const user = session?.user.emailVerified ? session.user : null;
+    if (!user) return { ok: false, message: 'Sign in to use a signature from your library.' };
+    const signSession = await readSession(token);
+    const view = await getSignerView(db(), token, signSession);
+    if (view.recipient.email.toLowerCase() !== user.email.toLowerCase())
+      return {
+        ok: false,
+        message:
+          'Your saved signatures can only be used on documents sent to your own email address.',
+      };
+    const png = await purchasedDesignPng(
+      db(),
+      studioDeps(),
+      user.id,
+      input.designId,
+      input.kind,
+      await studioSettings(),
+    );
+    const r = await adoptSignature(
+      db(),
+      token,
+      signSession,
+      {
+        kind: input.kind,
+        method: 'uploaded',
+        pngBase64: png.toString('base64'),
+        applyTo: input.applyTo,
+      },
+      await requestMeta(),
+      { kind: 'signature_studio', designId: input.designId },
+    );
+    return { ok: true, ...r };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/**
+ * Saves drafts (and, for Save & Exit, ends this browser session). Nothing is signed here.
+ */
+export async function saveProgressAction(
+  token: string,
+  input: Parameters<typeof saveSigningProgress>[3],
+): Promise<{ ok: true; savedAt: string } | { ok: false; message: string; ended?: boolean }> {
+  try {
+    const r = await saveSigningProgress(
+      db(),
+      token,
+      await readSession(token),
+      input,
+      await requestMeta(),
+    );
+    // On exit the session is revoked in the database (its hash is cleared), so the cookie is
+    // already worthless. It is left in place on purpose: changing cookies in a server action
+    // re-renders the route, which would replace the "progress saved" confirmation.
+    return { ok: true, savedAt: r.savedAt.toISOString() };
+  } catch (err) {
+    const f = fail(err);
+    return { ...f, ended: err instanceof AppError && err.code === 'unauthenticated' };
   }
 }
 
@@ -148,15 +229,26 @@ export async function completeAction(
     ctx = await context(token);
     result = await completeSigning(db(), storage(), token, await readSession(token), input, meta);
   } catch (err) {
+    // A repeated submission (double click, retry after a lost response) is not an error if the
+    // first one was recorded: the server refuses to sign twice, and the page shows the result.
+    if (err instanceof AppError && err.code === 'conflict') {
+      const v = await getSignerView(db(), token, undefined).catch(() => null);
+      if (v && (v.stage === 'signed_waiting' || v.stage === 'completed')) {
+        revalidatePath(`/sign/${token}`);
+        return { ok: true };
+      }
+    }
     return fail(err);
   }
-  await writeSession(token, null);
+  // The session cookie stays until it expires so the completed document opens without a new code.
   try {
     await sendInvitations(result.invitations, ctx);
     if (result.readyToFinalize) {
       // Finalizing queues the completion emails (sender and every recipient) in the same
       // transaction; they are sent after this response so signing never waits on email.
-      await finalizeRequest(db(), storage(), { token }, result.requestId);
+      await finalizeRequest(db(), storage(), { token }, result.requestId, {
+        appUrl: env().BETTER_AUTH_URL,
+      });
       dispatchAfterResponse(result.requestId);
     }
   } catch (err) {

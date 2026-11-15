@@ -1,11 +1,13 @@
 import { cookies } from 'next/headers';
-import { getConfigValue, hasPermission, hasSentDocument } from '@st/core';
+import { formatMoney, getConfigValue, hasPermission, hasSentDocument } from '@st/core';
+import { listLibrary } from '@st/core/studio/server';
 import { AppSidebar } from '@/components/shell/sidebar';
 import { SIDEBAR_COOKIE, visibleNav } from '@/components/shell/nav';
 import { Topbar } from '@/components/shell/topbar';
 import { requireWorkspace } from '@/lib/session';
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
+import { studioSettings } from '@/lib/studio';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,8 +24,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     cookies(),
   ]);
   const appEnv = env().APP_ENV;
-  const nav = visibleNav(ctx.membership.permissions);
-  const cta = canCreate ? { returning } : null;
+  const studio = await studioSettings().catch(() => null);
+  const studioOn = Boolean(studio?.enabled);
+  const nav = visibleNav(ctx.membership.permissions, studioOn);
+  // Offer Signature Studio only to people who have not bought a design yet.
+  const owns = studioOn
+    ? (await listLibrary(db(), ctx.user.id).catch(() => [])).some((d) => d.access === 'active')
+    : true;
+  const studioPrice =
+    studioOn && !owns && studio ? formatMoney(studio.priceCents, studio.currency) : null;
+  const cta = canCreate || studioPrice ? { returning, canCreate, studioPrice } : null;
   return (
     <div className="flex min-h-dvh">
       <AppSidebar

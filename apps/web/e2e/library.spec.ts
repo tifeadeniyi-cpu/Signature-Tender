@@ -92,21 +92,24 @@ test('a recipient without an account gets a new link, signs, and downloads the c
   await signer.getByRole('button', { name: /^Review/ }).click();
   await signer.getByLabel('I agree to use electronic records').check();
   await signer.getByRole('button', { name: 'Continue' }).click();
-  await signer.getByRole('button', { name: /Add your signature/ }).click();
-  await signer.getByRole('button', { name: 'Adopt and use signature' }).click();
-  await signer.getByRole('button', { name: 'Finish signing' }).click();
+  await signer.getByRole('button', { name: /^Sign here/ }).click();
+  await signer.getByRole('button', { name: 'Use This Signature' }).click();
+  await signer
+    .getByRole('navigation', { name: 'Field navigation' })
+    .getByRole('button', { name: 'Finish Signing' })
+    .click();
   await signer.getByLabel(/intend to sign it electronically/).check();
-  await signer.getByRole('button', { name: 'Sign document' }).click();
-  await expect(signer.getByRole('heading', { name: 'This document is complete' })).toBeVisible({
+  await signer.getByRole('button', { name: 'Complete Signing' }).click();
+  await expect(signer.getByRole('heading', { name: "You've Completed Your Signing" })).toBeVisible({
     timeout: 20_000,
   });
 
   // Back in the same retrieval session, the completed copy and certificate download.
   await guest.reload();
   await expect(item.getByText('Completed')).toBeVisible();
-  for (const name of ['Signed copy', 'Certificate']) {
+  for (const name of ['Signed copy + certificate', 'Certificate']) {
     const res = await guest.request.get(
-      (await item.getByRole('link', { name }).getAttribute('href')) as string,
+      (await item.getByRole('link', { name, exact: true }).getAttribute('href')) as string,
     );
     expect(res.status()).toBe(200);
     expect((await res.body()).subarray(0, 5).toString()).toBe('%PDF-');
@@ -168,11 +171,11 @@ test('search, filter, archive and set retention in the library', async ({ page }
   await expect(table.getByRole('link', { name: 'Booking', exact: true })).toBeVisible();
 
   // Search by the signer's email, then for something that does not exist.
-  await page.getByRole('searchbox').fill(email);
+  await page.getByRole('main').getByRole('searchbox').fill(email);
   await page.getByRole('button', { name: 'Apply' }).click();
   await expect(page).toHaveURL(/q=/);
   await expect(table.getByRole('link', { name: 'Booking', exact: true })).toBeVisible();
-  await page.getByRole('searchbox').fill('no-such-document-xyz');
+  await page.getByRole('main').getByRole('searchbox').fill('no-such-document-xyz');
   await page.getByRole('button', { name: 'Apply' }).click();
   await expect(page.getByRole('heading', { name: 'No documents match' })).toBeVisible();
   await page.getByRole('link', { name: 'Clear filters' }).click();

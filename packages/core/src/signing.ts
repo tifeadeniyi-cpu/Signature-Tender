@@ -8,6 +8,7 @@ import { getConfigValue } from './config';
 import {
   checkReadiness,
   documentSettingsSchema,
+  signatureBlockSettings,
   type DocumentSettings,
   type FieldType,
   type RecipientRole,
@@ -25,11 +26,65 @@ import {
   sha256Hex,
   verifyChain,
 } from './signing-crypto';
-import { buildCertificate, buildSignedPdf } from './finalize-pdf';
-import { consumeHold, reserveCredit, restoreOnCancel } from './billing';
+import { buildSignedPdf } from './finalize-pdf';
+import { buildCompletionCertificate, buildCompletionPackage, pageSizeFor } from './certificate-pdf';
+import {
+  certificateEvents,
+  certificateSigners,
+  newVerificationRef,
+  nextCertificateNumber,
+} from './certificate';
+import { documentReferenceOf } from './library';
+import { validTimeZone } from './signature-block/layout';
+
+/** Short public reference to a recipient's completion event: its sequence number and hash prefix. */
+export function signingEventRef(
+  events: { seq: number; type: string; recipientId: string | null; hash: string }[],
+  recipientId: string,
+): string | null {
+  const e = events.findLast(
+    (x) =>
+      x.recipientId === recipientId &&
+      ['recipient.signed', 'recipient.approved', 'recipient.reviewed'].includes(x.type),
+  );
+  return e ? `EV-${e.seq}-${e.hash.slice(0, 12).toUpperCase()}` : null;
+}
+import {
+  consumeHold,
+  getBalances,
+  hasPaidSelfSign,
+  isSelfSignRecipients,
+  isSelfSignRequest,
+  reserveCredit,
+  restoreOnCancel,
+} from './billing';
 import { enqueueCompletionNotifications } from './notifications';
 
-type Meta = { ipAddress?: string | null; userAgent?: string | null };
+type Meta = {
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  /** Time zone of the request's IP address, from the hosting edge (used if the device sends none). */
+  ipTimeZone?: string | null;
+};
+
+/** A real IANA zone name, or null. Unlike validTimeZone, never falls back to UTC. */
+export function ianaZoneOrNull(tz: string | null | undefined): string | null {
+  if (!tz || tz.length > 64 || !/^[A-Za-z_]+(?:\/[A-Za-z0-9_+-]+)*$|^UTC$/.test(tz)) return null;
+  try {
+    return new Intl.DateTimeFormat('en-US', { timeZone: tz }).resolvedOptions().timeZone;
+  } catch {
+    return null;
+  }
+}
+
+/** The signer's zone: what their device reported, else the zone of their IP address. */
+export function signerTimeZone(device: string | null | undefined, ip: string | null | undefined) {
+  const d = ianaZoneOrNull(device);
+  if (d) return { timeZone: d, source: 'device' as const };
+  const i = ianaZoneOrNull(ip);
+  if (i) return { timeZone: i, source: 'ip' as const };
+  return null;
+}
 type RequestRow = typeof schema.signingRequests.$inferSelect;
 type RecipientRow = typeof schema.requestRecipients.$inferSelect;
 export type RequestStatus = RequestRow['status'];
@@ -56,7 +111,7 @@ export interface Invitation {
 // ---------------------------------------------------------------------------------------------
 // Evidence log
 
-async function appendEvent(
+export async function appendEvent(
   tx: Tx,
   e: {
     requestId: string;
@@ -123,6 +178,8 @@ export interface SendResult {
   invitations: Invitation[];
   /** `awaiting_payment` when a live request had no credit to use; nothing was emailed. */
   status: 'sent' | 'awaiting_payment';
+  /** The sender is the only recipient ("sign it yourself"): open signing, do not email. */
+  selfSign: boolean;
 }
 
 const PAYABLE_STATUSES: RequestStatus[] = ['awaiting_payment', 'payment_processing'];
@@ -206,6 +263,50 @@ async function assignTokens(
     out.push({ recipientId: r.id, name: r.name, email: r.email, token, kind });
   }
   return out;
+}
+
+/**
+ * "Sign it yourself": gives the sender a fresh signing link to their own request, so they go
+ * straight to signing instead of waiting for an email. Only for a sent request whose one
+ * recipient is the signed-in person (same verified email), and only until they have signed.
+ */
+export async function openSelfSigning(
+  db: Database,
+  actor: ActorContext,
+  requestId: string,
+): Promise<{ token: string }> {
+  if (!z.string().uuid().safeParse(requestId).success)
+    throw new AppError('not_found', 'Request not found');
+  return withActor(db, actor, async (tx) => {
+    const [req] = await tx
+      .select()
+      .from(schema.signingRequests)
+      .where(eq(schema.signingRequests.id, requestId))
+      .for('update');
+    if (!req || req.sentBy !== actor.userId) throw new AppError('not_found', 'Request not found');
+    const [me] = await tx
+      .select({ email: schema.user.email, verified: schema.user.emailVerified })
+      .from(schema.user)
+      .where(eq(schema.user.id, actor.userId));
+    const recips = await tx
+      .select()
+      .from(schema.requestRecipients)
+      .where(eq(schema.requestRecipients.requestId, requestId));
+    if (!me?.verified || !isSelfSignRecipients(recips, me.email))
+      throw new AppError('forbidden', 'Only documents you sign yourself open here.');
+    if (!SIGNABLE_STATUSES.includes(req.status))
+      throw new AppError(
+        'conflict',
+        PAYABLE_STATUSES.includes(req.status)
+          ? 'Pay for this document to sign it.'
+          : 'This document can no longer be signed.',
+      );
+    if (recips[0]!.status === 'signed')
+      throw new AppError('conflict', 'You have already signed this document.');
+    const settings = documentSettingsSchema.parse(req.settings);
+    const [inv] = await assignTokens(tx, recips, await linkExpiry(tx, settings), 'sign');
+    return { token: inv!.token };
+  });
 }
 
 /** The next group that must act: everyone acting (any order) or the lowest unfinished order group. */
@@ -329,6 +430,17 @@ export async function sendForSignature(
       .from(schema.workspaces)
       .where(eq(schema.workspaces.id, doc.workspace_id));
     const expiresAt = settings.expiresAt ? endOfDayUtc(settings.expiresAt) : null;
+    // Signing times on the document are shown in this zone. Fixed at send so it cannot change later.
+    const [profile] = settings.timeZone
+      ? []
+      : await tx
+          .select({ timezone: schema.userProfiles.timezone })
+          .from(schema.userProfiles)
+          .where(eq(schema.userProfiles.userId, actor.userId));
+    const requestSettings = {
+      ...settings,
+      timeZone: settings.timeZone ?? validTimeZone(profile?.timezone),
+    };
 
     const [req] = await tx
       .insert(schema.signingRequests)
@@ -345,7 +457,7 @@ export async function sendForSignature(
         sourceFileId: file!.id,
         sourceSha256: file!.sha256,
         signingOrderEnabled: doc.signing_order_enabled,
-        settings,
+        settings: requestSettings,
         emailMessage: doc.email_message,
         disclosureVersion: disclosure.version,
         disclosureText: disclosure.text,
@@ -411,6 +523,7 @@ export async function sendForSignature(
       });
     let invitations: Invitation[] = [];
     let status: SendResult['status'] = 'sent';
+    const selfSign = isSelfSignRecipients(inserted, sender?.email);
     if (!live) {
       invitations = await dispatch(tx, req!, actor.userId, meta);
     } else {
@@ -419,17 +532,28 @@ export async function sendForSignature(
         workspaceId: doc.workspace_id,
         actorUserId: actor.userId,
         type: 'request.created',
-        data: { sourceSha256: file!.sha256, recipients: inserted.length, fields: fields.length },
+        data: {
+          sourceSha256: file!.sha256,
+          recipients: inserted.length,
+          fields: fields.length,
+          ...(selfSign ? { selfSign: true } : {}),
+        },
         ...meta,
       });
-      const bucket = await reserveCredit(tx, {
-        workspaceId: doc.workspace_id,
-        requestId,
-        userId: actor.userId,
-      });
+      // Signing your own document is a flat fee paid per document; it never spends a credit.
+      // Workspaces that sign for free still skip payment.
+      const bucket = selfSign
+        ? (await getBalances(tx, doc.workspace_id)).unlimited
+          ? 'complimentary'
+          : null
+        : await reserveCredit(tx, {
+            workspaceId: doc.workspace_id,
+            requestId,
+            userId: actor.userId,
+          });
       if (bucket) {
         invitations = await dispatch(tx, req!, actor.userId, meta);
-        await consumeHold(tx, requestId);
+        if (!selfSign) await consumeHold(tx, requestId);
       } else {
         status = 'awaiting_payment';
         await appendEvent(tx, {
@@ -437,6 +561,7 @@ export async function sendForSignature(
           workspaceId: doc.workspace_id,
           actorUserId: actor.userId,
           type: 'request.awaiting_payment',
+          ...(selfSign ? { data: { selfSign: true } } : {}),
           ...meta,
         });
       }
@@ -450,7 +575,7 @@ export async function sendForSignature(
       metadata: { requestId, test: !live },
       ...meta,
     });
-    return { requestId, invitations, status };
+    return { requestId, invitations, status, selfSign };
   });
 }
 
@@ -474,6 +599,8 @@ export async function sendPaidRequest(
   workspaceName: string;
   emailMessage: string | null;
   invitations: Invitation[];
+  /** Sign it yourself: the sender opens signing straight away, so no email is needed. */
+  selfSign: boolean;
 }> {
   if (!opts.liveSendingEnabled)
     throw new AppError(
@@ -496,25 +623,35 @@ export async function sendPaidRequest(
     )) as unknown as { ok: boolean }[];
     if (!canSend?.ok)
       throw new AppError('forbidden', 'Your role does not allow sending this document.');
-    const bucket = await reserveCredit(tx, {
-      workspaceId: req.workspaceId,
-      requestId,
-      userId: actor.userId,
-    });
+    // Sign it yourself: sent once its own flat-fee payment is confirmed; no credit involved.
+    const selfSign = await isSelfSignRequest(tx, requestId);
+    const bucket = selfSign
+      ? (await hasPaidSelfSign(tx, requestId))
+        ? 'self_sign'
+        : (await getBalances(tx, req.workspaceId)).unlimited
+          ? 'complimentary'
+          : null
+      : await reserveCredit(tx, {
+          workspaceId: req.workspaceId,
+          requestId,
+          userId: actor.userId,
+        });
     if (!bucket)
       throw new AppError(
         'conflict',
-        'There are no credits available. Buy credits or pay for this request.',
+        selfSign
+          ? 'Pay for this document to sign it.'
+          : 'There are no credits available. Buy credits or pay for this request.',
       );
     const invitations = await dispatch(tx, req, actor.userId, meta);
-    await consumeHold(tx, requestId);
+    if (!selfSign) await consumeHold(tx, requestId);
     await recordAudit(tx, {
       workspaceId: req.workspaceId,
       actorUserId: actor.userId,
       action: 'document.sent',
       targetType: 'document',
       targetId: req.documentId,
-      metadata: { requestId, test: false, credit: bucket },
+      metadata: { requestId, test: false, credit: bucket, ...(selfSign ? { selfSign: true } : {}) },
       ...meta,
     });
     return {
@@ -526,6 +663,7 @@ export async function sendPaidRequest(
       workspaceName: req.workspaceName,
       emailMessage: req.emailMessage,
       invitations,
+      selfSign,
     };
   });
 }
@@ -782,6 +920,7 @@ export type SignerStage =
   | 'verify'
   | 'consent'
   | 'sign'
+  | 'waiting_turn'
   | 'signed_waiting'
   | 'completed'
   | 'declined'
@@ -808,6 +947,12 @@ export interface SignerView {
   allowPrint: boolean;
   disclosure: { version: string; text: string };
   canDownloadSigned: boolean;
+  /** When this recipient completed their part, if they have. */
+  signedAt: Date | null;
+  /** The signer's recorded time zone, once they have signed. */
+  signerTimeZone: string | null;
+  /** Every acting recipient has completed. The signed copy may still be in preparation. */
+  allPartiesDone: boolean;
 }
 
 function stageFor(request: RequestRow, r: RecipientRow, session: string | undefined): SignerStage {
@@ -818,6 +963,8 @@ function stageFor(request: RequestRow, r: RecipientRow, session: string | undefi
   if (!ACTING_ROLES.includes(r.role)) return 'unavailable';
   if (r.status === 'signed') return 'signed_waiting';
   if (!SIGNABLE_STATUSES.includes(request.status)) return 'unavailable';
+  // In sequential signing a later recipient is only invited when their group's turn starts.
+  if (r.status === 'waiting') return 'waiting_turn';
   if (!sessionValid(r, session))
     return r.authMethod === 'email_code' && r.otpHash ? 'verify' : 'start';
   if (!r.consentedAt) return 'consent';
@@ -829,6 +976,7 @@ function toView(
   r: RecipientRow,
   stage: SignerStage,
   pageCount: number | null = null,
+  allPartiesDone = false,
 ): SignerView {
   const settings = documentSettingsSchema.parse(request.settings);
   return {
@@ -849,6 +997,9 @@ function toView(
     disclosure: { version: request.disclosureVersion, text: request.disclosureText },
     canDownloadSigned:
       request.status === 'completed' && settings.allowDownload && Boolean(request.signedFileId),
+    signedAt: r.signedAt,
+    signerTimeZone: r.timeZone ?? null,
+    allPartiesDone: request.status === 'completed' || allPartiesDone,
   };
 }
 
@@ -887,7 +1038,18 @@ export async function getSignerView(
       .select({ pageCount: schema.documentFiles.pageCount })
       .from(schema.documentFiles)
       .where(eq(schema.documentFiles.id, request.sourceFileId));
-    return toView(request, recipient, stageFor(request, recipient, session), file?.pageCount);
+    const stage = stageFor(request, recipient, session);
+    let allDone = false;
+    if (stage === 'signed_waiting') {
+      const all = await tx
+        .select({ role: schema.requestRecipients.role, status: schema.requestRecipients.status })
+        .from(schema.requestRecipients)
+        .where(eq(schema.requestRecipients.requestId, request.id));
+      allDone = all
+        .filter((x) => ACTING_ROLES.includes(x.role))
+        .every((x) => x.status === 'signed');
+    }
+    return toView(request, recipient, stage, file?.pageCount, allDone);
   });
 }
 
@@ -906,7 +1068,8 @@ export async function startSigning(
     if (
       !SIGNABLE_STATUSES.includes(request.status) ||
       !ACTING_ROLES.includes(recipient.role) ||
-      recipient.status === 'signed'
+      recipient.status === 'signed' ||
+      recipient.status === 'waiting'
     ) {
       throw new AppError('conflict', 'This request is no longer waiting for you.');
     }
@@ -1041,6 +1204,8 @@ async function requireSession(tx: Tx, session: string | undefined) {
     throw new AppError('conflict', 'This request is no longer open for signing.');
   if (!ACTING_ROLES.includes(ctx.recipient.role) || ctx.recipient.status === 'signed')
     throw new AppError('conflict', 'This request is no longer waiting for you.');
+  if (ctx.recipient.status === 'waiting')
+    throw new AppError('conflict', "It's not your turn to sign yet.");
   if (!sessionValid(ctx.recipient, session))
     throw new AppError(
       'unauthenticated',
@@ -1084,44 +1249,110 @@ export async function giveConsent(
   });
 }
 
-/** Fields assigned to this recipient, plus the adopted marks they can reuse. */
+const PNG_DATA_URL = (png: Uint8Array) =>
+  `data:image/png;base64,${Buffer.from(png).toString('base64')}`;
+
+/** Recipient-side progress events, newest first. */
+async function progressEvents(tx: Tx, requestId: string, recipientId: string) {
+  return tx
+    .select({ type: schema.signingEvents.type, data: schema.signingEvents.data })
+    .from(schema.signingEvents)
+    .where(
+      and(
+        eq(schema.signingEvents.requestId, requestId),
+        eq(schema.signingEvents.recipientId, recipientId),
+        inArray(schema.signingEvents.type, ['recipient.progress_saved', 'recipient.resumed']),
+      ),
+    )
+    .orderBy(desc(schema.signingEvents.seq))
+    .limit(5);
+}
+
+/**
+ * Everything the signing workspace needs: this recipient's fields with any saved progress, the
+ * marks they adopted, other recipients' completed fields (read-only), and the frozen version.
+ * Opening it after a Save & Exit records that signing resumed.
+ */
 export async function getSigningWorkspace(
   db: Database,
   token: string,
   session: string | undefined,
+  meta: Meta = {},
 ) {
   return withSigner(db, tokenHashOf(token), async (tx) => {
     const { recipient, request } = await requireSession(tx, session);
     if (!recipient.consentedAt)
       throw new AppError('conflict', 'Agree to sign electronically first.');
-    const fields = await tx
+    const all = await tx
       .select()
       .from(schema.requestFields)
-      .where(eq(schema.requestFields.recipientId, recipient.id))
+      .where(eq(schema.requestFields.requestId, request.id))
       .orderBy(
         asc(schema.requestFields.page),
         asc(schema.requestFields.y),
         asc(schema.requestFields.x),
       );
+    const fields = all.filter((f) => f.recipientId === recipient.id);
+    const people = await tx
+      .select({
+        id: schema.requestRecipients.id,
+        name: schema.requestRecipients.name,
+        role: schema.requestRecipients.role,
+        status: schema.requestRecipients.status,
+        signedAt: schema.requestRecipients.signedAt,
+      })
+      .from(schema.requestRecipients)
+      .where(eq(schema.requestRecipients.requestId, request.id));
+    const finished = new Set(people.filter((p) => p.status === 'signed').map((p) => p.id));
+    // Other recipients' fields are shown only once that recipient has completed their part.
+    const others = all.filter((f) => f.recipientId !== recipient.id && finished.has(f.recipientId));
     const sigs = await tx
       .select({
         id: schema.signatures.id,
+        recipientId: schema.signatures.recipientId,
         kind: schema.signatures.kind,
         method: schema.signatures.method,
         imagePng: schema.signatures.imagePng,
       })
       .from(schema.signatures)
-      .where(eq(schema.signatures.recipientId, recipient.id))
+      .where(eq(schema.signatures.requestId, request.id))
       .orderBy(desc(schema.signatures.adoptedAt));
+    const sigById = new Map(sigs.map((x) => [x.id, x]));
     const [file] = await tx
       .select({ pageCount: schema.documentFiles.pageCount })
       .from(schema.documentFiles)
       .where(eq(schema.documentFiles.id, request.sourceFileId));
+
+    const events = await progressEvents(tx, request.id, recipient.id);
+    const lastSave = events.find((e) => e.type === 'recipient.progress_saved');
+    const resumePage = Number((lastSave?.data as { page?: unknown } | undefined)?.page) || 1;
+    const latest = events[0];
+    if (latest?.type === 'recipient.progress_saved' && (latest.data as { exit?: boolean }).exit) {
+      await appendEvent(tx, {
+        requestId: request.id,
+        workspaceId: request.workspaceId,
+        recipientId: recipient.id,
+        type: 'recipient.resumed',
+        data: { sourceSha256: request.sourceSha256 },
+        ...meta,
+      });
+    }
+    const settings = documentSettingsSchema.parse(request.settings);
+    const mine = sigs.filter((x) => x.recipientId === recipient.id);
     return {
+      requestId: request.id,
+      documentId: request.documentId,
+      /** The frozen version: the SHA-256 of the exact PDF that was sent. */
+      documentVersion: request.sourceSha256,
+      sentAt: request.sentAt ?? request.createdAt,
       pageCount: file?.pageCount ?? 0,
+      allowDownload: settings.allowDownload,
+      /** How signature fields are drawn (the sender's signature block choice) and in which zone. */
+      signatureBlock: signatureBlockSettings(request.settings),
       role: recipient.role,
       name: recipient.name,
       email: recipient.email,
+      resumePage: Math.min(Math.max(1, resumePage), Math.max(1, file?.pageCount ?? 1)),
       fields: fields.map((f) => ({
         id: f.id,
         type: f.type,
@@ -1133,14 +1364,126 @@ export async function getSigningWorkspace(
         required: f.required,
         label: f.label,
         options: f.options,
+        savedValue: f.value,
+        savedSignatureId:
+          f.signatureId && sigById.get(f.signatureId)?.recipientId === recipient.id
+            ? f.signatureId
+            : null,
       })),
-      signatures: sigs.map((s) => ({
-        id: s.id,
-        kind: s.kind,
-        method: s.method,
-        dataUrl: `data:image/png;base64,${Buffer.from(s.imagePng).toString('base64')}`,
+      completedByOthers: others.map((f) => {
+        const sig = f.signatureId ? sigById.get(f.signatureId) : undefined;
+        return {
+          id: f.id,
+          type: f.type,
+          page: f.page,
+          x: f.x,
+          y: f.y,
+          width: f.width,
+          height: f.height,
+          label: f.label,
+          value: f.value,
+          dataUrl: sig ? PNG_DATA_URL(sig.imagePng) : null,
+          recipientName: people.find((p) => p.id === f.recipientId)?.name ?? '',
+          recipientRole: people.find((p) => p.id === f.recipientId)?.role ?? null,
+          signedAt: people.find((p) => p.id === f.recipientId)?.signedAt?.toISOString() ?? null,
+        };
+      }),
+      signatures: mine.map((x) => ({
+        id: x.id,
+        kind: x.kind,
+        method: x.method,
+        dataUrl: PNG_DATA_URL(x.imagePng),
       })),
     };
+  });
+}
+
+const draftSchema = z.object({
+  values: z
+    .array(
+      z.object({
+        fieldId: z.string().uuid(),
+        value: z.string().max(500).nullable().optional(),
+        signatureId: z.string().uuid().nullable().optional(),
+      }),
+    )
+    .max(500),
+  page: z.number().int().min(1).max(10_000).optional(),
+  /** Save & Exit: also ends this browser session, so resuming needs the link (and code) again. */
+  exit: z.boolean().optional(),
+});
+
+/**
+ * Saves work in progress without signing: field values and applied marks are stored as drafts
+ * (filled_at stays empty) and checked again in full at completion. Only this recipient's fields
+ * and marks are accepted.
+ */
+export async function saveSigningProgress(
+  db: Database,
+  token: string,
+  session: string | undefined,
+  input: z.input<typeof draftSchema>,
+  meta: Meta = {},
+) {
+  const data = draftSchema.parse(input);
+  return withSigner(db, tokenHashOf(token), async (tx) => {
+    const { recipient, request } = await requireSession(tx, session);
+    if (!recipient.consentedAt)
+      throw new AppError('conflict', 'Agree to sign electronically first.');
+    const fields = await tx
+      .select()
+      .from(schema.requestFields)
+      .where(eq(schema.requestFields.recipientId, recipient.id));
+    const sigs = await tx
+      .select({ id: schema.signatures.id, kind: schema.signatures.kind })
+      .from(schema.signatures)
+      .where(eq(schema.signatures.recipientId, recipient.id));
+    let saved = 0;
+    for (const v of data.values) {
+      const f = fields.find((x) => x.id === v.fieldId);
+      if (!f) throw new AppError('forbidden', 'A value was sent for a field that is not yours.');
+      if (f.type === 'date_signed') continue; // always set by the server at completion
+      let value: string | null = null;
+      let signatureId: string | null = null;
+      if (f.type === 'signature' || f.type === 'initials') {
+        if (v.signatureId) {
+          if (!sigs.some((x) => x.id === v.signatureId && x.kind === f.type))
+            throw new AppError('invalid', `Adopt your ${f.type} before applying it.`);
+          signatureId = v.signatureId;
+        }
+      } else {
+        value = (v.value ?? '').trim() || null;
+      }
+      if (value === f.value && signatureId === f.signatureId) continue;
+      await tx
+        .update(schema.requestFields)
+        .set({ value, signatureId, filledAt: null })
+        .where(eq(schema.requestFields.id, f.id));
+      saved++;
+    }
+    const now = new Date();
+    if (data.exit) {
+      await tx
+        .update(schema.requestRecipients)
+        .set({ sessionHash: null, sessionExpiresAt: null })
+        .where(eq(schema.requestRecipients.id, recipient.id));
+    }
+    if (data.exit || saved > 0) {
+      await appendEvent(tx, {
+        requestId: request.id,
+        workspaceId: request.workspaceId,
+        recipientId: recipient.id,
+        type: 'recipient.progress_saved',
+        data: {
+          page: data.page ?? null,
+          exit: Boolean(data.exit),
+          changedFields: saved,
+          sourceSha256: request.sourceSha256,
+        },
+        ...meta,
+      });
+    }
+    return { savedAt: now, changed: saved };
   });
 }
 
@@ -1150,6 +1493,7 @@ export async function readSignerSourceFile(
   storage: ObjectStorage,
   token: string,
   session: string | undefined,
+  opts: { download?: boolean; meta?: Meta } = {},
 ) {
   const { key, sha, filename } = await withSigner(db, tokenHashOf(token), async (tx) => {
     const { recipient, request } = await loadSigner(tx);
@@ -1157,6 +1501,18 @@ export async function readSignerSourceFile(
       throw new AppError('not_found', 'This document is no longer available here.');
     if (!sessionValid(recipient, session))
       throw new AppError('unauthenticated', 'Open the link again to continue.');
+    if (opts.download) {
+      if (!documentSettingsSchema.parse(request.settings).allowDownload)
+        throw new AppError('forbidden', 'The sender has turned off downloads for this document.');
+      await appendEvent(tx, {
+        requestId: request.id,
+        workspaceId: request.workspaceId,
+        recipientId: recipient.id,
+        type: 'recipient.source_downloaded',
+        data: { sourceSha256: request.sourceSha256 },
+        ...opts.meta,
+      });
+    }
     const [file] = await tx
       .select()
       .from(schema.documentFiles)
@@ -1207,6 +1563,16 @@ const adoptSchema = z.object({
   typedText: z.string().trim().min(1).max(120).optional(),
   font: z.string().trim().max(60).optional(),
   pngBase64: z.string().min(10).max(1_500_000),
+  /** The typed-signature design the signer chose (family, variation, adjustments), as evidence. */
+  style: z
+    .object({
+      family: z.string().trim().max(40),
+      variation: z.number().int().min(0).max(10_000),
+      params: z.record(z.string().max(30), z.union([z.number(), z.string().max(30)])).optional(),
+    })
+    .optional(),
+  /** Fields to apply the newly adopted mark to (this recipient's fields of the same kind only). */
+  applyTo: z.array(z.string().uuid()).max(200).optional(),
 });
 
 /** Stores an explicitly adopted signature or initials mark for this recipient. */
@@ -1216,6 +1582,11 @@ export async function adoptSignature(
   session: string | undefined,
   input: z.input<typeof adoptSchema>,
   meta: Meta = {},
+  /**
+   * Set only by the server when the image is a Signature Studio design the signed-in signer owns
+   * (never taken from the browser). Recorded in the audit trail as the mark's source.
+   */
+  source?: { kind: 'signature_studio'; designId: string },
 ) {
   const data = adoptSchema.parse(input);
   if (data.method === 'typed' && !data.typedText)
@@ -1258,15 +1629,54 @@ export async function adoptSignature(
       workspaceId: request.workspaceId,
       recipientId: recipient.id,
       type: 'recipient.signature_adopted',
-      data: { kind: data.kind, method: data.method, imageSha256: sha, font: data.font ?? null },
+      data: {
+        kind: data.kind,
+        method: data.method,
+        imageSha256: sha,
+        font: data.font ?? null,
+        style: data.method === 'typed' ? (data.style ?? null) : null,
+        sourceSha256: request.sourceSha256,
+        ...(source ? { source: source.kind, studioDesignId: source.designId } : {}),
+      },
       ...meta,
     });
-    return { id: row!.id, dataUrl: `data:image/png;base64,${png.toString('base64')}` };
+    let applied: string[] = [];
+    if (data.applyTo?.length) {
+      const mine = await tx
+        .select({ id: schema.requestFields.id, type: schema.requestFields.type })
+        .from(schema.requestFields)
+        .where(eq(schema.requestFields.recipientId, recipient.id));
+      for (const id of data.applyTo)
+        if (!mine.some((f) => f.id === id && f.type === data.kind))
+          throw new AppError('forbidden', `That field is not one of your ${data.kind} fields.`);
+      applied = [...new Set(data.applyTo)];
+      await tx
+        .update(schema.requestFields)
+        .set({ signatureId: row!.id, value: null, filledAt: null })
+        .where(inArray(schema.requestFields.id, applied));
+      await appendEvent(tx, {
+        requestId: request.id,
+        workspaceId: request.workspaceId,
+        recipientId: recipient.id,
+        type: 'recipient.mark_applied',
+        data: { kind: data.kind, signatureId: row!.id, fieldIds: applied },
+        ...meta,
+      });
+    }
+    return {
+      id: row!.id,
+      dataUrl: `data:image/png;base64,${png.toString('base64')}`,
+      applied,
+    };
   });
 }
 
 const completeSchema = z.object({
   intent: z.literal(true, { message: 'Confirm that you intend to sign.' }),
+  /** The version the signer reviewed; a mismatch means the document changed under them. */
+  documentVersion: z.string().length(64).optional(),
+  /** The signer's device time zone (Intl), for their signing time on the stamp. */
+  timeZone: z.string().max(64).optional(),
   values: z
     .array(
       z.object({
@@ -1326,6 +1736,11 @@ export async function completeSigning(
     const { recipient, request } = await requireSession(tx, session);
     if (!recipient.consentedAt)
       throw new AppError('conflict', 'Agree to sign electronically first.');
+    if (data.documentVersion && data.documentVersion !== request.sourceSha256)
+      throw new AppError(
+        'conflict',
+        'This document was changed after you opened it. Reload to review the current version.',
+      );
 
     // The version on file must still be the one that was sent.
     const [file] = await tx
@@ -1351,11 +1766,19 @@ export async function completeSigning(
       if (!fields.some((f) => f.id === v.fieldId))
         throw new AppError('invalid', 'A value was sent for a field that is not yours.');
     const now = new Date();
-    const signedDate = now.toISOString().slice(0, 10);
+    const zone = signerTimeZone(data.timeZone, meta.ipTimeZone);
+    // "Date signed" is the signer's own calendar date, not the server's.
+    const signedDate = new Intl.DateTimeFormat('en-CA', {
+      timeZone: zone?.timeZone ?? 'UTC',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(now);
     const settings = documentSettingsSchema.parse(request.settings);
 
     for (const f of fields) {
-      const v = byField.get(f.id);
+      // Values sent now win; otherwise a value saved earlier in the session is used and re-checked.
+      const v = byField.get(f.id) ?? { value: f.value, signatureId: f.signatureId };
       const label = f.label || f.type.replace('_', ' ');
       let value: string | null = null;
       let signatureId: string | null = null;
@@ -1391,7 +1814,11 @@ export async function completeSigning(
         signedAt: now,
         signedIp: meta.ipAddress ?? null,
         signedUserAgent: meta.userAgent ?? null,
-        sessionHash: null,
+        timeZone: zone?.timeZone ?? null,
+        timeZoneSource: zone?.source ?? null,
+        // The verified session is kept until it expires (SESSION_HOURS), so the signer can open
+        // the completed document without a second code. Signing actions still refuse a signed
+        // recipient, so it grants read access only.
       })
       .where(eq(schema.requestRecipients.id, recipient.id));
     const verb =
@@ -1405,8 +1832,20 @@ export async function completeSigning(
       workspaceId: request.workspaceId,
       recipientId: recipient.id,
       type: `recipient.${verb}`,
-      data: { intent: true, fields: fields.length, sourceSha256: request.sourceSha256 },
-      ...meta,
+      data: {
+        intent: true,
+        fields: fields.length,
+        fieldTypes: fields.reduce<Record<string, number>>(
+          (acc, f) => ({ ...acc, [f.type]: (acc[f.type] ?? 0) + 1 }),
+          {},
+        ),
+        consentedAt: recipient.consentedAt.toISOString(),
+        sourceSha256: request.sourceSha256,
+        timeZone: zone?.timeZone ?? null,
+        timeZoneSource: zone?.source ?? null,
+      },
+      ipAddress: meta.ipAddress,
+      userAgent: meta.userAgent,
     });
 
     const all = await tx
@@ -1488,6 +1927,7 @@ export async function finalizeRequest(
   storage: ObjectStorage,
   ctx: { token: string } | { actor: ActorContext },
   requestId: string,
+  opts: { appUrl?: string } = {},
 ): Promise<{
   invitations: Invitation[];
   senderEmail: string;
@@ -1563,18 +2003,39 @@ export async function finalizeRequest(
     if (sha256Hex(source) !== req.sourceSha256)
       throw new Error('Source file failed its integrity check');
     const sigById = new Map(sigs.map((s) => [s.id, s]));
+    const recipById = new Map(recips.map((r) => [r.id, r]));
+    const block = signatureBlockSettings(req.settings);
     const signed = await buildSignedPdf(
       source,
-      fields.map((f) => ({
-        type: f.type,
-        page: f.page,
-        x: f.x,
-        y: f.y,
-        width: f.width,
-        height: f.height,
-        value: f.value,
-        imagePng: f.signatureId ? (sigById.get(f.signatureId)?.imagePng ?? null) : null,
-      })),
+      fields.map((f) => {
+        const r = recipById.get(f.recipientId);
+        const hasMark = Boolean(f.signatureId);
+        // The block's time is the server's recorded completion time for that recipient. A mark
+        // without one would mean evidence is missing, so finalization stops rather than invent it.
+        if (hasMark && !r?.signedAt)
+          throw new Error(`Signature field ${f.id} has no recorded signing time`);
+        return {
+          type: f.type,
+          page: f.page,
+          x: f.x,
+          y: f.y,
+          width: f.width,
+          height: f.height,
+          value: f.value,
+          imagePng: f.signatureId ? (sigById.get(f.signatureId)?.imagePng ?? null) : null,
+          signer:
+            hasMark && r?.signedAt
+              ? {
+                  name: r.name,
+                  role: r.role,
+                  signedAt: r.signedAt,
+                  // Each signer's own zone when known; older signings keep the request's zone.
+                  timeZone: r.timeZone ?? block.timeZone,
+                  format: block.format,
+                }
+              : null,
+        };
+      }),
       { isTest: req.isTest, requestId },
     );
     const signedSha = sha256Hex(signed);
@@ -1587,50 +2048,53 @@ export async function finalizeRequest(
         .where(eq(schema.signingEvents.requestId, requestId))
         .orderBy(asc(schema.signingEvents.seq)),
     );
-    const nameOf = new Map(recips.map((r) => [r.id, `${r.name} <${r.email}>`]));
-    const usedSigIds = new Set(fields.map((f) => f.signatureId).filter(Boolean));
     const completedAt = new Date();
-    const cert = await buildCertificate({
-      requestId,
+    const certificateNumber = await run((tx) => nextCertificateNumber(tx, completedAt));
+    const verificationRef = newVerificationRef();
+    const usedSigIds = new Set(fields.map((f) => f.signatureId).filter(Boolean));
+    const signedDoc = await PDFDocument.load(signed);
+    const first = signedDoc.getPage(0).getSize();
+    const appUrl = (opts.appUrl ?? process.env.BETTER_AUTH_URL ?? '').replace(/\/+$/, '');
+    const cert = await buildCompletionCertificate({
+      pageSize: pageSizeFor(first.width, first.height),
       isTest: req.isTest,
       title: req.title,
-      workspaceName: req.workspaceName,
+      documentRef: documentReferenceOf(req.documentId),
+      requestId,
+      verificationRef,
+      certificateNumber,
       senderName: req.senderName,
-      senderEmail: req.senderEmail,
-      sentAt: req.sentAt ?? req.createdAt,
+      organization: req.workspaceName || null,
+      createdAt: file.createdAt,
+      sentAt: req.sentAt,
       completedAt,
-      sourceSha256: req.sourceSha256,
-      signedSha256: signedSha,
-      pageCount: file.pageCount,
-      signingOrderEnabled: req.signingOrderEnabled,
-      disclosureVersion: req.disclosureVersion,
-      recipients: recips.map((r) => ({
-        name: r.name,
-        email: r.email,
-        role: r.role,
-        signingOrder: r.signingOrder,
-        authMethod: r.authMethod,
-        authenticatedAt: r.authenticatedAt,
-        consentedAt: r.consentedAt,
-        signedAt: r.signedAt,
-        ip: r.signedIp,
-        userAgent: r.signedUserAgent,
-        signatures: sigs
-          .filter((s) => s.recipientId === r.id && usedSigIds.has(s.id))
-          .map((s) => ({ kind: s.kind, method: s.method, imagePng: s.imagePng })),
-      })),
-      events: events.map((e) => ({
-        at: e.createdAt,
-        type: e.type,
-        who: e.recipientId
-          ? (nameOf.get(e.recipientId) ?? '')
-          : e.actorUserId
-            ? `${req.senderName} (sender)`
-            : 'system',
-        detail: e.ipAddress ? `IP ${e.ipAddress}` : '',
-      })),
-      chainHead: events.at(-1)?.hash ?? GENESIS_HASH,
+      issuedAt: completedAt,
+      reissue: null,
+      agreementPages: signedDoc.getPageCount(),
+      timeZone: block.timeZone,
+      signingOrder: req.signingOrderEnabled,
+      signers: certificateSigners(
+        recips,
+        sigs.filter((x) => usedSigIds.has(x.id)),
+        (id) => signingEventRef(events, id),
+      ),
+      copyRecipients: recips.filter((r) => !ACTING_ROLES.includes(r.role)).length,
+      events: certificateEvents({
+        events,
+        recipients: recips,
+        senderName: req.senderName,
+        uploadedAt: file.createdAt,
+        completedAt,
+      }),
+      evidenceEventCount: events.length,
+      hashes: {
+        signed: signedSha,
+        original: req.sourceSha256,
+        chainHead: events.at(-1)?.hash ?? GENESIS_HASH,
+      },
+      verifyUrl: `${appUrl}/verify?ref=${verificationRef}`,
     });
+    const packageSha = sha256Hex(await buildCompletionPackage(signed, cert));
     const certSha = sha256Hex(cert);
     const base = `ws/${req.workspaceId}/doc/${req.documentId}/req/${requestId}`;
     signedKey = `${base}/signed-${signedSha.slice(0, 16)}.pdf`;
@@ -1688,6 +2152,10 @@ export async function finalizeRequest(
           completedAt,
           signedFileId: sf!.id,
           certificateFileId: cf!.id,
+          certificateNumber,
+          verificationRef,
+          certificateIssuedAt: completedAt,
+          packageSha256: packageSha,
           finalizationError: null,
           updatedAt: completedAt,
         })
@@ -1697,7 +2165,13 @@ export async function finalizeRequest(
         workspaceId: req.workspaceId,
         actorUserId: 'actor' in ctx ? ctx.actor.userId : null,
         type: 'request.completed',
-        data: { signedSha256: signedSha, certificateSha256: certSha },
+        data: {
+          signedSha256: signedSha,
+          certificateSha256: certSha,
+          packageSha256: packageSha,
+          certificateNumber,
+          verificationRef,
+        },
       });
       // Completion emails are queued only now: files stored, hashes recorded, evidence closed.
       await enqueueCompletionNotifications(tx, {
@@ -1778,7 +2252,7 @@ export interface FinalizationRetry {
 export async function retryFailedFinalizations(
   db: Database,
   storage: ObjectStorage,
-  opts: { limit?: number; maxAttempts?: number } = {},
+  opts: { limit?: number; maxAttempts?: number; appUrl?: string } = {},
 ): Promise<FinalizationRetry[]> {
   const queue = (await db.execute(
     sql`select * from st_finalization_retry_queue(${opts.limit ?? 10}, ${opts.maxAttempts ?? 3})`,
@@ -1796,6 +2270,7 @@ export async function retryFailedFinalizations(
         storage,
         { actor: { userId: q.sent_by } },
         q.request_id,
+        { appUrl: opts.appUrl },
       );
       out.push({
         requestId: q.request_id,

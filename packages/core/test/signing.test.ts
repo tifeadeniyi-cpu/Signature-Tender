@@ -17,6 +17,7 @@ import {
   giveConsent,
   getSigningWorkspace,
   adoptSignature,
+  saveSigningProgress,
   completeSigning,
   finalizeRequest,
   retryFailedFinalizations,
@@ -441,6 +442,152 @@ describe('sequential signing to completion', () => {
     await expect(
       readRequestFile(db, storage, { userId: owner }, requestId, 'signed'),
     ).rejects.toThrow(/Integrity/);
+  });
+});
+
+describe('signing workspace: save, resume, reuse and turn-taking', () => {
+  let token: string, session: string, laterToken: string | undefined, requestId: string;
+  let ws_: Awaited<ReturnType<typeof getSigningWorkspace>>;
+
+  async function consented(t: string) {
+    const s = ((await startSigning(db, t)) as { session: string }).session;
+    const v = await getSignerView(db, t, s);
+    await giveConsent(db, t, s, { disclosureVersion: v.disclosure.version, agree: true });
+    return s;
+  }
+
+  it('does not open the workspace for a later signer before their turn', async () => {
+    const id = await preparedDoc([
+      { name: 'Alex Morgan', email: 'alex@example.test', role: 'signer', signingOrder: 1 },
+      { name: 'Taylor Smith', email: 'taylor@example.test', role: 'signer', signingOrder: 2 },
+    ]);
+    const res = await sendForSignature(db, storage, { userId: owner }, id, TEST);
+    requestId = res.requestId;
+    token = res.invitations[0]!.token;
+    expect(res.invitations).toHaveLength(1);
+    // Taylor has no link yet; even with a forged token the request cannot be reached.
+    await expect(getSignerView(db, 'T'.repeat(43), undefined)).rejects.toMatchObject({
+      code: 'not_found',
+    });
+    session = await consented(token);
+    ws_ = await getSigningWorkspace(db, token, session);
+    expect(ws_.documentVersion).toMatch(/^[0-9a-f]{64}$/);
+    expect(ws_.resumePage).toBe(1);
+    expect(ws_.completedByOthers).toEqual([]);
+  });
+
+  it('saves drafts for own fields only and restores them after Save & Exit', async () => {
+    const text = ws_.fields.find((f) => f.type === 'text')!;
+    await expect(
+      saveSigningProgress(db, token, session, {
+        values: [{ fieldId: '00000000-0000-4000-8000-000000000000', value: 'x' }],
+      }),
+    ).rejects.toMatchObject({ code: 'forbidden' });
+    const sig = await adoptSignature(db, token, session, {
+      kind: 'signature',
+      method: 'typed',
+      typedText: 'Alex Morgan',
+      font: 'Great Vibes',
+      style: { family: 'luxury', variation: 2, params: { slant: 8 } },
+      pngBase64: makePng().toString('base64'),
+      applyTo: ws_.fields.filter((f) => f.type === 'signature').map((f) => f.id),
+    });
+    expect(sig.applied).toHaveLength(1);
+    await expect(
+      adoptSignature(db, token, session, {
+        kind: 'initials',
+        method: 'drawn',
+        pngBase64: makePng().toString('base64'),
+        applyTo: [text.id],
+      }),
+    ).rejects.toMatchObject({ code: 'forbidden' });
+    const saved = await saveSigningProgress(db, token, session, {
+      values: [{ fieldId: text.id, value: 'Client' }],
+      page: 2,
+      exit: true,
+    });
+    expect(saved.changed).toBe(1);
+    // The session ended: nothing more can be saved or signed with it.
+    await expect(saveSigningProgress(db, token, session, { values: [] })).rejects.toMatchObject({
+      code: 'unauthenticated',
+    });
+    expect((await getSignerView(db, token, session)).stage).toBe('start');
+
+    session = ((await startSigning(db, token)) as { session: string }).session;
+    expect((await getSignerView(db, token, session)).stage).toBe('sign'); // consent kept
+    const back = await getSigningWorkspace(db, token, session);
+    expect(back.resumePage).toBe(2);
+    expect(back.fields.find((f) => f.id === text.id)!.savedValue).toBe('Client');
+    expect(back.fields.find((f) => f.type === 'signature')!.savedSignatureId).toBe(sig.id);
+    const types = await owner_.db
+      .select({ type: schema.signingEvents.type, data: schema.signingEvents.data })
+      .from(schema.signingEvents)
+      .where(sql`request_id = ${requestId}::uuid`)
+      .orderBy(schema.signingEvents.seq);
+    const names = types.map((t) => t.type);
+    expect(names).toEqual(
+      expect.arrayContaining([
+        'recipient.signature_adopted',
+        'recipient.mark_applied',
+        'recipient.progress_saved',
+        'recipient.resumed',
+      ]),
+    );
+    const adopted = types.find((t) => t.type === 'recipient.signature_adopted')!;
+    expect(adopted.data).toMatchObject({ style: { family: 'luxury', variation: 2 } });
+    // Resuming is recorded once, not on every reload.
+    await getSigningWorkspace(db, token, session);
+    const again = await owner_.db.execute(
+      sql`select count(*)::int as n from signing_events where request_id = ${requestId}::uuid and type = 'recipient.resumed'`,
+    );
+    expect((again as unknown as { n: number }[])[0]!.n).toBe(1);
+  });
+
+  it('rejects completion against a different document version, then completes from saved values', async () => {
+    await expect(
+      completeSigning(db, storage, token, session, {
+        intent: true,
+        documentVersion: 'f'.repeat(64),
+        values: [],
+      }),
+    ).rejects.toMatchObject({ code: 'conflict' });
+    const res = await completeSigning(db, storage, token, session, {
+      intent: true,
+      documentVersion: ws_.documentVersion,
+      values: [],
+    });
+    laterToken = res.invitations[0]?.token;
+    expect(laterToken).toBeTruthy();
+    // A repeated submission is refused and adds no second signing event.
+    await expect(
+      completeSigning(db, storage, token, session, { intent: true, values: [] }),
+    ).rejects.toBeTruthy();
+    const signed = await owner_.db.execute(
+      sql`select count(*)::int as n from signing_events where request_id = ${requestId}::uuid and type = 'recipient.signed'`,
+    );
+    expect((signed as unknown as { n: number }[])[0]!.n).toBe(1);
+    const view = await getSignerView(db, token, undefined);
+    expect(view.stage).toBe('signed_waiting');
+    expect(view.signedAt).toBeInstanceOf(Date);
+    expect(view.allPartiesDone).toBe(false);
+  });
+
+  it('shows the next signer the completed fields read-only, and they cannot change them', async () => {
+    const s2 = await consented(laterToken!);
+    const w2 = await getSigningWorkspace(db, laterToken!, s2);
+    expect(w2.completedByOthers.length).toBeGreaterThan(0);
+    const theirs = w2.completedByOthers.find((f) => f.type === 'signature')!;
+    expect(theirs.dataUrl).toMatch(/^data:image\/png;base64,/);
+    expect(theirs.recipientName).toBe('Alex Morgan');
+    await expect(
+      saveSigningProgress(db, laterToken!, s2, { values: [{ fieldId: theirs.id, value: 'x' }] }),
+    ).rejects.toMatchObject({ code: 'forbidden' });
+    await expect(
+      completeSigning(db, storage, laterToken!, s2, {
+        intent: true,
+        values: [{ fieldId: theirs.id, value: 'x' }],
+      }),
+    ).rejects.toMatchObject({ code: 'invalid' });
   });
 });
 

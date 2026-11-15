@@ -253,3 +253,98 @@ export async function exportReportCsv(
   );
   return [header.join(','), ...lines].join('\r\n') + '\r\n';
 }
+
+export interface DashboardActivity {
+  range: ReportRange;
+  /** The equally long period just before `range`, used for comparisons. */
+  previous: ReportRange;
+  documents: { total: number; created: number; createdPrevious: number };
+  sent: { current: number; previous: number };
+  completed: { current: number; previous: number };
+  /** One row per day in the range: requests sent that day and requests completed that day. */
+  daily: { day: string; sent: number; completed: number }[];
+}
+
+/**
+ * Figures for the dashboard. Sent counts requests by the day they were sent; completed counts
+ * requests whose final signature landed in the period (not requests merely created then).
+ * Row-level security limits every query to documents the actor may view. Test requests excluded.
+ */
+export async function getDashboardActivity(
+  db: Database,
+  actor: ActorContext,
+  workspaceId: string,
+  rawRange: z.input<typeof reportRangeSchema>,
+  opts: { timeZone?: string } = {},
+): Promise<DashboardActivity> {
+  if (!z.string().uuid().safeParse(workspaceId).success)
+    throw new AppError('not_found', 'Workspace not found');
+  const range = reportRangeSchema.parse(rawRange);
+  const days = Math.round((Date.parse(range.to) - Date.parse(range.from)) / 86_400_000) + 1;
+  const prevTo = new Date(Date.parse(range.from) - 86_400_000).toISOString().slice(0, 10);
+  const prevFrom = new Date(Date.parse(range.from) - days * 86_400_000).toISOString().slice(0, 10);
+  const previous = { from: prevFrom, to: prevTo };
+  const tz =
+    opts.timeZone && /^[A-Za-z_]+(\/[A-Za-z_+-]+)*$/.test(opts.timeZone) ? opts.timeZone : 'UTC';
+  return withActor(db, actor, async (tx) => {
+    if (
+      !(await can(tx, workspaceId, 'documents.view_own')) &&
+      !(await can(tx, workspaceId, 'documents.view_all'))
+    )
+      throw new AppError('forbidden', 'Your role cannot view document activity.');
+    // Local calendar day in the user's time zone.
+    const local = (col: string) => sql.raw(`(${col} at time zone '${tz}')::date`);
+    const between = (col: string, r: ReportRange) =>
+      sql`${local(col)} between ${r.from}::date and ${r.to}::date`;
+
+    const [d] = (await tx.execute(sql`
+      select count(*)::int as total,
+        count(*) filter (where ${between('d.created_at', range)})::int as created,
+        count(*) filter (where ${between('d.created_at', previous)})::int as created_prev
+      from documents d
+      where d.workspace_id = ${workspaceId}::uuid and d.deleted_at is null
+    `)) as unknown as { total: number; created: number; created_prev: number }[];
+
+    const [s] = (await tx.execute(sql`
+      select count(*) filter (where sr.sent_at is not null and ${between('sr.sent_at', range)})::int as sent,
+        count(*) filter (where sr.sent_at is not null and ${between('sr.sent_at', previous)})::int as sent_prev,
+        count(*) filter (where sr.status = 'completed' and ${between('sr.completed_at', range)})::int as completed,
+        count(*) filter (where sr.status = 'completed' and ${between('sr.completed_at', previous)})::int as completed_prev
+      from signing_requests sr
+      where sr.workspace_id = ${workspaceId}::uuid and not sr.is_test
+    `)) as unknown as Record<string, number>[];
+
+    const daily = (await tx.execute(sql`
+      with days as (
+        select generate_series(${range.from}::date, ${range.to}::date, interval '1 day')::date as day
+      ),
+      sent as (
+        select ${local('sr.sent_at')} as day, count(*)::int as n from signing_requests sr
+        where sr.workspace_id = ${workspaceId}::uuid and not sr.is_test and sr.sent_at is not null
+          and ${between('sr.sent_at', range)} group by 1
+      ),
+      done as (
+        select ${local('sr.completed_at')} as day, count(*)::int as n from signing_requests sr
+        where sr.workspace_id = ${workspaceId}::uuid and not sr.is_test and sr.status = 'completed'
+          and ${between('sr.completed_at', range)} group by 1
+      )
+      select to_char(days.day, 'YYYY-MM-DD') as day, coalesce(sent.n, 0)::int as sent,
+        coalesce(done.n, 0)::int as completed
+      from days left join sent on sent.day = days.day left join done on done.day = days.day
+      order by days.day
+    `)) as unknown as { day: string; sent: number; completed: number }[];
+
+    return {
+      range,
+      previous,
+      documents: {
+        total: d?.total ?? 0,
+        created: d?.created ?? 0,
+        createdPrevious: d?.created_prev ?? 0,
+      },
+      sent: { current: s?.sent ?? 0, previous: s?.sent_prev ?? 0 },
+      completed: { current: s?.completed ?? 0, previous: s?.completed_prev ?? 0 },
+      daily,
+    };
+  });
+}

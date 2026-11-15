@@ -1,8 +1,18 @@
 import Link from 'next/link';
-import { CircleHelp, LogOut, UserRound, ShieldCheck, Plus } from 'lucide-react';
+import {
+  CircleHelp,
+  LogOut,
+  UserRound,
+  ShieldCheck,
+  Plus,
+  Search,
+  Building2,
+  CreditCard,
+} from 'lucide-react';
+import { hasPermission } from '@st/core';
 import type { AppContext } from '@/lib/session';
 import Image from 'next/image';
-import { MobileNavigationDrawer } from './sidebar';
+import { MobileNavigationDrawer, type SidebarCta } from './sidebar';
 import type { NavItem } from './nav';
 import { BRAND_ASSETS } from '@/lib/brand-assets';
 import { switchWorkspace, signOut } from './actions';
@@ -25,16 +35,39 @@ export function Topbar({
   ctx: AppContext;
   supportEmail: string;
   nav: NavItem[];
-  cta: { returning: boolean } | null;
+  cta: SidebarCta | null;
 }) {
   const { user, membership, workspaces } = ctx;
+  const canBill = hasPermission(membership.permissions, 'billing.manage');
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-ivory/95 px-4 backdrop-blur sm:px-6">
       <MobileNavigationDrawer items={nav} cta={cta} />
-      <Link href="/app" className="rounded-lg lg:hidden" aria-label="Signature Tender dashboard">
+      <Link
+        href="/app"
+        className="shrink-0 rounded-lg lg:hidden"
+        aria-label="Signature Tender dashboard"
+      >
         <Image {...BRAND_ASSETS.horizontalLight} alt="" className="h-9 w-auto" />
       </Link>
-      <div className="flex-1" />
+      <form action="/app/search" role="search" className="ml-auto w-full max-w-md">
+        <label htmlFor="global-search" className="sr-only">
+          Search documents, contacts, templates and signatures
+        </label>
+        <div className="relative">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-text"
+            aria-hidden
+          />
+          <input
+            id="global-search"
+            name="q"
+            type="search"
+            maxLength={100}
+            placeholder="Search documents, contacts..."
+            className="h-10 w-full rounded-lg border border-border bg-white pl-9 pr-3 text-sm text-dark-text placeholder:text-slate-text focus:border-primary-hover focus:outline-none focus:ring-2 focus:ring-gold/50"
+          />
+        </div>
+      </form>
       <a
         href={`mailto:${supportEmail}`}
         className="flex size-10 items-center justify-center rounded-lg text-primary hover:bg-primary-surface"
@@ -93,6 +126,20 @@ export function Topbar({
           >
             <UserRound className="size-4" aria-hidden /> Profile
           </Link>
+          <Link
+            href="/app/settings"
+            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-heading hover:bg-blush"
+          >
+            <Building2 className="size-4" aria-hidden /> Workspace
+          </Link>
+          {canBill ? (
+            <Link
+              href="/app/billing"
+              className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-heading hover:bg-blush"
+            >
+              <CreditCard className="size-4" aria-hidden /> Billing
+            </Link>
+          ) : null}
           <Link
             href="/app/settings/security"
             className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-heading hover:bg-blush"

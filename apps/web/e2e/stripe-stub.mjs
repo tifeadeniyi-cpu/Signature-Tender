@@ -65,6 +65,12 @@ const server = http.createServer(async (req, res) => {
         currency: p.get('line_items[0][price_data][currency]'),
         name: p.get('line_items[0][price_data][product_data][name]'),
         customer: p.get('customer'),
+        customerEmail: p.get('customer_email'),
+        metadata: Object.fromEntries(
+          [...p.entries()]
+            .filter(([k]) => /^metadata\[\w+\]$/.test(k))
+            .map(([k, v]) => [k.slice(9, -1), v]),
+        ),
         success: p.get('success_url'),
         cancel: p.get('cancel_url'),
       };
@@ -74,6 +80,32 @@ const server = http.createServer(async (req, res) => {
         object: 'checkout.session',
         mode: s.mode,
         url: `http://localhost:${PORT}/pay/${id}`,
+      });
+    }
+
+    // Setup-mode checkout saves a card: the app reads it back from the SetupIntent.
+    const si = url.pathname.match(/^\/v1\/setup_intents\/(seti_[\w]+)$/);
+    if (req.method === 'GET' && si)
+      return json(res, 200, {
+        id: si[1],
+        object: 'setup_intent',
+        status: 'succeeded',
+        payment_method: {
+          id: `pm_${si[1].slice(5)}`,
+          object: 'payment_method',
+          card: { brand: 'visa', last4: '4242' },
+        },
+      });
+    if (req.method === 'POST' && /^\/v1\/customers\/cus_[\w]+$/.test(url.pathname))
+      return json(res, 200, { id: url.pathname.split('/').pop(), object: 'customer' });
+
+    if (req.method === 'POST' && url.pathname === '/v1/refunds') {
+      const p = await read(req);
+      return json(res, 200, {
+        id: next('re_stub'),
+        object: 'refund',
+        payment_intent: p.get('payment_intent'),
+        status: 'succeeded',
       });
     }
 
@@ -87,7 +119,7 @@ const server = http.createServer(async (req, res) => {
         res.writeHead(200, { 'content-type': 'text/html' });
         return res.end(`<!doctype html><title>Test checkout</title><main>
           <h1>Test checkout (local Stripe stand-in)</h1>
-          <p>${s.name}: ${(s.amount / 100).toFixed(2)} ${s.currency.toUpperCase()}</p>
+          <p>${s.mode === 'setup' ? 'Save a card' : `${s.name}: ${(s.amount / 100).toFixed(2)} ${s.currency.toUpperCase()}`}</p>
           <form method="post"><button>Pay</button></form>
           <a href="${s.cancel}">Cancel</a></main>`);
       }
@@ -95,7 +127,7 @@ const server = http.createServer(async (req, res) => {
         id: s.id,
         object: 'checkout.session',
         mode: s.mode,
-        payment_status: 'paid',
+        payment_status: s.mode === 'setup' ? 'no_payment_required' : 'paid',
         status: 'complete',
         amount_subtotal: s.amount,
         amount_total: s.amount,
@@ -103,8 +135,10 @@ const server = http.createServer(async (req, res) => {
         customer: s.customer,
         payment_intent: s.mode === 'payment' ? `pi_${s.id}` : null,
         subscription: s.mode === 'subscription' ? next('sub_stub_') : null,
+        setup_intent: s.mode === 'setup' ? next('seti_stub') : null,
         invoice: null,
-        metadata: {},
+        customer_details: s.customerEmail ? { email: s.customerEmail } : null,
+        metadata: s.metadata,
       });
       res.writeHead(303, { location: s.success.replace('{CHECKOUT_SESSION_ID}', s.id) });
       return res.end();

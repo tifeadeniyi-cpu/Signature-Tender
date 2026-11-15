@@ -1,11 +1,14 @@
 import {
   House,
   FileText,
+  Signature,
   Layers,
   Contact,
   UsersRound,
   CreditCard,
+  ChartColumn,
   Puzzle,
+  BookOpen,
   Settings,
   type LucideIcon,
 } from 'lucide-react';
@@ -17,19 +20,22 @@ export interface NavChild {
   label: string;
   /** Path, optionally with a `?tab=` filter that the page already understands. */
   href: string;
-  /** Permission needed to see this link. Hiding is a convenience; pages still check. */
-  permission?: string;
+  /** Shown only with at least one of these permissions. Hiding is a convenience; pages still check. */
+  anyOf?: string[];
 }
 
 /** Icons are named, not passed as components, so the menu can be sent from server to browser. */
 export const NAV_ICONS = {
   home: House,
   documents: FileText,
+  studio: Signature,
   templates: Layers,
   contacts: Contact,
   team: UsersRound,
   billing: CreditCard,
+  reports: ChartColumn,
   integrations: Puzzle,
+  apiDocs: BookOpen,
   settings: Settings,
 } satisfies Record<string, LucideIcon>;
 export type NavIcon = keyof typeof NAV_ICONS;
@@ -38,9 +44,14 @@ export interface NavItem {
   href: string;
   label: string;
   icon: NavIcon;
-  permission?: string;
+  /** Shown only with at least one of these permissions. Pages enforce the same check server-side. */
+  anyOf?: string[];
+  /** Shown only while Signature Studio is switched on. */
+  studio?: boolean;
   children?: NavChild[];
 }
+
+const VIEW_DOCS = ['documents.view_own', 'documents.view_all'];
 
 /**
  * Primary navigation, shared by the desktop sidebar and the phone drawer. Only routes that exist
@@ -52,6 +63,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: '/app/documents',
     label: 'Documents',
     icon: 'documents',
+    anyOf: VIEW_DOCS,
     children: [
       { label: 'All Documents', href: '/app/documents' },
       { label: 'In Progress', href: '/app/documents?tab=in_progress' },
@@ -59,22 +71,36 @@ export const NAV_ITEMS: NavItem[] = [
       { label: 'Archived', href: '/app/documents?tab=archived' },
     ],
   },
-  { href: '/app/templates', label: 'Templates', icon: 'templates', permission: 'templates.view' },
-  { href: '/app/contacts', label: 'Contacts', icon: 'contacts', permission: 'contacts.view' },
-  { href: '/app/team', label: 'Team', icon: 'team', permission: 'team.view' },
+  {
+    href: '/app/signature-studio',
+    label: 'Signature Studio',
+    icon: 'studio',
+    studio: true,
+    children: [
+      { label: 'Design a Signature', href: '/app/signature-studio' },
+      { label: 'My Signatures', href: '/app/signature-studio/library' },
+    ],
+  },
+  { href: '/app/templates', label: 'Templates', icon: 'templates', anyOf: ['templates.view'] },
+  { href: '/app/contacts', label: 'Contacts', icon: 'contacts', anyOf: ['contacts.view'] },
+  { href: '/app/team', label: 'Team', icon: 'team', anyOf: ['team.view'] },
   {
     href: '/app/billing',
     label: 'Billing & Credits',
     icon: 'billing',
+    anyOf: ['billing.manage'],
     children: [
       { label: 'Overview', href: '/app/billing' },
       { label: 'Buy Credits', href: '/app/billing?tab=credits' },
       { label: 'Plans & Pricing', href: '/app/billing?tab=plans' },
+      { label: 'Transactions', href: '/app/billing?tab=payments' },
       { label: 'Invoices', href: '/app/billing?tab=invoices' },
       { label: 'Usage', href: '/app/billing?tab=usage' },
     ],
   },
+  { href: '/app/reports', label: 'Reports', icon: 'reports', anyOf: VIEW_DOCS },
   { href: '/app/integrations', label: 'Integrations', icon: 'integrations' },
+  { href: '/app/api-docs', label: 'API Docs', icon: 'apiDocs' },
   {
     href: '/app/settings',
     label: 'Settings',
@@ -85,17 +111,21 @@ export const NAV_ITEMS: NavItem[] = [
       { label: 'Branding', href: '/app/settings/branding' },
       { label: 'Security', href: '/app/settings/security' },
       { label: 'Data Retention', href: '/app/settings/retention' },
-      { label: 'API Settings', href: '/app/settings/developers', permission: 'api.manage' },
+      { label: 'API Settings', href: '/app/settings/developers', anyOf: ['api.manage'] },
     ],
   },
 ];
 
 /** The menu this person may see. Never grants access: every page enforces its own checks. */
-export function visibleNav(permissions: readonly string[], items = NAV_ITEMS): NavItem[] {
-  const can = (p?: string) => !p || permissions.includes(p);
+export function visibleNav(
+  permissions: readonly string[],
+  studioEnabled = false,
+  items = NAV_ITEMS,
+): NavItem[] {
+  const can = (anyOf?: string[]) => !anyOf || anyOf.some((p) => permissions.includes(p));
   return items
-    .filter((i) => can(i.permission))
-    .map((i) => (i.children ? { ...i, children: i.children.filter((c) => can(c.permission)) } : i));
+    .filter((i) => (!i.studio || studioEnabled) && can(i.anyOf))
+    .map((i) => (i.children ? { ...i, children: i.children.filter((c) => can(c.anyOf)) } : i));
 }
 
 export function isActive(pathname: string, href: string): boolean {

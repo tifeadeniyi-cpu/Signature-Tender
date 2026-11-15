@@ -54,3 +54,22 @@ jobs:
           name: playwright-report
           path: apps/web/playwright-report
           retention-days: 7
+
+  mobile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - run: npm ci
+      - run: npm run check:shared
+      - run: npx tsc --noEmit
+      - run: npx eslint src
+      - run: npx jest --ci

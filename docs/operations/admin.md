@@ -40,3 +40,28 @@ them to Sign-in and security with an explanation.
 
 - Review the `admin.viewed` audit rows.
 - Keep the staff list short and remove people who no longer need it.
+
+## Complimentary (founder) workspaces
+
+A workspace on the complimentary list signs for free with no limit: sending never needs a credit,
+nothing is reserved or charged, and checkout is refused. The founder workspace (Lara's Workspace,
+`71eabc8e-2b94-4757-b0a5-8f6da7082c4d`) is on it. Every other workspace pays as normal.
+
+The list is the `billing.complimentary_workspaces` row in `app_config`, a JSON array of workspace
+ids. Only the database owner can change it.
+
+```sql
+-- Add a workspace
+insert into app_config (key, value, description)
+values ('billing.complimentary_workspaces', '["<workspace id>"]',
+        'Workspaces that sign for free with no limit (founder)')
+on conflict (key) do update
+  set value = app_config.value || jsonb_build_array('<workspace id>'::text), updated_at = now();
+
+-- Remove a workspace (normal billing resumes on its next send)
+update app_config set value = value - '<workspace id>', updated_at = now()
+where key = 'billing.complimentary_workspaces';
+```
+
+This does not switch on real signing. Live sending still waits for the `production_signing` flag
+and the release checklist.

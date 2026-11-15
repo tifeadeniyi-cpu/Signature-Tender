@@ -9,7 +9,20 @@ const apiCsp = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; for
 const config: NextConfig = {
   transpilePackages: ['@st/db', '@st/core'],
   poweredByHeader: false,
-  serverExternalPackages: ['postgres'],
+  // resvg is a native module: load it from node_modules at runtime instead of bundling it.
+  serverExternalPackages: ['postgres', '@resvg/resvg-js'],
+  // Signature Studio renders exports on the server from the self-hosted font files.
+  outputFileTracingIncludes: {
+    '/api/stripe/webhook': ['./public/studio-fonts/*.woff'],
+    '/api/studio/**': ['./public/studio-fonts/*.woff'],
+    '/signature-studio/**': ['./public/studio-fonts/*.woff'],
+    '/admin/signature-studio': ['./public/studio-fonts/*.woff'],
+    '/sign/**': ['./public/studio-fonts/*.woff'],
+  },
+  // The API documentation moved behind sign-in. Old links land there (or on sign-in, then there).
+  async redirects() {
+    return [{ source: '/developers', destination: '/app/api-docs', permanent: false }];
+  },
   async headers() {
     return [
       {

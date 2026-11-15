@@ -6,11 +6,14 @@ const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 const ORDER = [
   'Dashboard',
   'Documents',
+  'Signature Studio',
   'Templates',
   'Contacts',
   'Team',
   'Billing & Credits',
+  'Reports',
   'Integrations',
+  'API Docs',
   'Settings',
 ];
 
@@ -72,6 +75,16 @@ test('desktop sidebar: links, active states, submenus, collapse, tooltips, flyou
     'page',
   );
 
+  // Until a design is bought, the card offers Signature Studio. Dismissing it brings back Get Started.
+  const offer = side.getByRole('region', { name: 'Custom signature offer' });
+  await expect(offer).toBeVisible();
+  await expect(offer.getByRole('link', { name: 'Design Now' })).toHaveAttribute(
+    'href',
+    '/app/signature-studio',
+  );
+  await offer.getByRole('button', { name: 'Dismiss the custom signature offer' }).click();
+  await expect(offer).toBeHidden();
+
   // Get Started opens the existing upload step; nothing is charged for a draft.
   await expect(side.getByRole('region', { name: 'Get started' })).toBeVisible();
   await side.getByRole('link', { name: 'Create Document' }).click();
@@ -117,6 +130,9 @@ test('short screens scroll the menu and keep every item reachable', async ({ pag
   await signUpWithWorkspace(page, 'Sho Short', 'Short Studio');
   await page.goto('/app/settings');
   const side = page.getByRole('complementary', { name: 'Sidebar' });
+  const dismiss = side.getByRole('button', { name: 'Dismiss the custom signature offer' });
+  await dismiss.scrollIntoViewIfNeeded();
+  await dismiss.click();
   const cta = side.getByRole('link', { name: 'Create Document' });
   await cta.scrollIntoViewIfNeeded();
   await expect(cta).toBeInViewport();

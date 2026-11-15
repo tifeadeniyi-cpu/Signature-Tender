@@ -40,12 +40,15 @@ async function sendAndSign(page: Page, browser: import('@playwright/test').Brows
   await signer.getByRole('button', { name: /^Review/ }).click();
   await signer.getByLabel('I agree to use electronic records').check();
   await signer.getByRole('button', { name: 'Continue' }).click();
-  await signer.getByRole('button', { name: /Add your signature/ }).click();
-  await signer.getByRole('button', { name: 'Adopt and use signature' }).click();
-  await signer.getByRole('button', { name: 'Finish signing' }).click();
+  await signer.getByRole('button', { name: /^Sign here/ }).click();
+  await signer.getByRole('button', { name: 'Use This Signature' }).click();
+  await signer
+    .getByRole('navigation', { name: 'Field navigation' })
+    .getByRole('button', { name: 'Finish Signing' })
+    .click();
   await signer.getByLabel(/intend to sign it electronically/).check();
-  await signer.getByRole('button', { name: 'Sign document' }).click();
-  await expect(signer.getByRole('heading', { name: 'This document is complete' })).toBeVisible({
+  await signer.getByRole('button', { name: 'Complete Signing' }).click();
+  await expect(signer.getByRole('heading', { name: "You've Completed Your Signing" })).toBeVisible({
     timeout: 20_000,
   });
   return docUrl;
@@ -104,7 +107,9 @@ test('completion email: recipient verifies, views, downloads and opens the evide
   await expect(guest).toHaveURL(/\/retrieve\/documents\/[0-9a-f-]{36}$/);
   await expect(guest.getByRole('heading', { name: 'Fictional Booking Agreement' })).toBeVisible();
   await expect(guest.getByRole('list', { name: 'Signers' }).getByText('Tess Tester')).toBeVisible();
-  await expect(guest.getByRole('img', { name: 'Page 2 of 2' })).toBeVisible({ timeout: 15_000 });
+  await expect(guest.getByRole('img', { name: /^Page 2 of \d+$/ })).toBeVisible({
+    timeout: 15_000,
+  });
   // The forwarded browser still cannot fetch the file, even knowing the request id.
   const requestId = guest.url().split('/').at(-1);
   const blocked = await forwarded.request.get(`/api/retrieve/${requestId}/file?kind=signed`);
@@ -115,7 +120,10 @@ test('completion email: recipient verifies, views, downloads and opens the evide
   await guest.goto(download);
   expect((await dl).suggestedFilename()).toMatch(/\.pdf$/);
   const file = await guest.request.get(
-    (await guest.getByRole('link', { name: 'Download signed document' }).getAttribute('href'))!,
+    (await guest
+      .getByRole('toolbar')
+      .getByRole('link', { name: 'Download' })
+      .getAttribute('href'))!,
   );
   expect(file.status()).toBe(200);
   expect((await file.body()).subarray(0, 5).toString()).toBe('%PDF-');
@@ -123,12 +131,15 @@ test('completion email: recipient verifies, views, downloads and opens the evide
   // Evidence certificate: integrity references, signing events and a certificate download.
   await guest.goto(evidence);
   await expect(guest.getByRole('heading', { name: 'Integrity references' })).toBeVisible();
+  await guest.getByText(/^Signing events/).click();
   await expect(guest.getByText('Completed: signed copy and certificate created')).toBeVisible();
   const cert = await guest.request.get(
     (await guest
-      .getByRole('link', { name: 'Download evidence certificate' })
+      .getByRole('toolbar')
+      .getByRole('link', { name: 'Download' })
       .getAttribute('href'))!,
   );
+  expect(cert.headers()['content-disposition']).toContain('certificate');
   expect(cert.status()).toBe(200);
 
   // The sender sees the emails and the recipient's access in Activity.

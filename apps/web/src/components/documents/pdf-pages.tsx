@@ -4,6 +4,8 @@ import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { Alert, Skeleton } from '@/components/ui/feedback';
 
 type PageSize = { width: number; height: number };
+/** `size` is the rendered size in CSS pixels; `points` is the page size in PDF points (as shown). */
+type Overlay = (page: number, size: PageSize, points: PageSize) => ReactNode;
 
 /**
  * Renders every page of a PDF to canvases sized to the container width. Bytes come from the
@@ -16,7 +18,7 @@ export function PdfPages({
   maxWidth = 820,
 }: {
   src: string;
-  overlay?: (page: number, size: PageSize) => ReactNode;
+  overlay?: Overlay;
   onPageClick?: (page: number, x: number, y: number) => void;
   maxWidth?: number;
 }) {
@@ -92,11 +94,12 @@ function PdfPage({
   pdf: PDFDocumentProxy;
   pageNumber: number;
   width: number;
-  overlay?: (page: number, size: PageSize) => ReactNode;
+  overlay?: Overlay;
   onPageClick?: (page: number, x: number, y: number) => void;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState<PageSize | null>(null);
+  const [points, setPoints] = useState<PageSize | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -113,6 +116,7 @@ function PdfPage({
       c.style.width = `${viewport.width}px`;
       c.style.height = `${viewport.height}px`;
       setSize({ width: viewport.width, height: viewport.height });
+      setPoints({ width: base.width, height: base.height });
       task = page.render({
         canvas: c,
         viewport,
@@ -143,7 +147,7 @@ function PdfPage({
         }}
         className={onPageClick ? 'cursor-crosshair' : undefined}
       />
-      {size && overlay ? overlay(pageNumber, size) : null}
+      {size && points && overlay ? overlay(pageNumber, size, points) : null}
       <span className="absolute -bottom-5 right-0 text-xs text-slate-500">
         Page {pageNumber} of {pdf.numPages}
       </span>

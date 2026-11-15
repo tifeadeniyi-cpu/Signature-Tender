@@ -1,4 +1,5 @@
-import { formatMoney, getAdminOperations } from '@st/core';
+import { countLegacyCertificates, formatMoney, getAdminOperations } from '@st/core';
+import { CertificateReissue } from './certificate-reissue';
 import { db } from '@/lib/db';
 import { requireStaff } from '@/lib/session';
 import { Card, CardHeader } from '@/components/ui/card';
@@ -56,9 +57,17 @@ function Table({
 export default async function AdminOperationsPage() {
   const user = await requireStaff();
   const o = await getAdminOperations(db(), { userId: user.id }, 50);
+  const legacyCertificates = await countLegacyCertificates(db());
   return (
     <div className="flex flex-col gap-6">
       <h1 className="font-display text-3xl">Operations</h1>
+      <Card>
+        <CardHeader
+          title="Certificates of Completion"
+          description="Gives already-completed requests a new Certificate of Completion from their recorded evidence. The signed agreement and its evidence are not changed; the old certificate is kept in the file history and the new one says it was re-issued."
+        />
+        <CertificateReissue legacy={legacyCertificates} />
+      </Card>
       {o.stripe_events_unprocessed || o.stuck_requests ? (
         <Alert tone="warning">
           {o.stripe_events_unprocessed} Stripe events unprocessed after 10 minutes;{' '}

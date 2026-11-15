@@ -2,6 +2,7 @@ import { readRetrievedFile } from '@st/core';
 import { db } from '@/lib/db';
 import { storage } from '@/lib/storage';
 import { apiError } from '@/lib/api';
+import { completionKind, readCompletion } from '@/lib/completion-files';
 import { requestMeta } from '@/lib/session';
 import { readRetrieveSession } from '@/lib/retrieve-session';
 
@@ -15,20 +16,18 @@ export async function GET(req: Request, { params }: { params: Promise<{ rid: str
   try {
     const { rid } = await params;
     const q = new URL(req.url).searchParams;
-    const kind = q.get('kind') === 'certificate' ? 'certificate' : 'signed';
+    const kind = completionKind(q.get('kind'));
     // view=1 streams inline for the in-page viewer; it is logged as a view, not a download.
     const view = q.get('view') === '1';
-    const { bytes, filename } = await readRetrievedFile(
-      db(),
-      storage(),
-      await readRetrieveSession(),
-      rid,
-      kind,
-      await requestMeta(),
-      view ? 'view' : 'download',
+    const meta = await requestMeta();
+    const retrieveSession = await readRetrieveSession();
+    const { bytes, filename } = await readCompletion(kind, (k) =>
+      readRetrievedFile(db(), storage(), retrieveSession, rid, k, meta, view ? 'view' : 'download'),
     );
     const name =
-      filename.replace(/\.pdf$/i, '') + (kind === 'certificate' ? '-certificate' : '') + '.pdf';
+      kind === 'package'
+        ? filename
+        : filename.replace(/\.pdf$/i, '') + (kind === 'certificate' ? '-certificate' : '') + '.pdf';
     return new Response(Buffer.from(bytes), {
       headers: {
         'Content-Type': 'application/pdf',

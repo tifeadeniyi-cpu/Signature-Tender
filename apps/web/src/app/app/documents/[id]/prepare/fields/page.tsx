@@ -4,6 +4,7 @@ import { loadPreparation } from '@/lib/documents';
 import { PrepareHeader } from '@/components/documents/prepare-header';
 import { EmptyState } from '@/components/ui/feedback';
 import { buttonClass } from '@/components/ui/button';
+import { signatureBlockSettings, documentSettingsSchema } from '@st/core';
 import { FieldEditor } from './field-editor';
 import { saveFieldsAction } from '../../../actions';
 
@@ -45,7 +46,16 @@ export default async function FieldsStep({ params }: { params: Promise<{ id: str
           }}
           disabled={!data.canEdit}
           pageCount={data.file?.pageCount ?? 0}
-          recipients={fillable.map((r) => ({ id: r.id, name: r.name, colorIndex: r.colorIndex }))}
+          recipients={fillable.map((r) => ({
+            id: r.id,
+            name: r.name,
+            colorIndex: r.colorIndex,
+            role: r.role,
+          }))}
+          signatureBlock={{
+            format: signatureBlockSettings(data.document.settings).format,
+            timeZone: documentSettingsSchema.parse(data.document.settings ?? {}).timeZone,
+          }}
           initial={data.fields.map((f) => ({
             id: f.id,
             recipientId: f.recipientId,

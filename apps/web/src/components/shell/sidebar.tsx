@@ -3,13 +3,22 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
-import { useCallback, useEffect, useId, useRef, useState, type RefObject } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type RefObject,
+} from 'react';
 import {
   ArrowRight,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Menu,
+  PenLine,
   Plus,
   Rocket,
   X,
@@ -18,11 +27,21 @@ import { cn } from '@/lib/cn';
 import { BRAND_ASSETS } from '@/lib/brand-assets';
 import { NAV_ICONS, SIDEBAR_COOKIE, isActive, isChildActive, type NavItem } from './nav';
 
+export interface SidebarCta {
+  returning: boolean;
+  canCreate: boolean;
+  /** Formatted Signature Studio price, or null when the offer does not apply. */
+  studioPrice: string | null;
+}
+
 export interface SidebarProps {
   items: NavItem[];
   initialCollapsed: boolean;
-  /** Null when this person cannot create documents. */
-  cta: { returning: boolean } | null;
+  /**
+   * The card at the bottom: a Signature Studio offer (with its price) for people who have not
+   * bought a design yet, otherwise the Create Document card. Null when there is nothing to offer.
+   */
+  cta: SidebarCta | null;
 }
 
 const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white';
@@ -449,13 +468,90 @@ const CTA_BUTTON = cn(
   FOCUS,
 );
 
+const PROMO_KEY = 'st.studio-promo.dismissed';
+const PROMO_EVENT = 'st-studio-promo';
+function subscribePromo(cb: () => void) {
+  window.addEventListener(PROMO_EVENT, cb);
+  window.addEventListener('storage', cb);
+  return () => {
+    window.removeEventListener(PROMO_EVENT, cb);
+    window.removeEventListener('storage', cb);
+  };
+}
+function readDismissed(): boolean {
+  try {
+    return localStorage.getItem(PROMO_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+function dismissPromo() {
+  try {
+    localStorage.setItem(PROMO_KEY, '1');
+  } catch {
+    /* storage unavailable: the offer simply stays */
+  }
+  window.dispatchEvent(new Event(PROMO_EVENT));
+}
+
+/** Which card to show: the Studio offer until it is dismissed, then Create Document if allowed. */
+function useCtaKind(cta: SidebarCta): 'studio' | 'create' | null {
+  const dismissed = useSyncExternalStore(subscribePromo, readDismissed, () => false);
+  if (cta.studioPrice && !dismissed) return 'studio';
+  return cta.canCreate ? 'create' : null;
+}
+
 export function SidebarGetStartedCard({
-  returning,
+  cta,
   onNavigate,
 }: {
-  returning: boolean;
+  cta: SidebarCta;
   onNavigate?: () => void;
 }) {
+  const kind = useCtaKind(cta);
+  if (!kind) return null;
+  if (kind === 'studio')
+    return (
+      <section
+        aria-label="Custom signature offer"
+        className="relative rounded-2xl border border-[#D8AF68]/40 bg-white/[0.04] p-4"
+      >
+        <button
+          type="button"
+          onClick={dismissPromo}
+          aria-label="Dismiss the custom signature offer"
+          className={cn(
+            'absolute right-2 top-2 rounded p-1 text-[#CBD5E1] hover:bg-white/10 hover:text-white',
+            FOCUS,
+          )}
+        >
+          <X className="size-3.5" aria-hidden />
+        </button>
+        <div className="flex gap-3 pr-3">
+          <PenLine
+            className="mt-0.5 size-7 shrink-0 text-[#D8AF68]"
+            strokeWidth={1.5}
+            aria-hidden
+          />
+          <div>
+            <p className="font-display text-lg leading-tight text-white">
+              Create a Custom Signature
+            </p>
+            <p className="mt-1 text-sm leading-snug text-[#CBD5E1]">
+              Design your unique signature for just {cta.studioPrice}.
+            </p>
+          </div>
+        </div>
+        <Link
+          href="/app/signature-studio"
+          onClick={onNavigate}
+          className={cn(CTA_BUTTON, 'mt-4 w-full px-4 text-[15px]')}
+        >
+          Design Now <ArrowRight className="size-4" aria-hidden />
+        </Link>
+      </section>
+    );
+  const returning = cta.returning;
   return (
     <section
       aria-label={returning ? 'Ready to send' : 'Get started'}
@@ -482,6 +578,36 @@ export function SidebarGetStartedCard({
         Create Document <ArrowRight className="size-4" aria-hidden />
       </Link>
     </section>
+  );
+}
+
+/** The collapsed sidebar's single button for the same card. */
+function CollapsedCta({
+  cta,
+  tooltip,
+}: {
+  cta: SidebarCta;
+  tooltip: ReturnType<typeof useTooltip>;
+}) {
+  const kind = useCtaKind(cta);
+  if (!kind) return null;
+  const studio = kind === 'studio';
+  const label = studio ? 'Create a Custom Signature' : 'Create Document';
+  return (
+    <div className="mt-6 flex justify-center border-t border-white/10 pt-5">
+      <Link
+        href={studio ? '/app/signature-studio' : '/app/documents/new'}
+        aria-label={label}
+        className={cn(CTA_BUTTON, 'size-11')}
+        {...tipProps(true, label, tooltip)}
+      >
+        {studio ? (
+          <PenLine className="size-5" aria-hidden />
+        ) : (
+          <Plus className="size-5" aria-hidden />
+        )}
+      </Link>
+    </div>
   );
 }
 
@@ -547,20 +673,11 @@ export function AppSidebar({ items, initialCollapsed, cta }: SidebarProps) {
         </nav>
         {cta ? (
           collapsed ? (
-            <div className="mt-6 flex justify-center border-t border-white/10 pt-5">
-              <Link
-                href="/app/documents/new"
-                aria-label="Create Document"
-                className={cn(CTA_BUTTON, 'size-11')}
-                {...tipProps(true, 'Create Document', tooltip)}
-              >
-                <Plus className="size-5" aria-hidden />
-              </Link>
-            </div>
+            <CollapsedCta cta={cta} tooltip={tooltip} />
           ) : (
             <div className="mt-auto pt-6">
               <div className="mb-5 h-px bg-white/10" aria-hidden />
-              <SidebarGetStartedCard returning={cta.returning} />
+              <SidebarGetStartedCard cta={cta} />
             </div>
           )
         ) : null}
@@ -689,7 +806,7 @@ export function MobileNavigationDrawer({ items, cta }: Omit<SidebarProps, 'initi
                   </nav>
                   {cta ? (
                     <div className="mt-auto pt-6">
-                      <SidebarGetStartedCard returning={cta.returning} onNavigate={close} />
+                      <SidebarGetStartedCard cta={cta} onNavigate={close} />
                     </div>
                   ) : null}
                 </div>

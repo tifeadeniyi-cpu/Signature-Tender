@@ -2,7 +2,7 @@ import Link from 'next/link';
 import type { ComponentProps, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
+type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'gold' | 'inverse' | 'inverse-ghost';
 type Size = 'sm' | 'md' | 'lg';
 
 const base =
@@ -12,6 +12,11 @@ const variants: Record<Variant, string> = {
   secondary: 'border border-border bg-white text-heading hover:bg-blush',
   ghost: 'text-primary hover:bg-primary-surface',
   danger: 'bg-error text-white hover:opacity-90',
+  /** Champagne gold, for the main action on navy backgrounds. */
+  gold: 'bg-gold text-primary hover:bg-soft-gold',
+  /** Outline for navy backgrounds. */
+  inverse: 'border border-white/40 text-white hover:bg-white/10',
+  'inverse-ghost': 'text-white hover:bg-white/10',
 };
 const sizes: Record<Size, string> = {
   sm: 'h-8 px-3 text-sm',

@@ -7,6 +7,7 @@ import type { ActionState } from '@/lib/action-result';
 import { Card, CardHeader } from '@/components/ui/card';
 import { Button, buttonClass } from '@/components/ui/button';
 import { FormStatus } from '@/components/ui/form-status';
+import { SignatureDisplayCard } from '@/components/signature-block/display-options';
 
 const METHODS: { value: DocumentSettings['signingMethod']; label: string; hint: string }[] = [
   {
@@ -162,6 +163,13 @@ export function SettingsForm({
           </label>
         </div>
       </Card>
+      <SignatureDisplayCard
+        className="lg:col-span-2"
+        format={s.signatureDisplay}
+        timeZone={s.timeZone}
+        onFormat={(f) => set('signatureDisplay', f)}
+        onTimeZone={(tz) => set('timeZone', tz)}
+      />
       <div className="flex flex-col gap-3 lg:col-span-2">
         <FormStatus state={state} />
         <div className="flex flex-wrap justify-between gap-2">

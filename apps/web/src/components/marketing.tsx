@@ -13,7 +13,7 @@ const FOOTER: { title: string; links: [string, string][] }[] = [
     title: 'Product',
     links: [
       ['Features', '/product#features'],
-      ['Signature Studio', '/product#signature-studio'],
+      ['Signature Studio', '/signature-studio'],
       ['Templates', '/product#templates'],
       ['Integrations', '/product#integrations'],
       ['Pricing', '/pricing'],
@@ -22,9 +22,9 @@ const FOOTER: { title: string; links: [string, string][] }[] = [
   {
     title: 'Resources',
     links: [
-      ['API documentation', '/developers'],
       ['FAQ', '/product#faq'],
       ['Get your documents', '/retrieve'],
+      ['Verify a certificate', '/verify'],
     ],
   },
   {

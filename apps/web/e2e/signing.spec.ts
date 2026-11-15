@@ -75,20 +75,29 @@ test('send a test request, sign with an email code, and download the completed c
   await signer.getByLabel('I agree to use electronic records').check();
   await signer.getByRole('button', { name: 'Continue' }).click();
 
-  await expect(signer.getByText('0 of 2 required fields complete')).toBeVisible();
-  await expect(signer.getByRole('button', { name: 'Finish signing' })).toBeDisabled();
-  await signer.getByRole('button', { name: /Add your signature/ }).click();
-  const dialog = signer.getByRole('dialog', { name: 'Adopt your signature' });
-  await expect(dialog.getByLabel('Your full name')).toHaveValue('Rae Signer');
-  await dialog.getByRole('button', { name: 'Adopt and use signature' }).click();
-  await expect(dialog).toBeHidden();
-  await signer.getByRole('button', { name: 'Next required field' }).click();
-  await signer.getByLabel('Stage name (required)').fill('RAE');
-  await expect(signer.getByText('2 of 2 required fields complete')).toBeVisible();
-  await signer.getByRole('button', { name: 'Finish signing' }).click();
-  await signer.getByLabel(/intend to sign it electronically/).check();
-  await signer.getByRole('button', { name: 'Sign document' }).click();
-  await expect(signer.getByRole('heading', { name: 'This document is complete' })).toBeVisible({
+  await expect(signer.getByText('0 of 2 completed')).toBeVisible();
+  await expect(signer.getByRole('button', { name: 'Finish Signing' })).toHaveCount(0);
+  await signer.getByRole('button', { name: 'Next Field' }).click();
+  await expect(signer.getByRole('button', { name: /^Sign here/ })).toBeFocused();
+  const studio = signer.getByRole('complementary', { name: 'Signing tools' });
+  await expect(studio.getByLabel('Your full name')).toHaveValue('Rae Signer');
+  await studio.getByRole('button', { name: 'Use This Signature' }).click();
+  await expect(signer.getByText('1 of 2 completed')).toBeVisible();
+  await signer.getByRole('button', { name: 'Next Field' }).click();
+  await signer.getByRole('textbox', { name: /^Stage name \(required/ }).fill('RAE');
+  await expect(signer.getByText('2 of 2 completed')).toBeVisible();
+  await signer
+    .getByRole('navigation', { name: 'Field navigation' })
+    .getByRole('button', { name: 'Finish Signing' })
+    .click();
+  const confirm = signer.getByRole('dialog', { name: 'Confirm Your Electronic Signature' });
+  await expect(confirm.getByRole('button', { name: 'Complete Signing' })).toBeDisabled();
+  await confirm.getByLabel(/intend to sign it electronically/).check();
+  await confirm.getByRole('button', { name: 'Complete Signing' }).click();
+  await expect(signer.getByRole('heading', { name: "You've Completed Your Signing" })).toBeVisible({
+    timeout: 20_000,
+  });
+  await expect(signer.getByText('All parties have completed the document')).toBeVisible({
     timeout: 20_000,
   });
   const dl = await signer.request.get(`${link.replace('/sign/', '/api/sign/')}/signed`);

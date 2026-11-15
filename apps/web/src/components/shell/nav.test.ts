@@ -3,15 +3,17 @@ import { NAV_ITEMS, isActive, isChildActive, visibleNav } from './nav';
 
 describe('primary navigation', () => {
   it('follows the approved order, with no duplicates', () => {
-    const labels = NAV_ITEMS.map((n) => n.label);
-    expect(labels).toEqual([
+    expect(NAV_ITEMS.map((n) => n.label)).toEqual([
       'Dashboard',
       'Documents',
+      'Signature Studio',
       'Templates',
       'Contacts',
       'Team',
       'Billing & Credits',
+      'Reports',
       'Integrations',
+      'API Docs',
       'Settings',
     ]);
     const hrefs = NAV_ITEMS.flatMap((n) => [n.href, ...(n.children ?? []).map((c) => c.href)]);
@@ -35,29 +37,55 @@ describe('primary navigation', () => {
     expect(isChildActive('/app/documents', 'completed', '/app/documents?tab=completed')).toBe(true);
     expect(isChildActive('/app/documents/abc', null, '/app/documents')).toBe(false);
     expect(isChildActive('/app/billing', 'plans', '/app/billing?tab=plans')).toBe(true);
+    expect(isChildActive('/app/billing', 'payments', '/app/billing?tab=payments')).toBe(true);
+    expect(isChildActive('/app/billing', 'payments', '/app/billing')).toBe(false);
     expect(isChildActive('/app/billing', null, '/app/billing')).toBe(true);
     expect(isChildActive('/app/settings/profile', null, '/app/settings/profile')).toBe(true);
     expect(isChildActive('/app/settings/profile', null, '/app/settings')).toBe(false);
+  });
+
+  it('keeps Design a Signature and My Signatures apart', () => {
+    const lib = '/app/signature-studio/library';
+    expect(isChildActive(lib, null, '/app/signature-studio')).toBe(false);
+    expect(isChildActive(lib, null, lib)).toBe(true);
+    expect(isActive(lib, '/app/signature-studio')).toBe(true);
   });
 
   it('hides what a role cannot use, and never adds anything', () => {
     const viewer = visibleNav([]);
     expect(viewer.map((n) => n.label)).toEqual([
       'Dashboard',
-      'Documents',
-      'Billing & Credits',
       'Integrations',
+      'API Docs',
       'Settings',
     ]);
     expect(viewer.find((n) => n.label === 'Settings')!.children!.map((c) => c.label)).not.toContain(
       'API Settings',
     );
-    const dev = visibleNav(['api.manage', 'templates.view']);
-    expect(dev.map((n) => n.label)).toContain('Templates');
+    const dev = visibleNav(['api.manage', 'templates.view', 'documents.view_own']);
+    expect(dev.map((n) => n.label)).toEqual(
+      expect.arrayContaining(['Templates', 'Documents', 'Reports']),
+    );
+    expect(dev.map((n) => n.label)).not.toContain('Billing & Credits');
     expect(dev.find((n) => n.label === 'Settings')!.children!.map((c) => c.label)).toContain(
       'API Settings',
     );
-    const owner = visibleNav(['templates.view', 'contacts.view', 'team.view', 'api.manage']);
+  });
+
+  it('shows Signature Studio only while it is switched on', () => {
+    expect(visibleNav([]).map((n) => n.label)).not.toContain('Signature Studio');
+    expect(visibleNav([], true).map((n) => n.label)).toContain('Signature Studio');
+    const owner = visibleNav(
+      [
+        'documents.view_all',
+        'templates.view',
+        'contacts.view',
+        'team.view',
+        'billing.manage',
+        'api.manage',
+      ],
+      true,
+    );
     expect(owner).toHaveLength(NAV_ITEMS.length);
   });
 });

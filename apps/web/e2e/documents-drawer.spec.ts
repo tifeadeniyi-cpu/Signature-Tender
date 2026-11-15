@@ -50,12 +50,15 @@ async function sign(page: Page, link: string) {
   await page.getByRole('button', { name: /^Review/ }).click();
   await page.getByLabel('I agree to use electronic records').check();
   await page.getByRole('button', { name: 'Continue' }).click();
-  await page.getByRole('button', { name: /Add your signature/ }).click();
-  await page.getByRole('button', { name: 'Adopt and use signature' }).click();
-  await page.getByRole('button', { name: 'Finish signing' }).click();
+  await page.getByRole('button', { name: /^Sign here/ }).click();
+  await page.getByRole('button', { name: 'Use This Signature' }).click();
+  await page
+    .getByRole('navigation', { name: 'Field navigation' })
+    .getByRole('button', { name: 'Finish Signing' })
+    .click();
   await page.getByLabel(/intend to sign it electronically/).check();
-  await page.getByRole('button', { name: 'Sign document' }).click();
-  await expect(page.getByRole('heading', { name: 'This document is complete' })).toBeVisible({
+  await page.getByRole('button', { name: 'Complete Signing' }).click();
+  await expect(page.getByRole('heading', { name: "You've Completed Your Signing" })).toBeVisible({
     timeout: 20_000,
   });
 }
@@ -83,7 +86,7 @@ test('the drawer opens from a row, switches tabs, reminds, deep-links and closes
   await expect(drawer.getByText('0 of 1 completed')).toBeVisible();
   await expect(drawer.getByRole('button', { name: 'Send Reminder' })).toBeVisible();
   await expect(drawer.getByRole('button', { name: 'Cancel Request' })).toBeVisible();
-  await expect(drawer.getByRole('link', { name: 'Download Signed Document' })).toHaveCount(0);
+  await expect(drawer.getByRole('link', { name: 'Download Complete Package' })).toHaveCount(0);
 
   // The whole open drawer passes the accessibility scan.
   const axe = await new AxeBuilder({ page }).include('[role="dialog"]').withTags(TAGS).analyze();
@@ -145,7 +148,7 @@ test('the drawer opens from a row, switches tabs, reminds, deep-links and closes
   await expect(
     drawer.getByText('Status: Completed').filter({ visible: true }).first(),
   ).toBeVisible();
-  const dl = drawer.getByRole('link', { name: 'Download Signed Document' });
+  const dl = drawer.getByRole('link', { name: 'Download Complete Package' });
   await expect(dl).toBeVisible();
   const res = await page.request.get((await dl.getAttribute('href'))!);
   expect(res.status()).toBe(200);
@@ -178,7 +181,9 @@ test('the drawer opens from a row, switches tabs, reminds, deep-links and closes
   await expect(page.getByRole('dialog')).toHaveCount(1);
   await expect(nda.getByText('Status: Draft').filter({ visible: true }).first()).toBeVisible();
   await expect(nda.getByRole('link', { name: 'Continue editing' })).toBeVisible();
-  await expect(nda.getByRole('link', { name: 'Download Signed Document' })).toHaveCount(0);
+  await expect(
+    nda.getByRole('link', { name: /^Download (Complete Package|Signed Document)$/ }),
+  ).toHaveCount(0);
 });
 
 test('loading, error and retry states, and cancelling from the drawer', async ({ page }) => {

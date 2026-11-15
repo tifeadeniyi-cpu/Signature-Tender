@@ -22,12 +22,13 @@ const PUBLIC = [
   '/',
   '/product',
   '/pricing',
-  '/developers',
   '/sign-in',
   '/sign-up',
   '/forgot-password',
   '/retrieve',
   '/sign/not-a-real-token',
+  '/verify',
+  '/verify?ref=STV-0000-0000',
 ];
 const APP = [
   '/app',
@@ -47,6 +48,7 @@ const APP = [
   '/app/settings/branding',
   '/app/settings/retention',
   '/app/settings/developers',
+  '/app/api-docs',
   '/app/reports',
 ];
 
