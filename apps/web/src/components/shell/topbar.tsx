@@ -11,7 +11,10 @@ import {
 } from 'lucide-react';
 import { hasPermission } from '@st/core';
 import type { AppContext } from '@/lib/session';
-import { MobileNav } from './sidebar';
+import Image from 'next/image';
+import { MobileNavigationDrawer, type SidebarCta } from './sidebar';
+import type { NavItem } from './nav';
+import { BRAND_ASSETS } from '@/lib/brand-assets';
 import { switchWorkspace, signOut } from './actions';
 
 function initials(name: string) {
@@ -26,17 +29,26 @@ function initials(name: string) {
 export function Topbar({
   ctx,
   supportEmail,
-  allowed,
+  nav,
+  cta,
 }: {
   ctx: AppContext;
   supportEmail: string;
-  allowed: string[];
+  nav: NavItem[];
+  cta: SidebarCta | null;
 }) {
   const { user, membership, workspaces } = ctx;
   const canBill = hasPermission(membership.permissions, 'billing.manage');
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-ivory/95 px-4 backdrop-blur sm:px-6">
-      <MobileNav allowed={allowed} />
+      <MobileNavigationDrawer items={nav} cta={cta} />
+      <Link
+        href="/app"
+        className="shrink-0 rounded-lg lg:hidden"
+        aria-label="Signature Tender dashboard"
+      >
+        <Image {...BRAND_ASSETS.horizontalLight} alt="" className="h-9 w-auto" />
+      </Link>
       <form action="/app/search" role="search" className="ml-auto w-full max-w-md">
         <label htmlFor="global-search" className="sr-only">
           Search documents, contacts, templates and signatures
