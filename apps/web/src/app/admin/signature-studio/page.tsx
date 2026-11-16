@@ -3,7 +3,7 @@ import { getStudioAdminReport } from '@st/core/studio/server';
 import { Card, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { db } from '@/lib/db';
-import { requireStaff } from '@/lib/session';
+import { requireAdmin } from '@/lib/session';
 import { studioSettings } from '@/lib/studio';
 import { retryAssetsAction } from './actions';
 import { StudioSettingsForm } from './settings-form';
@@ -20,26 +20,43 @@ const FUNNEL = [
   ['download_clicked', 'Downloaded'],
 ] as const;
 
-const when = (d: Date | null) => (d ? new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }).format(d) + ' UTC' : '—');
+const when = (d: Date | null) =>
+  d
+    ? new Intl.DateTimeFormat('en-US', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+        timeZone: 'UTC',
+      }).format(d) + ' UTC'
+    : '—';
 
 export default async function AdminStudioPage() {
-  const staff = await requireStaff();
-  const [report, settings] = await Promise.all([getStudioAdminReport(db(), staff.id), studioSettings()]);
+  const { user: staff } = await requireAdmin('settings.manage', 'signature_studio');
+  const [report, settings] = await Promise.all([
+    getStudioAdminReport(db(), staff.id),
+    studioSettings(),
+  ]);
   const ev = Object.fromEntries(report.funnel.map((f) => [f.event, f]));
   const paid = report.totals.find((t) => t.status === 'paid');
-  const refunded = report.totals.filter((t) => ['refunded', 'disputed', 'duplicate'].includes(t.status));
+  const refunded = report.totals.filter((t) =>
+    ['refunded', 'disputed', 'duplicate'].includes(t.status),
+  );
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="font-display text-3xl text-heading">Signature Studio</h1>
-        <p className="text-sm">Sales, conversion and settings. Names, artwork and emails are never shown here.</p>
+        <p className="text-sm">
+          Sales, conversion and settings. Names, artwork and emails are never shown here.
+        </p>
       </div>
       <div className="grid gap-4 sm:grid-cols-4">
         {[
           ['Paid designs', String(paid?.n ?? 0)],
           ['Revenue', formatMoney(paid?.cents ?? 0, 'USD')],
           ['Refunded or disputed', String(refunded.reduce((a, t) => a + t.n, 0))],
-          ['Buyers who later sent a document', `${report.conversion?.buyers_sent ?? 0} of ${report.conversion?.buyers ?? 0}`],
+          [
+            'Buyers who later sent a document',
+            `${report.conversion?.buyers_sent ?? 0} of ${report.conversion?.buyers ?? 0}`,
+          ],
         ].map(([k, v]) => (
           <Card key={k}>
             <p className="text-xs uppercase tracking-wide text-slate-500">{k}</p>
@@ -57,14 +74,22 @@ export default async function AdminStudioPage() {
             </li>
           ))}
         </ol>
-        <p className="mt-2 text-xs text-slate-text">People counted once per account or browser. Buyers who paid for a signing request afterwards: {report.conversion?.buyers_paid_request ?? 0}.</p>
+        <p className="mt-2 text-xs text-slate-text">
+          People counted once per account or browser. Buyers who paid for a signing request
+          afterwards: {report.conversion?.buyers_paid_request ?? 0}.
+        </p>
       </Card>
       <Card>
         <CardHeader title="Recent transactions" />
         {report.recent.length === 0 ? (
           <p className="text-sm">None yet.</p>
         ) : (
-          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Recent transactions">
+          <div
+            className="overflow-x-auto"
+            tabIndex={0}
+            role="region"
+            aria-label="Recent transactions"
+          >
             <table className="w-full min-w-[720px] text-left text-sm">
               <thead className="text-xs uppercase text-slate-500">
                 <tr>
@@ -101,7 +126,8 @@ export default async function AdminStudioPage() {
             {report.failedAssets.map((a) => (
               <li key={a.id} className="flex flex-wrap items-center justify-between gap-3 py-2">
                 <span>
-                  <span className="font-mono text-xs">{a.purchaseId.slice(0, 8)}</span> · {a.format.toUpperCase()} · {a.attempts} attempts · {a.error}
+                  <span className="font-mono text-xs">{a.purchaseId.slice(0, 8)}</span> ·{' '}
+                  {a.format.toUpperCase()} · {a.attempts} attempts · {a.error}
                 </span>
                 <form action={retryAssetsAction.bind(null, a.purchaseId)}>
                   <Button type="submit" size="sm" variant="secondary">

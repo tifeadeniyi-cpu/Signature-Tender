@@ -124,7 +124,7 @@ function SignIn({ providers }: { providers: SocialProviderId[] }) {
       <p className="mt-6 text-center text-sm">
         New to Signature Tender?{' '}
         <Link
-          href={claim ? `/sign-up?next=${encodeURIComponent(claim.next)}` : '/sign-up'}
+          href={claimNext ? `/sign-up?next=${encodeURIComponent(claimNext)}` : '/sign-up'}
           className="font-semibold text-primary hover:underline"
         >
           Create an account
