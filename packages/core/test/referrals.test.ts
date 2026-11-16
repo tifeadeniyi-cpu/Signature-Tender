@@ -144,7 +144,10 @@ beforeAll(async () => {
   referrerWs = (await createWorkspace(db, { userId: referrer }, { name: 'Referrer WS' })).id;
   code = (await ensureReferralLink(db, { userId: referrer }, referrerWs)).code;
   staff = await makeUser('ref_staff');
-  await owner_.db.insert(schema.platformAdmins).values({ userId: staff }).onConflictDoNothing();
+  await owner_.db
+    .insert(schema.platformAdmins)
+    .values({ userId: staff, role: 'founder' })
+    .onConflictDoNothing();
 });
 afterAll(async () => {
   await close();

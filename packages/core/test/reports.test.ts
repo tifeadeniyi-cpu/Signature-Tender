@@ -28,6 +28,13 @@ import {
   getAdminOverview,
   listAdminWorkspaces,
   getAdminOperations,
+  getAdminAccess,
+  recordAdminDenied,
+  listAdminAudit,
+  listAdminStaff,
+  getCommandCenter,
+  resolvePeriod,
+  pctChange,
 } from '../src';
 import { APP_URL, OWNER_URL } from './env';
 import { makeUser, addMember, makePdf } from './helpers';
@@ -284,5 +291,127 @@ describe('internal administration', () => {
     await owner_.db.execute(sql`update "user" set two_factor_enabled = true where id = ${staff}`);
     expect(await hasStrongSignIn(db, staff)).toBe(true);
     await owner_.db.execute(sql`update "user" set two_factor_enabled = false where id = ${staff}`);
+  });
+});
+
+describe('admin roles and the audit trail', () => {
+  it('limits each role to its permissions, in the database as well as the app', async () => {
+    const analyst = await makeUser('rep_analyst');
+    const founder = await makeUser('rep_founder');
+    await owner_.db.execute(sql`insert into platform_admins (user_id) values (${analyst})`);
+    await owner_.db.execute(
+      sql`insert into platform_admins (user_id, role) values (${founder}, 'founder')`,
+    );
+    // A grant without a role gets read-only analytics.
+    expect(await getAdminAccess(db, { userId: analyst })).toEqual({
+      role: 'analyst',
+      permissions: ['analytics.view'],
+    });
+    expect((await getAdminAccess(db, { userId: founder })).permissions).toContain('audit.view');
+    expect(await getAdminAccess(db, { userId: owner })).toEqual({ role: null, permissions: [] });
+    // Direct calls are refused too, not just hidden in the UI.
+    await expect(listAdminAudit(db, { userId: analyst })).rejects.toMatchObject({
+      code: 'forbidden',
+    });
+    await expect(listAdminStaff(db, { userId: analyst })).rejects.toMatchObject({
+      code: 'forbidden',
+    });
+    await expect(listAdminAudit(db, { userId: owner })).rejects.toMatchObject({
+      code: 'forbidden',
+    });
+    // An invalid role cannot be stored.
+    await expect(
+      owner_.db.execute(sql`update platform_admins set role = 'god' where user_id = ${analyst}`),
+    ).rejects.toThrow();
+
+    await recordAdminDenied(db, { userId: owner }, '/admin/audit', 'audit.view');
+    const log = await listAdminAudit(db, { userId: founder }, { q: 'admin.access_denied' });
+    const denied = log.rows.find((r) => r.actor_role === 'customer');
+    expect(denied).toMatchObject({ category: 'security', risk: 'high', outcome: 'denied' });
+    // Customers appear only as an opaque reference, with no details.
+    expect(denied!.actor).toMatch(/^User [0-9A-F]{8}$/);
+    expect(denied!.details).toEqual({});
+    expect(JSON.stringify(log.rows)).not.toContain(owner);
+    const staffRows = await listAdminStaff(db, { userId: founder });
+    expect(staffRows.find((r) => r.user_id === founder)).toMatchObject({ role: 'founder' });
+  });
+
+  it('keeps the audit log append-only, even for the database owner', async () => {
+    const refused = async (q: Promise<unknown>) => {
+      const err = await q.then(
+        () => null,
+        (e: Error & { cause?: Error }) => e,
+      );
+      expect(String(err?.cause?.message ?? err?.message)).toMatch(/append-only/);
+    };
+    const [row] = (await owner_.db.execute(
+      sql`select id from audit_events order by seq desc limit 1`,
+    )) as unknown as { id: string }[];
+    await refused(
+      owner_.db.execute(sql`update audit_events set action = 'x' where id = ${row!.id}`),
+    );
+    await refused(owner_.db.execute(sql`delete from audit_events where id = ${row!.id}`));
+    await refused(owner_.db.execute(sql`truncate audit_events`));
+    await expect(db.execute(sql`delete from audit_events where id = ${row!.id}`)).rejects.toThrow();
+  });
+});
+
+describe('command center', () => {
+  it('resolves periods in UTC with an equal-length comparison', () => {
+    const now = new Date('2026-11-15T10:00:00Z');
+    const p = resolvePeriod({}, now);
+    expect(p.range).toBe('30d');
+    expect(p.to.toISOString()).toBe('2026-11-16T00:00:00.000Z');
+    expect(p.from.toISOString()).toBe('2026-10-17T00:00:00.000Z');
+    expect(p.cmpTo).toEqual(p.from);
+    expect(p.to.getTime() - p.from.getTime()).toBe(p.cmpTo!.getTime() - p.cmpFrom!.getTime());
+    expect(p.bucket).toBe('day');
+    const lm = resolvePeriod({ range: 'last_month', compare: 'prev_year' }, now);
+    expect([lm.from.toISOString(), lm.to.toISOString()]).toEqual([
+      '2026-10-01T00:00:00.000Z',
+      '2026-11-01T00:00:00.000Z',
+    ]);
+    expect(lm.cmpFrom!.toISOString()).toBe('2025-10-01T00:00:00.000Z');
+    expect(resolvePeriod({ range: 'this_year', compare: 'none' }, now)).toMatchObject({
+      cmpFrom: null,
+      bucket: 'month',
+    });
+    // A bad custom range falls back to the default instead of failing.
+    expect(
+      resolvePeriod({ range: 'custom', from: '2026-11-10', to: '2026-11-01' }, now).range,
+    ).toBe('30d');
+    expect(pctChange(5, 0)).toBeNull();
+    expect(pctChange(15, 10)).toBe(50);
+  });
+
+  it('returns aggregates only, statuses that sum to the cohort, and revenue only for finance roles', async () => {
+    const founder = await makeUser('cc_founder');
+    const analyst = await makeUser('cc_analyst');
+    await owner_.db.execute(
+      sql`insert into platform_admins (user_id, role) values (${founder}, 'founder'), (${analyst}, 'analyst')`,
+    );
+    const p = resolvePeriod({ range: 'this_year' });
+    const c = await getCommandCenter(db, { userId: founder }, p);
+    expect(c.kpi.users_total).toBeGreaterThan(0);
+    expect(c.kpi.orgs_total).toBeGreaterThan(0);
+    const s = c.doc_status;
+    expect(s.completed + s.pending + s.declined + s.expired + s.cancelled + s.failed).toBe(s.total);
+    expect(s.total).toBe(c.kpi.docs_sent);
+    expect(c.doc_types.reduce((n, t) => n + t.count, 0)).toBeLessThanOrEqual(s.total);
+    expect(c.revenue).not.toBeNull();
+    expect(c.security.audit_append_only).toBe(true);
+    expect(c.growth.length).toBeGreaterThan(0);
+    const last = c.growth[c.growth.length - 1]!;
+    expect(last.users_total).toBe(c.kpi.users_total);
+    // No customer names, emails or document titles in the payload.
+    const json = JSON.stringify(c);
+    expect(json).not.toContain('@example.test');
+    expect(json).not.toContain('Lease');
+    const a = await getCommandCenter(db, { userId: analyst }, p);
+    expect(a.revenue).toBeNull();
+    expect(a.audit).toBeNull();
+    await expect(getCommandCenter(db, { userId: owner }, p)).rejects.toMatchObject({
+      code: 'forbidden',
+    });
   });
 });

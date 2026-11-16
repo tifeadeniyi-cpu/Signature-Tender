@@ -4,7 +4,7 @@ import { reissueCertificates } from '@st/core';
 import { db } from '@/lib/db';
 import { storage } from '@/lib/storage';
 import { env } from '@/lib/env';
-import { requireStaff } from '@/lib/session';
+import { requireAdmin } from '@/lib/session';
 import { toActionError, type ActionState } from '@/lib/action-result';
 
 /**
@@ -12,7 +12,7 @@ import { toActionError, type ActionState } from '@/lib/action-result';
  * that still have an old-design certificate. Signed agreements are not touched.
  */
 export async function reissueCertificatesAction(): Promise<ActionState> {
-  const user = await requireStaff();
+  const { user } = await requireAdmin('operations.manage', 'operations');
   try {
     const r = await reissueCertificates(
       db(),

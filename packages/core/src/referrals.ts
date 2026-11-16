@@ -1154,15 +1154,20 @@ export async function getReferralCenter(
 // ---------------------------------------------------------------------------------------------
 // Administration (platform staff)
 
+/**
+ * Staff access through the founder-admin role matrix: viewing needs revenue.view (founder,
+ * finance); decisions, adjustments and settings need operations.manage. The check is logged.
+ */
 async function withReferralAdmin<T>(
   db: Database,
   staffUserId: string,
   fn: (tx: Tx) => Promise<T>,
+  permission: 'revenue.view' | 'operations.manage' = 'operations.manage',
 ): Promise<T> {
   return db.transaction(async (tx) => {
     await tx.execute(sql`select set_config('app.user_id', ${staffUserId}, true)`);
     await tx.execute(sql`select set_config('app.system_actor', 'billing', true)`);
-    await tx.execute(sql`select st_admin_require('referrals')`);
+    await tx.execute(sql`select st_admin_require_perm(${permission}, 'referrals')`);
     return fn(tx);
   });
 }
@@ -1181,11 +1186,14 @@ export async function getReferralAdmin(
 ) {
   const from = f.from ?? new Date(Date.now() - 30 * 86400_000);
   const to = f.to ?? new Date();
-  return withReferralAdmin(db, staffUserId, async (tx) => {
-    const program = toProgram(await programRow(tx));
-    const fromIso = from.toISOString();
-    const toIso = to.toISOString();
-    const [m] = (await tx.execute(sql`
+  return withReferralAdmin(
+    db,
+    staffUserId,
+    async (tx) => {
+      const program = toProgram(await programRow(tx));
+      const fromIso = from.toISOString();
+      const toIso = to.toISOString();
+      const [m] = (await tx.execute(sql`
       select
         (select count(*) from referral_identities)::int as links,
         (select count(*) from referral_identities where status = 'revoked')::int as revoked_links,
@@ -1205,15 +1213,15 @@ export async function getReferralAdmin(
            join referral_attributions a on a.referred_user_id = p.dispatch_as
            where p.status in ('paid','partially_refunded') and p.paid_at between ${fromIso}::timestamptz and ${toIso}::timestamptz)::bigint as sourced_revenue_cents
     `)) as unknown as Record<string, number>[];
-    const conditions = [sql`true`];
-    if (f.status) conditions.push(sql`a.status::text = ${f.status}`);
-    if (f.q) {
-      const like = `%${f.q.trim().toLowerCase()}%`;
-      conditions.push(
-        sql`(lower(ru.email) like ${like} or lower(ou.email) like ${like} or i.code = ${f.q.trim().toUpperCase()})`,
-      );
-    }
-    const rows = (await tx.execute(sql`
+      const conditions = [sql`true`];
+      if (f.status) conditions.push(sql`a.status::text = ${f.status}`);
+      if (f.q) {
+        const like = `%${f.q.trim().toLowerCase()}%`;
+        conditions.push(
+          sql`(lower(ru.email) like ${like} or lower(ou.email) like ${like} or i.code = ${f.q.trim().toUpperCase()})`,
+        );
+      }
+      const rows = (await tx.execute(sql`
       select a.id, a.status::text as status, a.source, a.registered_at, a.verified_at, a.qualified_at,
              a.reward_after, a.risk_flags, a.reason, a.qualification_payment_id,
              i.id as identity_id, i.code, i.status::text as code_status, i.workspace_id as referrer_workspace_id,
@@ -1227,45 +1235,52 @@ export async function getReferralAdmin(
       where ${sql.join(conditions, sql` and `)}
       order by (a.status = 'under_review') desc, a.registered_at desc
       limit 200`)) as unknown as {
-      id: string;
-      status: string;
-      source: string;
-      registered_at: Date;
-      verified_at: Date | null;
-      qualified_at: Date | null;
-      reward_after: Date | null;
-      risk_flags: string[];
-      reason: string | null;
-      qualification_payment_id: string | null;
-      identity_id: string;
-      code: string;
-      code_status: string;
-      referrer_workspace_id: string;
-      referrer_email: string;
-      referrer_name: string;
-      referred_email: string;
-      referred_name: string;
-      credits_issued: number;
-    }[];
-    return { program, metrics: m ?? {}, rows, range: { from, to } };
-  });
+        id: string;
+        status: string;
+        source: string;
+        registered_at: Date;
+        verified_at: Date | null;
+        qualified_at: Date | null;
+        reward_after: Date | null;
+        risk_flags: string[];
+        reason: string | null;
+        qualification_payment_id: string | null;
+        identity_id: string;
+        code: string;
+        code_status: string;
+        referrer_workspace_id: string;
+        referrer_email: string;
+        referrer_name: string;
+        referred_email: string;
+        referred_name: string;
+        credits_issued: number;
+      }[];
+      return { program, metrics: m ?? {}, rows, range: { from, to } };
+    },
+    'revenue.view',
+  );
 }
 
 export async function getReferralAdminDetail(db: Database, staffUserId: string, id: string) {
   if (!z.string().uuid().safeParse(id).success)
     throw new AppError('not_found', 'Referral not found');
-  return withReferralAdmin(db, staffUserId, async (tx) => {
-    const events = await tx
-      .select()
-      .from(schema.referralEvents)
-      .where(eq(schema.referralEvents.attributionId, id))
-      .orderBy(schema.referralEvents.createdAt);
-    const rewards = await tx
-      .select()
-      .from(schema.referralRewards)
-      .where(eq(schema.referralRewards.attributionId, id));
-    return { events, rewards };
-  });
+  return withReferralAdmin(
+    db,
+    staffUserId,
+    async (tx) => {
+      const events = await tx
+        .select()
+        .from(schema.referralEvents)
+        .where(eq(schema.referralEvents.attributionId, id))
+        .orderBy(schema.referralEvents.createdAt);
+      const rewards = await tx
+        .select()
+        .from(schema.referralRewards)
+        .where(eq(schema.referralRewards.attributionId, id));
+      return { events, rewards };
+    },
+    'revenue.view',
+  );
 }
 
 /** Staff decision on a referral held for review. Approving pays whatever is due. */

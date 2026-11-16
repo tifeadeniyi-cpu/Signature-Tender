@@ -10,7 +10,7 @@ import {
   setReferralLinkStatus,
 } from '@st/core';
 import { db } from '@/lib/db';
-import { requireStaff } from '@/lib/session';
+import { requireAdmin } from '@/lib/session';
 import { sendReferralNotices } from '@/lib/referrals';
 
 type Result = { ok: boolean; message: string } | null;
@@ -29,7 +29,7 @@ async function run(fn: () => Promise<string>): Promise<Result> {
 }
 
 export async function reviewReferralAction(_prev: Result, form: FormData): Promise<Result> {
-  const staff = await requireStaff();
+  const { user: staff } = await requireAdmin('operations.manage', 'referrals');
   const decision = form.get('decision') === 'approve' ? 'approve' : 'reject';
   return run(async () => {
     const notices = await reviewReferral(
@@ -45,7 +45,7 @@ export async function reviewReferralAction(_prev: Result, form: FormData): Promi
 }
 
 export async function linkStatusAction(_prev: Result, form: FormData): Promise<Result> {
-  const staff = await requireStaff();
+  const { user: staff } = await requireAdmin('operations.manage', 'referrals');
   const status = form.get('status') === 'active' ? 'active' : 'revoked';
   return run(async () => {
     await setReferralLinkStatus(
@@ -60,7 +60,7 @@ export async function linkStatusAction(_prev: Result, form: FormData): Promise<R
 }
 
 export async function adjustCreditsAction(_prev: Result, form: FormData): Promise<Result> {
-  const staff = await requireStaff();
+  const { user: staff } = await requireAdmin('operations.manage', 'referrals');
   return run(async () => {
     await adjustReferralCredits(db(), staff.id, {
       workspaceId: String(form.get('workspaceId')),
@@ -73,7 +73,7 @@ export async function adjustCreditsAction(_prev: Result, form: FormData): Promis
 }
 
 export async function saveProgramAction(_prev: Result, form: FormData): Promise<Result> {
-  const staff = await requireStaff();
+  const { user: staff } = await requireAdmin('operations.manage', 'referrals');
   const current = await getReferralProgram(db());
   const num = (k: string, d: number) => {
     const v = Number(form.get(k));

@@ -188,7 +188,7 @@ test('staff re-issue gives an old completed request the new certificate without 
         package_sha256 = null, certificate_issued_at = null
       where document_id = ${id} and status = 'completed'
       returning id, signed_file_id, certificate_file_id`;
-    await sql`insert into platform_admins (user_id, note) select id, 'e2e' from "user" where email = ${ownerEmail}`;
+    await sql`insert into platform_admins (user_id, note, role) select id, 'e2e', 'technical' from "user" where email = ${ownerEmail}`;
     await sql`update "user" set two_factor_enabled = true where email = ${ownerEmail}`;
 
     await page.goto('/admin/operations');

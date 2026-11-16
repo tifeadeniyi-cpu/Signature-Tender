@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { formatMoney, getReferralAdmin } from '@st/core';
 import { Card, CardHeader } from '@/components/ui/card';
 import { db } from '@/lib/db';
-import { requireStaff } from '@/lib/session';
+import { requireAdmin } from '@/lib/session';
 import { AdjustForm, LinkStatusForm, ProgramForm, ReviewForm } from './forms';
 
 export const metadata = { title: 'Referrals' };
@@ -52,7 +52,7 @@ export default async function AdminReferralsPage({
     q?: string;
   }>;
 }) {
-  const staff = await requireStaff();
+  const { user: staff } = await requireAdmin('revenue.view', 'referrals');
   const sp = await searchParams;
   const r = rangeFrom(sp);
   const status = sp.status && STATUSES.includes(sp.status) ? sp.status : null;

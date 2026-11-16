@@ -1,12 +1,12 @@
 import { getReferralAdmin, referralRowsToCsv } from '@st/core';
 import { db } from '@/lib/db';
-import { requireStaff } from '@/lib/session';
+import { requireAdmin } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 
 /** CSV of referral records for staff (same filters as the page). */
 export async function GET(req: Request) {
-  const staff = await requireStaff();
+  const { user: staff } = await requireAdmin('revenue.view', 'referrals');
   const u = new URL(req.url);
   const parse = (v: string | null) =>
     v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? new Date(`${v}T00:00:00Z`) : null;
