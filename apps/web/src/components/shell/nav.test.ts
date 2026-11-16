@@ -11,6 +11,7 @@ describe('primary navigation', () => {
       'Contacts',
       'Team',
       'Billing & Credits',
+      'Refer & Earn',
       'Reports',
       'Integrations',
       'API Docs',
@@ -85,7 +86,10 @@ describe('primary navigation', () => {
         'api.manage',
       ],
       true,
+      true,
     );
     expect(owner).toHaveLength(NAV_ITEMS.length);
+    expect(visibleNav([], false, false).map((n) => n.label)).not.toContain('Refer & Earn');
+    expect(visibleNav([], false, true).map((n) => n.label)).toContain('Refer & Earn');
   });
 });

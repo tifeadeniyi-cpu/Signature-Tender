@@ -101,6 +101,8 @@ export async function sendViaApi(
           testSigningEnabled: false,
           liveSendingEnabled: await liveSendingEnabled(),
           specializedAck: input.acknowledge_specialized_documents ? { source: 'api' } : undefined,
+          // Referral credits pay for web sends only.
+          channel: 'api',
         },
     meta,
   );
