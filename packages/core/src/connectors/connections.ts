@@ -1,6 +1,7 @@
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { schema, withActor, type Database, type ActorContext, type Tx } from '@st/db';
 import { AppError } from '../errors';
+import type { ObjectStorage } from '../storage';
 import { recordAudit } from '../audit';
 import { decryptSecret, encryptSecret } from '../webhooks';
 import { getConfigValue } from '../config';
@@ -39,6 +40,8 @@ export interface IntegrationContext {
   /** Injected in tests; defaults to global fetch. */
   fetch?: ProviderFetch;
   now?: () => number;
+  /** Document file storage, passed to actions that read signed files. */
+  storage?: ObjectStorage;
 }
 
 export const AVAILABILITY_KEY = 'integrations.availability';

@@ -1,6 +1,12 @@
 'use server';
 import { revalidatePath } from 'next/cache';
 import {
+  AppError,
+  drivePickerToken,
+  getConfigValue,
+  importFromGoogleDrive,
+  listIntegrationConnections,
+  setDriveAutoSave,
   cancelIntegrationJob,
   deleteAutomation,
   disconnectIntegrationConnection,
@@ -13,13 +19,15 @@ import {
 import { db } from '@/lib/db';
 import { requireWorkspace, requestMeta } from '@/lib/session';
 import { toFormError, type ActionState } from '@/lib/action-result';
-import { integrationContext, kickIntegrationJobs } from '@/lib/integrations';
+import { integrationContext, kickIntegrationJobs, pickerConfig } from '@/lib/integrations';
+import { storage } from '@/lib/storage';
+import type { PickerConfigResult } from '@/components/integrations/drive-picker';
 
 const BASE = '/app/integrations';
 
 async function ctx() {
-  const { user } = await requireWorkspace();
-  return { actor: { userId: user.id }, meta: await requestMeta() };
+  const { user, membership } = await requireWorkspace();
+  return { actor: { userId: user.id }, ws: membership.workspace.id, meta: await requestMeta() };
 }
 
 function refresh() {
@@ -84,6 +92,11 @@ export async function saveConnectionSettingsAction(
     settings[k] ??= false;
   try {
     await updateConnectionSettings(db(), actor, id, settings, meta);
+    // Google Drive saves through an automation, so the switch turns that automation on or off.
+    const { ws } = await ctx();
+    const conn = (await listIntegrationConnections(db(), actor, ws)).find((c) => c.id === id);
+    if (conn?.provider === 'google_drive')
+      await setDriveAutoSave(db(), actor, ws, id, settings.autoSave === true, meta);
     refresh();
     return { ok: true, message: 'Settings saved.' };
   } catch (err) {
@@ -121,5 +134,75 @@ export async function jobAction(_p: ActionState, fd: FormData): Promise<ActionSt
     return { ok: true, message: fd.get('op') === 'cancel' ? 'Cancelled.' : 'Queued again.' };
   } catch (err) {
     return toFormError(err);
+  }
+}
+
+/**
+ * The Google Picker runs in the browser and needs a short-lived access token (about an hour).
+ * Only members who may use connected apps get one; the refresh token never leaves the server.
+ */
+export async function drivePickerConfigAction(): Promise<PickerConfigResult> {
+  const { actor, ws } = await ctx();
+  const picker = pickerConfig();
+  if (!picker) return { ok: false, error: 'The Google Drive picker is not set up yet.' };
+  try {
+    const t = await drivePickerToken(db(), actor, ws, await integrationContext());
+    return { ok: true, config: { accessToken: t.token, ...picker } };
+  } catch (err) {
+    return {
+      ok: false,
+      error:
+        err instanceof AppError ? err.message : 'Google Drive could not be reached. Try again.',
+    };
+  }
+}
+
+export async function importDriveFileAction(
+  fileId: string,
+): Promise<{ ok: true; documentId: string } | { ok: false; error: string }> {
+  const { actor, ws, meta } = await ctx();
+  try {
+    const maxMb = await getConfigValue(db(), 'limits.max_upload_mb', 25);
+    const maxPages = await getConfigValue(db(), 'limits.max_pages', 200);
+    const r = await importFromGoogleDrive(
+      db(),
+      storage(),
+      actor,
+      ws,
+      fileId,
+      await integrationContext(),
+      { maxBytes: maxMb * 1024 * 1024, maxPages },
+      meta,
+    );
+    refresh();
+    return { ok: true, documentId: r.documentId };
+  } catch (err) {
+    if (err instanceof AppError) return { ok: false, error: err.message };
+    console.error('[integrations] Drive import failed', err);
+    return { ok: false, error: 'The file could not be imported. Try again.' };
+  }
+}
+
+/** Saves the Drive folder picked for signed copies (null = the default Signature Tender folder). */
+export async function setDriveFolderAction(
+  connectionId: string,
+  folder: { id: string; name: string } | null,
+): Promise<{ ok: boolean; error?: string }> {
+  const { actor, meta } = await ctx();
+  try {
+    await updateConnectionSettings(
+      db(),
+      actor,
+      connectionId,
+      { folderId: folder?.id ?? null, folderName: folder?.name.slice(0, 200) ?? null },
+      meta,
+    );
+    refresh();
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof AppError ? err.message : 'Could not save the folder.',
+    };
   }
 }

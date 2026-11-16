@@ -65,6 +65,10 @@ const schema = z.object({
   // Google Drive can reuse the Sign in with Google client (add the Drive API, scope and redirect).
   GOOGLE_DRIVE_CLIENT_ID: z.string().optional(),
   GOOGLE_DRIVE_CLIENT_SECRET: z.string().optional(),
+  // Google Picker (choose files and folders in Drive): a browser API key restricted to this site
+  // and the Picker API, and the Cloud project number. Without them the Drive import button is hidden.
+  GOOGLE_PICKER_API_KEY: z.string().optional(),
+  GOOGLE_CLOUD_PROJECT_NUMBER: z.string().regex(/^\d+$/).optional(),
   HUBSPOT_CLIENT_ID: z.string().optional(),
   HUBSPOT_CLIENT_SECRET: z.string().optional(),
 });

@@ -5,6 +5,8 @@ import { integrationPermissions } from '@/lib/integrations-view';
 import { Card } from '@/components/ui/card';
 import { AppLogo } from '../_components/badges';
 import { ConnectionSettingsForm, type SettingField } from '../_components/connection-forms';
+import { DriveFolderChooser } from '../_components/drive-folder';
+import { pickerConfig } from '@/lib/integrations';
 
 export const metadata = { title: 'Integration settings' };
 
@@ -13,6 +15,26 @@ function fieldsFor(provider: string): SettingField[] {
   const def = getConnector(provider);
   if (!def?.implemented) return [];
   const f: SettingField[] = [];
+  if (def.key === 'google_drive')
+    return [
+      {
+        key: 'autoSave',
+        label: 'Save signed documents to Google Drive automatically',
+        type: 'checkbox',
+        hint: 'Off by default. Applies to documents finished after you turn it on. Anyone with access to the folder can open the copies.',
+      },
+      {
+        key: 'saveCertificate',
+        label: 'Also save the Certificate of Completion',
+        type: 'checkbox',
+      },
+      {
+        key: 'saveCombined',
+        label: 'Save one combined PDF (agreement + certificate) instead',
+        type: 'checkbox',
+      },
+      { key: 'namingDate', label: 'Add the completion date to file names', type: 'checkbox' },
+    ];
   if (def.capabilities.includes('save_signed'))
     f.push(
       {
@@ -113,6 +135,21 @@ export default async function IntegrationSettingsPage() {
                     values={c.settings}
                     canEdit={perms.manage || c.ownerUserId === user.id}
                   />
+                  {c.provider === 'google_drive' ? (
+                    <DriveFolderChooser
+                      connectionId={c.id}
+                      folderName={
+                        typeof c.settings.folderName === 'string' && c.settings.folderId
+                          ? c.settings.folderName
+                          : null
+                      }
+                      canEdit={
+                        Boolean(pickerConfig()) &&
+                        c.status === 'active' &&
+                        (perms.manage || c.ownerUserId === user.id)
+                      }
+                    />
+                  ) : null}
                 </li>
               );
             })}
