@@ -220,7 +220,7 @@ describe('catalogue and availability', () => {
       'slack',
     ])
       expect(keysList).toContain(k);
-    for (const k of ['zapier', 'google_drive', 'hubspot', 'make', 'salesforce']) {
+    for (const k of ['zapier', 'onedrive', 'hubspot', 'make', 'salesforce']) {
       const r = resolveAvailability(
         getConnector(k)!,
         { [k]: 'available' },
@@ -397,7 +397,7 @@ describe('connections', () => {
       assertCanConnect(db, { userId: editor }, ws, 'fake_drive', 'personal', ctx),
     ).resolves.toBeTruthy();
     await expect(
-      assertCanConnect(db, { userId: owner }, ws, 'google_drive', 'workspace', ctx),
+      assertCanConnect(db, { userId: owner }, ws, 'onedrive', 'workspace', ctx),
     ).rejects.toMatchObject({ code: 'invalid' });
     await expect(
       assertCanConnect(db, { userId: outsider }, ws, 'fake_drive', 'personal', ctx),

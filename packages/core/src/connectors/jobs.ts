@@ -168,6 +168,7 @@ async function runOne(db: Database, ctx: IntegrationContext, job: ClaimedJob): P
       documentId: job.document_id,
       requestId: job.request_id,
       correlationId: job.correlation_id,
+      storage: ctx.storage,
     });
   } catch (e) {
     err = toIntegrationError(e);
