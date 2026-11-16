@@ -20,6 +20,26 @@ const FOOTER: { title: string; links: [string, string][] }[] = [
     ],
   },
   {
+    title: 'Solutions',
+    links: [
+      ['Sign PDFs online', '/solutions/sign-pdf-online'],
+      ['No-subscription e-signatures', '/solutions/e-signature-without-subscription'],
+      ['Small business', '/solutions/electronic-signature-for-small-business'],
+      ['Real estate', '/solutions/real-estate-e-signature'],
+      ['HR and onboarding', '/solutions/hr-onboarding-e-signature'],
+      ['Freelancers', '/solutions/electronic-signature-for-freelancers'],
+    ],
+  },
+  {
+    title: 'Compare',
+    links: [
+      ['Docusign alternative', '/compare/docusign-alternative'],
+      ['Adobe Sign alternative', '/compare/adobe-sign-alternative'],
+      ['Dropbox Sign alternative', '/compare/dropbox-sign-alternative'],
+      ['All comparisons', '/compare'],
+    ],
+  },
+  {
     title: 'Resources',
     links: [
       ['FAQ', '/product#faq'],
@@ -40,7 +60,7 @@ const FOOTER: { title: string; links: [string, string][] }[] = [
 export function MarketingFooter() {
   return (
     <footer className="border-t border-border bg-white">
-      <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-[1.4fr_repeat(3,1fr)]">
+      <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-3 lg:grid-cols-[1.4fr_repeat(5,1fr)]">
         <div>
           <Image
             {...BRAND_ASSETS.horizontalLight}

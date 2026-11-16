@@ -28,6 +28,28 @@ What the code does, and the steps only the owner can take.
 
 The API documentation stays signed-in only (`/app/api-docs`), so it is not indexed.
 
+## Competitive pages (round 2)
+
+To compete for searches where Docusign and Adobe rank, the site targets the queries people type
+when they are looking for something cheaper or simpler:
+
+- `/compare` plus `/compare/docusign-alternative`, `/compare/adobe-sign-alternative` and
+  `/compare/dropbox-sign-alternative`, each with an honest "which one fits you" section, a feature
+  table, an FAQ, a trademark notice and a link to the competitor's own pricing page.
+- `/solutions` plus six use-case pages: sign PDF online, e-signature without a subscription, small
+  business, real estate, HR and onboarding, and freelancers. Each has HowTo, FAQPage and
+  BreadcrumbList structured data.
+- The content lives in `apps/web/src/lib/marketing-pages.ts`. Prices are filled from the database
+  through `{price}`, `{studioPrice}` and `{maxSigners}`; never type a price into the copy. Competitor
+  rows describe pricing models only, never competitor prices, and should be re-checked every few
+  months (update `REVIEWED` in `compare/[slug]/page.tsx`).
+- Every page is linked from the footer, the Resources menu and the sitemap.
+
+Ranking next to Docusign and Adobe on broad terms such as "electronic signature" takes months of
+links and reputation, not only on-page work. These pages aim first at the narrower searches
+("Docusign alternative", "e-signature without subscription", "sign PDF online free") where a new
+site can rank sooner.
+
 ## Owner steps
 
 1. **Google Search Console.** Go to https://search.google.com/search-console, add a **Domain**
@@ -50,7 +72,13 @@ The API documentation stays signed-in only (`/app/api-docs`), so it is not index
    pages build trust with both people and search engines.
 7. **Earn links.** List Signature Tender on software directories (for example G2, Capterra, Product
    Hunt, AlternativeTo) and ask partners such as Beam Artist and Jectstack to link to the site.
-8. **Watch results.** After a few weeks, check Search Console's Performance and Page indexing
+8. **Reviews.** Ask early customers to review Signature Tender on G2, Capterra and Trustpilot.
+   Comparison searches often show review sites first, and reviews there are what make a new tool
+   credible next to Docusign.
+9. **Keep publishing.** A short guide every week or two (for example "How to sign a PDF on iPhone"
+   or "Is an e-signature legally binding?") builds the topical authority Google rewards. Ask in
+   this project and the pages can be added in the same style.
+10. **Watch results.** After a few weeks, check Search Console's Performance and Page indexing
    reports, and turn on Vercel Speed Insights to track Core Web Vitals.
 
 ## Notes

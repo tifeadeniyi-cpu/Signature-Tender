@@ -2,6 +2,7 @@ import type { MetadataRoute } from 'next';
 import { getStudioSettings } from '@st/core/studio/server';
 import { db } from '@/lib/db';
 import { absoluteUrl } from '@/lib/seo';
+import { COMPETITORS, SOLUTIONS } from '@/lib/marketing-pages';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,6 +17,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ['/product', 0.9, 'weekly'],
     ['/pricing', 0.9, 'weekly'],
     ...(studioEnabled ? [['/signature-studio', 0.8, 'weekly'] satisfies Page] : []),
+    ['/compare', 0.7, 'monthly'],
+    ...COMPETITORS.map((c): Page => [`/compare/${c.slug}`, 0.8, 'monthly']),
+    ['/solutions', 0.7, 'monthly'],
+    ...SOLUTIONS.map((x): Page => [`/solutions/${x.slug}`, 0.8, 'monthly']),
     ['/sign-up', 0.5, 'monthly'],
     ['/legal/terms', 0.2, 'yearly'],
     ['/legal/privacy', 0.2, 'yearly'],

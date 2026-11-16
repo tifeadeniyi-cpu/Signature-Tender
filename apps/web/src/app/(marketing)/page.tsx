@@ -20,18 +20,22 @@ export const metadata = pageMetadata({ title: TITLE, description: DESCRIPTION, p
 const USE_CASES = [
   {
     title: 'Freelancers and consultants',
+    href: '/solutions/electronic-signature-for-freelancers',
     body: 'Send proposals, statements of work and service agreements for e-signature, and pay only for the documents you send.',
   },
   {
     title: 'Small businesses',
+    href: '/solutions/electronic-signature-for-small-business',
     body: 'Get contracts, vendor forms and customer agreements signed online, with reusable templates and a shared team workspace.',
   },
   {
     title: 'Landlords and property managers',
+    href: '/solutions/real-estate-e-signature',
     body: 'Collect signatures on leases, renewals and notices from several people, in order or at the same time.',
   },
   {
     title: 'HR and operations teams',
+    href: '/solutions/hr-onboarding-e-signature',
     body: 'Send offer letters, policies and onboarding forms, then download each signed PDF with its evidence certificate.',
   },
 ];
@@ -162,7 +166,11 @@ export default async function HomePage() {
         <ul className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {USE_CASES.map((u) => (
             <li key={u.title} className="rounded-2xl border border-border bg-white p-5 shadow-card">
-              <h3 className="font-semibold text-heading">{u.title}</h3>
+              <h3 className="font-semibold text-heading">
+                <Link href={u.href} className="hover:text-primary hover:underline">
+                  {u.title}
+                </Link>
+              </h3>
               <p className="mt-2 text-sm">{u.body}</p>
             </li>
           ))}
@@ -170,6 +178,10 @@ export default async function HomePage() {
         <p className="mt-6 text-center text-sm">
           <Link href="/product" className="font-semibold text-primary hover:underline">
             Explore all e-signature features
+          </Link>
+          {' · '}
+          <Link href="/compare" className="font-semibold text-primary hover:underline">
+            Compare with Docusign and Adobe Sign
           </Link>
         </p>
       </section>

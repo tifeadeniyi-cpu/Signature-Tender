@@ -18,6 +18,53 @@ const PUBLIC_PAGES = [
   },
   { path: '/pricing', title: /E-Signature Pricing/, types: ['SoftwareApplication', 'FAQPage'] },
   { path: '/product', title: /E-Signature Features/, types: ['SoftwareApplication', 'FAQPage'] },
+  { path: '/compare', title: /Compare E-Signature Tools/, types: ['BreadcrumbList'] },
+  {
+    path: '/compare/docusign-alternative',
+    title: /Docusign Alternative/,
+    types: ['BreadcrumbList', 'FAQPage'],
+  },
+  {
+    path: '/compare/adobe-sign-alternative',
+    title: /Adobe Acrobat Sign Alternative/,
+    types: ['BreadcrumbList', 'FAQPage'],
+  },
+  {
+    path: '/compare/dropbox-sign-alternative',
+    title: /Dropbox Sign/,
+    types: ['BreadcrumbList', 'FAQPage'],
+  },
+  { path: '/solutions', title: /E-Signature Solutions/, types: ['BreadcrumbList'] },
+  {
+    path: '/solutions/sign-pdf-online',
+    title: /Sign a PDF Online/,
+    types: ['BreadcrumbList', 'HowTo', 'FAQPage'],
+  },
+  {
+    path: '/solutions/e-signature-without-subscription',
+    title: /Without a Subscription/,
+    types: ['BreadcrumbList', 'HowTo', 'FAQPage'],
+  },
+  {
+    path: '/solutions/electronic-signature-for-small-business',
+    title: /Small Business/,
+    types: ['BreadcrumbList', 'HowTo', 'FAQPage'],
+  },
+  {
+    path: '/solutions/real-estate-e-signature',
+    title: /Real Estate/,
+    types: ['BreadcrumbList', 'HowTo', 'FAQPage'],
+  },
+  {
+    path: '/solutions/hr-onboarding-e-signature',
+    title: /HR/,
+    types: ['BreadcrumbList', 'HowTo', 'FAQPage'],
+  },
+  {
+    path: '/solutions/electronic-signature-for-freelancers',
+    title: /Freelancers/,
+    types: ['BreadcrumbList', 'HowTo', 'FAQPage'],
+  },
   {
     path: '/signature-studio',
     title: /Handwritten Signature Online/,
@@ -63,6 +110,27 @@ test.describe('SEO', () => {
     expect(product.offers.priceCurrency).toBe('USD');
   });
 
+  test('comparison and solution pages show live prices, no placeholders, and 404 unknown slugs', async ({
+    page,
+    request,
+  }) => {
+    for (const path of [
+      '/compare/docusign-alternative',
+      '/solutions/electronic-signature-for-freelancers',
+    ]) {
+      await page.goto(path);
+      const text = await page.locator('main').innerText();
+      expect(text).toContain('$2.99');
+      expect(text).not.toMatch(/\{(price|studioPrice|maxSigners)\}/);
+    }
+    await page.goto('/compare/docusign-alternative');
+    await expect(page.getByRole('table')).toContainText('Docusign eSignature');
+    await expect(page.getByText(/not affiliated with or endorsed by Docusign/)).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Breadcrumb' })).toContainText('Compare');
+    expect((await request.get('/compare/not-a-product')).status()).toBe(404);
+    expect((await request.get('/solutions/not-a-use')).status()).toBe(404);
+  });
+
   test('preview images are served', async ({ request }) => {
     for (const f of ['og-default.png', 'og-signature-studio.png']) {
       const res = await request.get(`/branding/signature-tender/social/${f}`);
@@ -90,7 +158,15 @@ test.describe('SEO', () => {
     const xml = await res.text();
     const urls = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => new URL(m[1]!).pathname);
     expect(urls).toEqual(
-      expect.arrayContaining(['/', '/product', '/pricing', '/signature-studio', '/sign-up']),
+      expect.arrayContaining([
+        '/',
+        '/product',
+        '/pricing',
+        '/signature-studio',
+        '/sign-up',
+        '/compare/docusign-alternative',
+        '/solutions/sign-pdf-online',
+      ]),
     );
     for (const u of urls) expect(u).not.toMatch(/^\/(app|admin|api|sign\/|retrieve|invite|claim)/);
   });

@@ -151,3 +151,16 @@ export function faqJsonLd(items: { q: string; a: string }[]) {
     })),
   };
 }
+
+/** BreadcrumbList structured data. Pass [name, path] pairs from the home page down. */
+export function breadcrumbJsonLd(trail: [string, string][]) {
+  return {
+    '@type': 'BreadcrumbList',
+    itemListElement: trail.map(([name, path], i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      name,
+      item: absoluteUrl(path),
+    })),
+  };
+}

@@ -29,6 +29,16 @@ export const NAV: NavItem[] = [
         description: 'Answers about signing, pricing and security',
       },
       {
+        label: 'Solutions',
+        href: '/solutions',
+        description: 'E-signatures for small business, real estate, HR and more',
+      },
+      {
+        label: 'Compare',
+        href: '/compare',
+        description: 'How we compare with Docusign, Adobe Sign and Dropbox Sign',
+      },
+      {
         label: 'Get your documents',
         href: '/retrieve',
         description: 'Find a completed copy sent to your email',
