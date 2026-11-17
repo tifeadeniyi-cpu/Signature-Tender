@@ -85,6 +85,12 @@ test('staff pages have no WCAG 2.2 AA violations found by axe', async ({ page })
       '/admin/operations',
       '/admin/audit',
       '/admin/access',
+      '/admin/performance',
+      '/admin/performance?tab=growth',
+      '/admin/performance?tab=engagement',
+      '/admin/performance?tab=features',
+      '/admin/performance?tab=conversion',
+      '/admin/performance?tab=delivery',
     ])
       found.push(...(await scan(page, p)));
     if (found.length) console.log(JSON.stringify(found, null, 2));

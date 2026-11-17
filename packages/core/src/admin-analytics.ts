@@ -101,17 +101,20 @@ function numbers<T>(v: T): T {
   return v;
 }
 
-export async function getCommandCenter(
+/** Calls one of the founder admin analytics functions; 42501 (not permitted) becomes forbidden. */
+export async function callAdminReport<T>(
   db: Database,
   actor: ActorContext,
+  fn: string,
   p: Period,
-): Promise<CommandCenter> {
+): Promise<T> {
+  if (!/^st_admin_[a-z_]+$/.test(fn)) throw new Error('Unknown admin report');
   try {
     const [r] = (await withActor(db, actor, (tx) =>
-      tx.execute(sql`select st_admin_command_center(${p.from.toISOString()}::timestamptz,
+      tx.execute(sql`select ${sql.raw(fn)}(${p.from.toISOString()}::timestamptz,
         ${p.to.toISOString()}::timestamptz, ${p.cmpFrom?.toISOString() ?? null}::timestamptz,
         ${p.cmpTo?.toISOString() ?? null}::timestamptz, ${p.bucket}) as c`),
-    )) as unknown as { c: CommandCenter }[];
+    )) as unknown as { c: T }[];
     return numbers(r!.c);
   } catch (err) {
     const code =
@@ -119,6 +122,14 @@ export async function getCommandCenter(
     if (code === '42501') throw new AppError('forbidden', 'Signature Tender staff only.');
     throw err;
   }
+}
+
+export function getCommandCenter(
+  db: Database,
+  actor: ActorContext,
+  p: Period,
+): Promise<CommandCenter> {
+  return callAdminReport<CommandCenter>(db, actor, 'st_admin_command_center', p);
 }
 
 /** Writes an audit event for an admin report export (the actor's own platform-level event). */
