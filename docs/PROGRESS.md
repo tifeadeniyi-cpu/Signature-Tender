@@ -334,6 +334,78 @@ Clicking a row, a document name or its View link on `/app/documents` opens a rig
 
 - Actions the backend does not support yet are not shown in the drawer. They are planned in Phase 10 below.
 
+## Documents Kanban board: Done
+
+A Kanban view on the Documents page, next to the list. The Kanban / List switch is remembered per browser (cookie `st_docs_view`); the list stays the default.
+
+- **Columns come from the real status.** Each document sits in one column, based on its latest signing request: Drafts (no request yet, or waiting for payment or dispatch), Sent (`sent`, nobody has opened it), In Progress (`in_progress`, `awaiting_approval`, `finalization_failed`), Completed, Declined / Expired (one column; each card keeps its own status), and Cancelled (its own column, collapsed by default). There is no second status field: `loadBoard` in `packages/core/src/board.ts` maps the canonical status to a column in SQL.
+- **Nothing on the board changes a status.** Dragging a card to another column only shows "Document status updates automatically based on signing activity." with a next step. "Add document" appears only in Drafts.
+- **Cards** show the type, reference, recipients (initials, with signed and declined marked), the date that matters for the column, the due date while open, and for In Progress "2 of 3 signed" with a progress bar (required signers completed / total required signers).
+- **Card menu** (portal, so columns never clip it; arrow keys, Home, End, Escape): actions differ by column and are shown only when the document page's own permission rules allow them. Reminders and archiving run in place; cancelling opens the existing drawer, where the reason is asked for. Completed cards offer the complete package, the signed agreement only, and the Certificate of Completion (opens in the browser via `?view=1`).
+- **Clicking a card** opens the existing details drawer.
+- **Filters** are shared with the list and kept in the address bar: debounced search (title, reference, recipient name or email), recipient (all, assigned to me, sent by me, a specific recipient), date range on last activity (7, 30, 90 days, this year, custom), type, owner, and sort (within each column, stable on ties). Status cards above the board focus one column.
+- **Large workspaces:** counts are filtered totals from one grouped query; each column loads 15 cards and pages with "Load more".
+- **Live updates:** the board re-reads every 30 seconds while the tab is visible, when the tab regains focus and when the drawer closes, never while a menu or the drawer is open. A card that changes column is announced to screen readers.
+- Columns collapse one at a time or all at once (cookie `st_board_collapsed`). On phones the columns swipe sideways, with chips to jump to a status.
+- Tests: `packages/core/test/library.test.ts` (board grouping, counts, filters, paging, access) and `apps/web/e2e/documents-board.spec.ts`.
+
+## Sign it yourself ($0.99): Done
+
+For documents only you need to sign. **Sign it yourself** (Documents page, dashboard "Sign a Document" and "Upload & Sign") uploads the PDF, adds you as the only signer, skips the signers step, and after you place your fields takes you straight into signing. The completed document and Certificate of Completion are the same as any request.
+
+- A request is "self-signing" when its one recipient is a signer with the sender's own email (`isSelfSignRecipients`).
+- Price: a flat **$0.99** per document from config `billing.self_sign_price` (`{ amountCents, currency }`; minimum 50 cents), kept out of the prices table so it never appears as a credit pack.
+- It never buys or spends a credit: the request waits for its own Stripe payment (`priceCode: self_sign`, `credits: 0`), and once paid it is sent without a credit hold. Workspaces with unlimited signing and test requests are free.
+- After payment, the return page opens signing directly (`/app/documents/[id]/sign-now` issues a fresh link to the signed-in sender only). Nobody is emailed, including you. The document page shows **Sign now** while it waits for your signature.
+- Anyone who can create documents can pay for their own self-sign document; other request payments still need the billing permission.
+- Tests: `packages/core/test/self-sign.test.ts` (no credit used, $0.99 checkout, paid send, owner-only link, other requests unaffected); `apps/web/e2e/self-sign.spec.ts` (test mode) and `self-sign-paid.spec.ts` (Stripe stand-in).
+
+## Mobile app (iOS and Android): Phase 1 done
+
+A native app in `apps/mobile` (Expo SDK 58, React Native, Expo Router), for senders and signers. It talks to the same server and account as the website; see `apps/mobile/README.md` for running, testing and shipping it.
+
+- **Sign-in:** Better Auth's Expo plugin on the server (`expo()`), with the app's scheme `signaturetender://` as a trusted origin. The session cookie lives in the phone's secure storage and travels in a Cookie header, so every permission check is the website's own. Two-step codes and backup codes work.
+- **Server endpoints** (`apps/web/src/app/api/mobile`): `GET /api/mobile/me` (profile, workspaces, permissions), `POST /api/mobile/requests/[rid]/remind` and `/cancel` (the same core services as the drawer; JSON only, so a cross-site form cannot trigger them). The app also uses `/api/documents/board` and `/api/documents/[id]/summary`. The workspace is chosen with the `x-st-workspace` header and checked against membership.
+- **Screens:** Home (status counts, waiting on signers, recent), Documents (the Kanban board one status at a time, with search, sort, date range, paging), Document details (progress, recipients, activity, certificate; remind, cancel, download and share the package, signed copy or certificate), Sign (open a signing link), Account (workspace switcher, sign out).
+- **Signing** uses the website's signing page inside the app, limited to Signature Tender's signing pages; other links open in the browser.
+- **Universal links:** `/.well-known/apple-app-site-association` (from `APPLE_TEAM_ID`) and `/.well-known/assetlinks.json` (from `ANDROID_APP_CERT_SHA256`) let email signing links open the app. Both stay empty until set.
+- **Tests:** `apps/web/e2e/mobile-api.spec.ts` (sign-in through the app's origin, an unknown origin refused, board and drawer data, JSON-only changes, remind, cancel, outsiders refused, link files). In the app: Jest component tests for the document card, Documents tab, document details (actions, remind, cancel, download) and the signing-link form. CI has a separate `mobile` job.
+- Not verified on a device in this environment: the app's JavaScript builds for iOS and Android (`expo export`), and the checks above pass. The first device run needs a development build.
+
+### Mobile phase 2: Planned
+
+| Feature                                 | Notes                                                                                                                               |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Native document sending                 | Pick a PDF or photo, add recipients, place fields on the page, send. Replaces the in-app browser.                                   |
+| Native signing                          | Sign with a finger, using the same consent, evidence and certificate steps.                                                         |
+| Awaiting my signature                   | Requests where the signed-in person is a recipient, across senders. Needs a server endpoint that issues fresh signing links safely. |
+| Push notifications                      | Signed, declined, completed and reminder events, using Expo push tokens stored per device.                                          |
+| Sign in with Google, Apple and passkeys | Through the Expo plugin's browser flow.                                                                                             |
+| Workspace creation in the app           | Today new accounts finish setup on the website.                                                                                     |
+| Store listings                          | Screenshots, privacy labels, review account; needs the Apple and Google developer accounts.                                         |
+
+## Give 1, Get 2 referral program: Done
+
+Existing customers refer new ones. The new customer gets **1** free signing credit once their email is verified and they create a workspace. The referrer gets **2** once the friend's first paid send settles.
+
+- **Credits are ledger entries.** A new `referral` credit bucket. Rewards, reversals and staff adjustments are `credit_ledger` rows with unique idempotency keys (`referral_welcome:{id}`, `referral_reward:{id}`), so a repeated webhook or two jobs at once never pay twice. There is no second balance.
+- **Spending order.** Allowance, then referral, then purchased (`app_config billing.redemption_order`). API sends never use referral credits (`channel: 'api'`), and the API's `available` excludes them. Signature Studio never uses credits. A cancelled send returns the credit to its own bucket.
+- **Whose wallet.** A referral link belongs to a person *in a workspace* (`referral_identities`); rewards go to that workspace. The welcome credit goes to the first workspace the new person created (`st_referral_first_workspace`).
+- **Attribution.** `/r/CODE` counts a visit (daily totals only, no visitor data), sets a signed httpOnly cookie for the attribution window (30 days) and shows `/invited`. The sign-up form has *Referral Code (Optional)*, prefilled from the cookie and checked server-side. A better-auth `user.create.after` hook records the attribution, so only brand-new accounts can be referred. One referral per account, final at sign-up.
+- **Qualification.** A settled `request` payment (including Sign it yourself) by the referred person, from the Stripe webhook. An optional settlement hold is paid by the daily cron.
+- **Refunds and disputes.** A full refund or dispute of the qualifying payment takes back the unused part of the reward (never below zero), marks the referral reversed, and flags any credits already spent for staff.
+- **Risk.** Self-referral by the same mailbox (Gmail dots and `+tags`) is rejected. Disposable domains and bursts (velocity) hold the referral for review. A shared network is recorded but never holds on its own.
+- **Pages.**
+  - Refer & Earn (`/app/referrals`): hero, copy and share (Email, WhatsApp, Facebook, LinkedIn, native share), four summary cards, masked history with a four-step progress, and reward activity.
+  - Elsewhere: a dismissible dashboard card, the welcome banner, a Referral Credits panel on Billing, and links in the sidebar and account menu.
+  - Public: the invite page and `/referral-terms`.
+- **Staff.** `/admin/referrals` has metrics and a funnel by date range, records (under review first) with approve and reject, link revoke and restore, audited credit adjustments, program settings and CSV export. Every action is a `referral_events` row.
+- **Emails.** Someone joined (to the referrer), welcome credit, reward earned, reward adjusted.
+- **JSON.** `GET /api/referrals/me`, `POST /api/referrals/validate-code`.
+- **Launch.** The program ships **paused**. Switch it on in Admin > Referrals.
+- **Not yet.** Campaigns beyond the standard one (the table supports them), credit-pack purchases as qualifying events, a referral code typed before a Google or Apple sign-up (the link cookie works for those), and an entry point on the signer's completion screen.
+- **Tests.** `packages/core/test/referrals.test.ts` (14) and `apps/web/e2e/referrals.spec.ts` (the full acceptance scenario, bad codes, phone layout).
+
 ## Phase 10: Document management actions: Planned
 
 Adds the actions left out of the documents drawer. Each one appears in the drawer only when the server allows it, and every change is recorded in the evidence or audit log.
@@ -348,6 +420,11 @@ Adds the actions left out of the documents drawer. Each one appears in the drawe
 | Tags and folders            | Overview summary, list filters | Workspace-level folders and tags with library filters. Changing them never changes a sent or completed document and is recorded in the audit log.                                                   |
 | Supporting attachments      | Files tab                      | Extra files added to a draft for recipients to read. They can be replaced or deleted only while the document is a draft and are locked once it is sent.                                             |
 | First-page thumbnail        | Overview preview card          | Page 1 rendered to an image when a PDF is uploaded, served through the same access checks as the file. Replaces the drawn page.                                                                     |
+| Board: folders on cards     | Kanban cards, header           | Once folders exist, cards show the folder in place of the document type, and a New Folder button joins the header.                                                                                  |
+| Board: Sign a Document      | Documents header               | A flow for signing your own document without sending it. The header button appears once the flow exists.                                                                                            |
+| Board: rename and duplicate | Draft card menu                | Rename a draft and duplicate as a new request, through the same rules as Duplicate a document.                                                                                                      |
+| Board: bulk actions         | Kanban, multi-select           | Select several cards for safe bulk actions only (archive closed documents, remind open requests). Never a bulk status change.                                                                       |
+| Board: manual card order    | Kanban columns                 | Drag to reorder within a column, stored per user apart from status, with a keyboard alternative.                                                                                                    |
 
 ### Tests to add
 
@@ -379,3 +456,29 @@ Every completed request now gets a Certificate of Completion in the Midnight Nav
 
 - Unit (`packages/core/test/certificate.test.ts`): evidence mapping (one row per participant, approvals shown as approvals, unverified codes not claimed, no post-completion or invented events), one-page and multi-page layout on Letter and A4, re-issue and test markings, deterministic package.
 - Playwright (`e2e/certificate.spec.ts`): completion → certificate ID and reference → three downloads with matching stored hashes → public verify without personal data → hash match and mismatch → viewer jump; staff re-issue keeps the agreement and old certificate, appends one event, never repeats, and is a 404 for customers. `/verify` added to the axe scan.
+
+## App sidebar: Midnight Navy and Champagne Gold: Done (pending review)
+
+The signed-in sidebar is redesigned: navy background with gold accents, a navy version of the approved logo, a gold Create Document card, and the same menu in the phone drawer. Page content is unchanged.
+
+| Feature         | Status | Notes                                                                                                                                                                                                                                                                                                        |
+| --------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Menu            | Done   | Dashboard, Documents, Templates, Contacts, Team, Billing & Credits, Integrations, Settings, from one shared config (`components/shell/nav.ts`) used by desktop and phone                                                                                                                                     |
+| Submenus        | Done   | Documents (All, In Progress, Completed, Archived), Billing (Overview, Buy Credits, Plans & Pricing, Invoices, Usage) and Settings (Workspace, Profile, Branding, Security, Data Retention, API Settings). They reuse the pages' own tabs; label navigates, chevron toggles; the current section opens itself |
+| Collapse        | Done   | 272px or 80px. Remembered in a cookie (no database writes) and read by the server, so there is no flash. Tooltips and flyout menus when collapsed, placed outside the scrolling menu                                                                                                                         |
+| Role visibility | Done   | Templates, Contacts, Team and API Settings hidden without their permission; Create Document hidden without `documents.create`. Pages still enforce access                                                                                                                                                    |
+| Create Document | Done   | "Get Started" until the person has sent a document, then "Ready to Send?". Opens the existing upload step; drafts are never charged                                                                                                                                                                          |
+| Phone drawer    | Done   | Slides in from the left with focus trap, Escape, backdrop click and focus return. Rendered at page level so the top bar's blur no longer clips it                                                                                                                                                            |
+| Logo            | Done   | `public/brand/logo-on-navy.png` and `icon-on-navy.png`, recoloured from the approved logo (gold nib, ivory wordmark); shapes unchanged                                                                                                                                                                       |
+
+### Tests
+
+- Unit: menu order, no duplicate entries, tab matching, role filtering.
+- Playwright `e2e/sidebar.spec.ts`: every link, active states, submenus, collapse and expand, content resizing without overlap, tooltips, flyouts, keyboard, preference after reload, short screens, phone drawer, axe scan. `teams.spec.ts` checks what a Viewer sees and that hidden pages still refuse.
+
+### Known gaps
+
+- Signature Studio is not in the menu: the app has no Signature Studio page yet (it exists only as a demo on the Product page).
+- Drafts is left out of the Documents submenu because the Drafts tab was deliberately hidden.
+- No notification badges: there is no inbox or notification centre to count from yet.
+- The rebrand's info blue (#2563eb) failed contrast on its pale background; restored to #1d4ed8 so the accessibility checks pass again.

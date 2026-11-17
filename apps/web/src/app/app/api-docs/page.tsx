@@ -1,10 +1,13 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { API_SCOPES, WEBHOOK_EVENTS } from '@st/core';
 
-export const metadata = {
+// Signed-in only (the /app layout requires a session). Keep it out of search results too.
+export const metadata: Metadata = {
   title: 'API documentation',
   description: 'Send documents for signature from your own software with the Signature Tender API.',
+  robots: { index: false, follow: false },
 };
 
 function Code({ children }: { children: string }) {
@@ -90,8 +93,8 @@ const ENDPOINTS: [string, string, string, string][] = [
 
 export default function DevelopersDocsPage() {
   return (
-    <div className="mx-auto max-w-3xl px-4 py-14 sm:px-6">
-      <h1 className="font-display text-4xl">API documentation</h1>
+    <div className="mx-auto max-w-3xl">
+      <h1 className="font-display text-3xl sm:text-4xl">API documentation</h1>
       <p className="mt-3 text-sm">
         Send documents for signature from your own software, and get status updates back by webhook.
         Signature Tender keeps the signing record and its evidence; store the ids we return and

@@ -6,12 +6,17 @@ import {
   applyCheckoutCompleted,
   applyInvoice,
   applyReversal,
+  qualifyReferralPayment,
+  type ReferralNotice,
   applySubscription,
   claimStripeEvent,
+  clearCardOnFile,
   finishStripeEvent,
+  recordCardOnFile,
   sendPaidRequest,
 } from '@st/core';
 import { db } from '@/lib/db';
+import { sendReferralNotices } from '@/lib/referrals';
 import { stripe, stripeLiveMode, webhookSecret } from '@/lib/stripe';
 import { liveSendingEnabled } from '@/lib/billing';
 import { checkoutFacts, invoiceFacts, subscriptionFacts } from '@/lib/stripe-events';
@@ -40,6 +45,8 @@ async function dispatchPaid(requestId: string, dispatchAs: string) {
       { liveSendingEnabled: await liveSendingEnabled() },
       { userAgent: 'Stripe webhook' },
     );
+    // Sign it yourself: the sender opens signing from the return page; no email to themselves.
+    if (sent.selfSign) return;
     await sendInvitations(sent.invitations, {
       title: sent.title,
       senderName: sent.senderName,
@@ -76,14 +83,21 @@ async function studioCompleted(s: Stripe.Checkout.Session) {
   });
   if (out.action === 'refund_duplicate' && out.paymentIntentId) {
     await stripe().refunds.create(
-      { payment_intent: out.paymentIntentId, reason: 'duplicate', metadata: { st_purchase_id: out.purchaseId } },
+      {
+        payment_intent: out.paymentIntentId,
+        reason: 'duplicate',
+        metadata: { st_purchase_id: out.purchaseId },
+      },
       { idempotencyKey: `studio-duplicate-refund:${out.purchaseId}` },
     );
     return true;
   }
   if (out.action === 'refund_duplicate') return true;
   if (out.action === 'none') return out.reason !== 'unknown_session';
-  await recordStudioEvent(db(), 'purchase_completed', { userId: out.userId, designId: out.designId }).catch(() => undefined);
+  await recordStudioEvent(db(), 'purchase_completed', {
+    userId: out.userId,
+    designId: out.designId,
+  }).catch(() => undefined);
   try {
     await generateStudioAssets(db(), studioDeps(), out.purchaseId, await studioSettings());
   } catch (err) {
@@ -92,18 +106,55 @@ async function studioCompleted(s: Stripe.Checkout.Session) {
   return true;
 }
 
+/**
+ * A company saved its card (setup-mode checkout). Recorded only for the workspace whose Stripe
+ * customer it is; the card also becomes the customer's default for invoices.
+ */
+async function cardSaved(s: Stripe.Checkout.Session) {
+  const workspaceId = s.metadata?.st_workspace_id;
+  const customerId = id(s.customer);
+  const setupId = id(s.setup_intent);
+  if (!workspaceId || !customerId || !setupId) return;
+  const si = await stripe().setupIntents.retrieve(setupId, { expand: ['payment_method'] });
+  const pm = typeof si.payment_method === 'object' ? si.payment_method : null;
+  if (si.status !== 'succeeded' || !pm) return;
+  const ok = await recordCardOnFile(db(), {
+    workspaceId,
+    customerId,
+    paymentMethodId: pm.id,
+    brand: pm.card?.brand ?? null,
+    last4: pm.card?.last4 ?? null,
+  });
+  if (ok)
+    await stripe().customers.update(customerId, {
+      invoice_settings: { default_payment_method: pm.id },
+    });
+}
+
 async function handle(event: Stripe.Event) {
   switch (event.type) {
+    case 'payment_method.detached':
+      await clearCardOnFile(db(), event.data.object.id);
+      return;
     case 'checkout.session.completed':
     case 'checkout.session.async_payment_succeeded': {
+      if (event.data.object.mode === 'setup') {
+        if (event.data.object.metadata?.st_purpose === 'card_on_file')
+          await cardSaved(event.data.object);
+        return;
+      }
       if (isStudio(event.data.object)) {
         await studioCompleted(event.data.object);
         return;
       }
       const out = await applyCheckoutCompleted(db(), checkoutFacts(event.data.object));
-      if (out.action === 'dispatch') await dispatchPaid(out.requestId, out.dispatchAs);
+      if (out.action === 'dispatch') {
+        await dispatchPaid(out.requestId, out.dispatchAs);
+        await referralStep(() => qualifyReferralPayment(db(), out.paymentId));
+      }
       // Sessions without our metadata are matched by their id instead.
-      if (out.action === 'none' && out.reason === 'unknown_session') await studioCompleted(event.data.object);
+      if (out.action === 'none' && out.reason === 'unknown_session')
+        await studioCompleted(event.data.object);
       return;
     }
     case 'checkout.session.expired':
@@ -137,6 +188,7 @@ async function handle(event: Stripe.Event) {
           kind: 'refund',
           amountRefunded: event.data.object.amount_refunded,
         });
+        await referralStep(async () => r.referralNotices);
         if (!r.found)
           await applyStudioReversal(db(), {
             paymentIntentId: pi,
@@ -154,12 +206,25 @@ async function handle(event: Stripe.Event) {
           kind: 'dispute',
           disputeId: event.data.object.id,
         });
+        await referralStep(async () => r.referralNotices);
         if (!r.found) await applyStudioReversal(db(), { paymentIntentId: pi, kind: 'dispute' });
       }
       return;
     }
     default:
       return;
+  }
+}
+
+/**
+ * Give 1, Get 2: referral qualification and reversal run after the payment work and are
+ * idempotent on their own. A failure here is logged and never makes Stripe retry the payment.
+ */
+async function referralStep(fn: () => Promise<ReferralNotice[]>) {
+  try {
+    await sendReferralNotices(await fn());
+  } catch (err) {
+    console.error('Referral step failed', err);
   }
 }
 

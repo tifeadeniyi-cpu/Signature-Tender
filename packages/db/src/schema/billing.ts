@@ -34,6 +34,11 @@ export const billingAccounts = pgTable(
     currentPeriodStart: timestamp('current_period_start', { withTimezone: true }),
     currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }),
     cancelAtPeriodEnd: boolean('cancel_at_period_end').notNull().default(false),
+    /** The card saved for the company (Stripe Checkout setup mode); display details only. */
+    cardPaymentMethodId: text('card_payment_method_id'),
+    cardBrand: text('card_brand'),
+    cardLast4: text('card_last4'),
+    cardSavedAt: timestamp('card_saved_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -110,9 +115,16 @@ export const creditEntryType = pgEnum('credit_entry_type', [
   'restore',
   'expire',
   'reversal',
+  'referral_welcome',
+  'referral_reward',
+  'referral_reversal',
+  'referral_adjustment',
 ]);
-/** Purchased credits never expire; a subscription allowance lasts one billing period. */
-export const creditBucket = pgEnum('credit_bucket', ['purchased', 'allowance']);
+/**
+ * Purchased credits never expire; a subscription allowance lasts one billing period. Referral
+ * credits (Give 1, Get 2) never expire, have no cash value and pay only for web sends.
+ */
+export const creditBucket = pgEnum('credit_bucket', ['purchased', 'allowance', 'referral']);
 
 /**
  * Append-only credit ledger. The balance is always the sum of `delta`; nothing is ever edited. The

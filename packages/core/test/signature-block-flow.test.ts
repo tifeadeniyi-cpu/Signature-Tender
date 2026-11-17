@@ -20,6 +20,7 @@ import {
   readRequestFile,
   getSignatureSeals,
   formatSigningTime,
+  formatCertTime,
   MemoryStorage,
 } from '../src';
 import { APP_URL, OWNER_URL } from './env';
@@ -144,7 +145,11 @@ describe('signature blocks through a real signing', () => {
     expect(req!.settings).toMatchObject({ signatureDisplay: 'full', timeZone: 'America/New_York' });
   });
 
-  async function sign(email: string, extra: Record<string, unknown> = {}) {
+  async function sign(
+    email: string,
+    extra: Record<string, unknown> = {},
+    zone: { device?: string; ip?: string } = {},
+  ) {
     const token = tokens[email]!;
     const { session } = (await startSigning(db, token)) as { session: string };
     const view = await getSignerView(db, token, session);
@@ -160,19 +165,29 @@ describe('signature blocks through a real signing', () => {
       pngBase64: png(),
     });
     const before = Date.now();
-    const res = await completeSigning(db, storage, token, session, {
-      intent: true,
-      // A forged time or name from the browser must be ignored.
-      values: [{ fieldId: wsp.fields[0]!.id, signatureId: sig.id, ...extra }],
-    } as never);
+    const res = await completeSigning(
+      db,
+      storage,
+      token,
+      session,
+      {
+        intent: true,
+        timeZone: zone.device,
+        // A forged time or name from the browser must be ignored.
+        values: [{ fieldId: wsp.fields[0]!.id, signatureId: sig.id, ...extra }],
+      } as never,
+      { ipTimeZone: zone.ip ?? null },
+    );
     return { res, before, token, session };
   }
 
   it('uses the server time for each signer and ignores client-sent metadata', async () => {
-    const a = await sign('ann.block@example.test', {
-      signedAt: '1999-01-01T00:00:00Z',
-      name: 'Mallory',
-    });
+    // Ann's device reports her zone; Ben's browser sends nonsense, so his IP's zone is used.
+    const a = await sign(
+      'ann.block@example.test',
+      { signedAt: '1999-01-01T00:00:00Z', name: 'Mallory' },
+      { device: 'America/Los_Angeles', ip: 'Europe/London' },
+    );
     expect(a.res.readyToFinalize).toBe(false);
     // A completed signer cannot add or change marks afterwards.
     await expect(
@@ -184,7 +199,7 @@ describe('signature blocks through a real signing', () => {
       }),
     ).rejects.toBeTruthy();
     await new Promise((r) => setTimeout(r, 1100));
-    const b = await sign('ben.block@example.test');
+    const b = await sign('ben.block@example.test', {}, { device: 'Not/A_Zone', ip: 'Asia/Tokyo' });
     expect(b.res.readyToFinalize).toBe(true);
     await finalizeRequest(db, storage, { token: b.token }, requestId);
 
@@ -200,8 +215,12 @@ describe('signature blocks through a real signing', () => {
     const signed = pdfContent(
       (await readRequestFile(db, storage, { userId: owner }, requestId, 'signed')).bytes,
     );
-    expect(signed).toContain(pdfHex(formatSigningTime(ann.signedAt!, 'America/New_York')));
-    expect(signed).toContain(pdfHex(formatSigningTime(ben.signedAt!, 'America/New_York')));
+    expect(ann).toMatchObject({ timeZone: 'America/Los_Angeles', timeZoneSource: 'device' });
+    expect(ben).toMatchObject({ timeZone: 'Asia/Tokyo', timeZoneSource: 'ip' });
+    // Each stamp shows that signer's own time zone, not the sender's.
+    expect(signed).toContain(pdfHex(formatSigningTime(ann.signedAt!, 'America/Los_Angeles')));
+    expect(signed).toContain(pdfHex(formatSigningTime(ben.signedAt!, 'Asia/Tokyo')));
+    expect(signed).not.toContain(pdfHex(formatSigningTime(ann.signedAt!, 'America/New_York')));
     expect(signed).toContain(pdfHex('Ann Artist'));
     expect(signed).not.toContain(pdfHex('Mallory'));
     expect(signed).not.toContain(pdfHex('1999'));
@@ -226,6 +245,12 @@ describe('signature blocks through a real signing', () => {
       (await readRequestFile(db, storage, { userId: owner }, requestId, 'certificate')).bytes,
     );
     expect(cert).toContain(pdfHex(annSeal.eventRef!));
+    // The certificate's signer rows use each signer's zone too; the event recorded it.
+    expect(cert).toContain(pdfHex(formatCertTime(ann.signedAt!, 'America/Los_Angeles').time));
+    expect(signedEv.data).toMatchObject({
+      timeZone: 'America/Los_Angeles',
+      timeZoneSource: 'device',
+    });
   });
 
   it('only shows seal details to people who can open the document', async () => {

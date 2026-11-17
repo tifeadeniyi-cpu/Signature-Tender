@@ -49,10 +49,42 @@ export function signingEventRef(
   );
   return e ? `EV-${e.seq}-${e.hash.slice(0, 12).toUpperCase()}` : null;
 }
-import { consumeHold, reserveCredit, restoreOnCancel } from './billing';
+import {
+  consumeHold,
+  getBalances,
+  hasPaidSelfSign,
+  isSelfSignRecipients,
+  isSelfSignRequest,
+  reserveCredit,
+  restoreOnCancel,
+} from './billing';
 import { enqueueCompletionNotifications } from './notifications';
 
-type Meta = { ipAddress?: string | null; userAgent?: string | null };
+type Meta = {
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  /** Time zone of the request's IP address, from the hosting edge (used if the device sends none). */
+  ipTimeZone?: string | null;
+};
+
+/** A real IANA zone name, or null. Unlike validTimeZone, never falls back to UTC. */
+export function ianaZoneOrNull(tz: string | null | undefined): string | null {
+  if (!tz || tz.length > 64 || !/^[A-Za-z_]+(?:\/[A-Za-z0-9_+-]+)*$|^UTC$/.test(tz)) return null;
+  try {
+    return new Intl.DateTimeFormat('en-US', { timeZone: tz }).resolvedOptions().timeZone;
+  } catch {
+    return null;
+  }
+}
+
+/** The signer's zone: what their device reported, else the zone of their IP address. */
+export function signerTimeZone(device: string | null | undefined, ip: string | null | undefined) {
+  const d = ianaZoneOrNull(device);
+  if (d) return { timeZone: d, source: 'device' as const };
+  const i = ianaZoneOrNull(ip);
+  if (i) return { timeZone: i, source: 'ip' as const };
+  return null;
+}
 type RequestRow = typeof schema.signingRequests.$inferSelect;
 type RecipientRow = typeof schema.requestRecipients.$inferSelect;
 export type RequestStatus = RequestRow['status'];
@@ -128,6 +160,8 @@ export interface SendOptions {
    * Required for live requests; recorded with the notice version and how it was given.
    */
   specializedAck?: { source: 'sender' | 'api' };
+  /** API sends never spend referral credits. Defaults to web. */
+  channel?: 'web' | 'api';
 }
 
 export interface SpecializedNotice {
@@ -146,6 +180,8 @@ export interface SendResult {
   invitations: Invitation[];
   /** `awaiting_payment` when a live request had no credit to use; nothing was emailed. */
   status: 'sent' | 'awaiting_payment';
+  /** The sender is the only recipient ("sign it yourself"): open signing, do not email. */
+  selfSign: boolean;
 }
 
 const PAYABLE_STATUSES: RequestStatus[] = ['awaiting_payment', 'payment_processing'];
@@ -229,6 +265,50 @@ async function assignTokens(
     out.push({ recipientId: r.id, name: r.name, email: r.email, token, kind });
   }
   return out;
+}
+
+/**
+ * "Sign it yourself": gives the sender a fresh signing link to their own request, so they go
+ * straight to signing instead of waiting for an email. Only for a sent request whose one
+ * recipient is the signed-in person (same verified email), and only until they have signed.
+ */
+export async function openSelfSigning(
+  db: Database,
+  actor: ActorContext,
+  requestId: string,
+): Promise<{ token: string }> {
+  if (!z.string().uuid().safeParse(requestId).success)
+    throw new AppError('not_found', 'Request not found');
+  return withActor(db, actor, async (tx) => {
+    const [req] = await tx
+      .select()
+      .from(schema.signingRequests)
+      .where(eq(schema.signingRequests.id, requestId))
+      .for('update');
+    if (!req || req.sentBy !== actor.userId) throw new AppError('not_found', 'Request not found');
+    const [me] = await tx
+      .select({ email: schema.user.email, verified: schema.user.emailVerified })
+      .from(schema.user)
+      .where(eq(schema.user.id, actor.userId));
+    const recips = await tx
+      .select()
+      .from(schema.requestRecipients)
+      .where(eq(schema.requestRecipients.requestId, requestId));
+    if (!me?.verified || !isSelfSignRecipients(recips, me.email))
+      throw new AppError('forbidden', 'Only documents you sign yourself open here.');
+    if (!SIGNABLE_STATUSES.includes(req.status))
+      throw new AppError(
+        'conflict',
+        PAYABLE_STATUSES.includes(req.status)
+          ? 'Pay for this document to sign it.'
+          : 'This document can no longer be signed.',
+      );
+    if (recips[0]!.status === 'signed')
+      throw new AppError('conflict', 'You have already signed this document.');
+    const settings = documentSettingsSchema.parse(req.settings);
+    const [inv] = await assignTokens(tx, recips, await linkExpiry(tx, settings), 'sign');
+    return { token: inv!.token };
+  });
 }
 
 /** The next group that must act: everyone acting (any order) or the lowest unfinished order group. */
@@ -445,6 +525,7 @@ export async function sendForSignature(
       });
     let invitations: Invitation[] = [];
     let status: SendResult['status'] = 'sent';
+    const selfSign = isSelfSignRecipients(inserted, sender?.email);
     if (!live) {
       invitations = await dispatch(tx, req!, actor.userId, meta);
     } else {
@@ -453,17 +534,29 @@ export async function sendForSignature(
         workspaceId: doc.workspace_id,
         actorUserId: actor.userId,
         type: 'request.created',
-        data: { sourceSha256: file!.sha256, recipients: inserted.length, fields: fields.length },
+        data: {
+          sourceSha256: file!.sha256,
+          recipients: inserted.length,
+          fields: fields.length,
+          ...(selfSign ? { selfSign: true } : {}),
+        },
         ...meta,
       });
-      const bucket = await reserveCredit(tx, {
-        workspaceId: doc.workspace_id,
-        requestId,
-        userId: actor.userId,
-      });
+      // Signing your own document is a flat fee paid per document; it never spends a credit.
+      // Workspaces that sign for free still skip payment.
+      const bucket = selfSign
+        ? (await getBalances(tx, doc.workspace_id)).unlimited
+          ? 'complimentary'
+          : null
+        : await reserveCredit(tx, {
+            workspaceId: doc.workspace_id,
+            requestId,
+            userId: actor.userId,
+            channel: opts.channel ?? 'web',
+          });
       if (bucket) {
         invitations = await dispatch(tx, req!, actor.userId, meta);
-        await consumeHold(tx, requestId);
+        if (!selfSign) await consumeHold(tx, requestId);
       } else {
         status = 'awaiting_payment';
         await appendEvent(tx, {
@@ -471,6 +564,7 @@ export async function sendForSignature(
           workspaceId: doc.workspace_id,
           actorUserId: actor.userId,
           type: 'request.awaiting_payment',
+          ...(selfSign ? { data: { selfSign: true } } : {}),
           ...meta,
         });
       }
@@ -484,7 +578,7 @@ export async function sendForSignature(
       metadata: { requestId, test: !live },
       ...meta,
     });
-    return { requestId, invitations, status };
+    return { requestId, invitations, status, selfSign };
   });
 }
 
@@ -508,6 +602,8 @@ export async function sendPaidRequest(
   workspaceName: string;
   emailMessage: string | null;
   invitations: Invitation[];
+  /** Sign it yourself: the sender opens signing straight away, so no email is needed. */
+  selfSign: boolean;
 }> {
   if (!opts.liveSendingEnabled)
     throw new AppError(
@@ -530,25 +626,35 @@ export async function sendPaidRequest(
     )) as unknown as { ok: boolean }[];
     if (!canSend?.ok)
       throw new AppError('forbidden', 'Your role does not allow sending this document.');
-    const bucket = await reserveCredit(tx, {
-      workspaceId: req.workspaceId,
-      requestId,
-      userId: actor.userId,
-    });
+    // Sign it yourself: sent once its own flat-fee payment is confirmed; no credit involved.
+    const selfSign = await isSelfSignRequest(tx, requestId);
+    const bucket = selfSign
+      ? (await hasPaidSelfSign(tx, requestId))
+        ? 'self_sign'
+        : (await getBalances(tx, req.workspaceId)).unlimited
+          ? 'complimentary'
+          : null
+      : await reserveCredit(tx, {
+          workspaceId: req.workspaceId,
+          requestId,
+          userId: actor.userId,
+        });
     if (!bucket)
       throw new AppError(
         'conflict',
-        'There are no credits available. Buy credits or pay for this request.',
+        selfSign
+          ? 'Pay for this document to sign it.'
+          : 'There are no credits available. Buy credits or pay for this request.',
       );
     const invitations = await dispatch(tx, req, actor.userId, meta);
-    await consumeHold(tx, requestId);
+    if (!selfSign) await consumeHold(tx, requestId);
     await recordAudit(tx, {
       workspaceId: req.workspaceId,
       actorUserId: actor.userId,
       action: 'document.sent',
       targetType: 'document',
       targetId: req.documentId,
-      metadata: { requestId, test: false, credit: bucket },
+      metadata: { requestId, test: false, credit: bucket, ...(selfSign ? { selfSign: true } : {}) },
       ...meta,
     });
     return {
@@ -560,6 +666,7 @@ export async function sendPaidRequest(
       workspaceName: req.workspaceName,
       emailMessage: req.emailMessage,
       invitations,
+      selfSign,
     };
   });
 }
@@ -845,6 +952,8 @@ export interface SignerView {
   canDownloadSigned: boolean;
   /** When this recipient completed their part, if they have. */
   signedAt: Date | null;
+  /** The signer's recorded time zone, once they have signed. */
+  signerTimeZone: string | null;
   /** Every acting recipient has completed. The signed copy may still be in preparation. */
   allPartiesDone: boolean;
 }
@@ -892,6 +1001,7 @@ function toView(
     canDownloadSigned:
       request.status === 'completed' && settings.allowDownload && Boolean(request.signedFileId),
     signedAt: r.signedAt,
+    signerTimeZone: r.timeZone ?? null,
     allPartiesDone: request.status === 'completed' || allPartiesDone,
   };
 }
@@ -1568,6 +1678,8 @@ const completeSchema = z.object({
   intent: z.literal(true, { message: 'Confirm that you intend to sign.' }),
   /** The version the signer reviewed; a mismatch means the document changed under them. */
   documentVersion: z.string().length(64).optional(),
+  /** The signer's device time zone (Intl), for their signing time on the stamp. */
+  timeZone: z.string().max(64).optional(),
   values: z
     .array(
       z.object({
@@ -1657,7 +1769,14 @@ export async function completeSigning(
       if (!fields.some((f) => f.id === v.fieldId))
         throw new AppError('invalid', 'A value was sent for a field that is not yours.');
     const now = new Date();
-    const signedDate = now.toISOString().slice(0, 10);
+    const zone = signerTimeZone(data.timeZone, meta.ipTimeZone);
+    // "Date signed" is the signer's own calendar date, not the server's.
+    const signedDate = new Intl.DateTimeFormat('en-CA', {
+      timeZone: zone?.timeZone ?? 'UTC',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(now);
     const settings = documentSettingsSchema.parse(request.settings);
 
     for (const f of fields) {
@@ -1698,6 +1817,8 @@ export async function completeSigning(
         signedAt: now,
         signedIp: meta.ipAddress ?? null,
         signedUserAgent: meta.userAgent ?? null,
+        timeZone: zone?.timeZone ?? null,
+        timeZoneSource: zone?.source ?? null,
         // The verified session is kept until it expires (SESSION_HOURS), so the signer can open
         // the completed document without a second code. Signing actions still refuse a signed
         // recipient, so it grants read access only.
@@ -1723,8 +1844,11 @@ export async function completeSigning(
         ),
         consentedAt: recipient.consentedAt.toISOString(),
         sourceSha256: request.sourceSha256,
+        timeZone: zone?.timeZone ?? null,
+        timeZoneSource: zone?.source ?? null,
       },
-      ...meta,
+      ipAddress: meta.ipAddress,
+      userAgent: meta.userAgent,
     });
 
     const all = await tx
@@ -1908,7 +2032,8 @@ export async function finalizeRequest(
                   name: r.name,
                   role: r.role,
                   signedAt: r.signedAt,
-                  timeZone: block.timeZone,
+                  // Each signer's own zone when known; older signings keep the request's zone.
+                  timeZone: r.timeZone ?? block.timeZone,
                   format: block.format,
                 }
               : null,

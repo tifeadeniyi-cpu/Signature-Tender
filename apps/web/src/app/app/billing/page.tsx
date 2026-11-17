@@ -5,6 +5,7 @@ import {
   bundleSavingsPercent,
   formatMoney,
   getBillingOverview,
+  getCardOnFile,
   getConfigValue,
   reconcileCredits,
 } from '@st/core';
@@ -12,6 +13,7 @@ import { db } from '@/lib/db';
 import { requireWorkspace } from '@/lib/session';
 import { paymentsAvailable } from '@/lib/billing';
 import { stripeLiveMode } from '@/lib/stripe';
+import { SaveCardButton } from '@/components/billing/save-card-button';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardHeader } from '@/components/ui/card';
 import { Alert, Badge } from '@/components/ui/feedback';
@@ -92,6 +94,7 @@ export default async function BillingPage({
     throw err;
   }
   const paymentsOn = await paymentsAvailable();
+  const card = await getCardOnFile(db(), actor, workspaceId).catch(() => null);
   const supportEmail = await getConfigValue(db(), 'support.email', 'support@signaturetender.com');
   const canBuy = o.canManage && paymentsOn && !o.complimentary;
   const notice = o.complimentary
@@ -148,6 +151,32 @@ export default async function BillingPage({
 
       {tab === 'overview' ? (
         <div className="flex flex-col gap-6">
+          {card && card.required && o.canManage && paymentsOn ? (
+            <Card>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-text">
+                    Card on file
+                  </p>
+                  <p className="mt-1 text-lg font-semibold text-heading">
+                    {card.brand && card.last4
+                      ? `${card.brand[0]!.toUpperCase()}${card.brand.slice(1)} ending ${card.last4}`
+                      : card.hasCard
+                        ? 'On file with your subscription'
+                        : 'No card on file'}
+                  </p>
+                  <p className="mt-1 text-sm">
+                    Needed to add team members. Saving a card does not charge it.
+                  </p>
+                </div>
+                <SaveCardButton
+                  returnPath="/app/billing"
+                  label={card.brand ? 'Replace card' : 'Add a card'}
+                  variant={card.hasCard ? 'secondary' : 'primary'}
+                />
+              </div>
+            </Card>
+          ) : null}
           <Card>
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-text">
               Current billing model
@@ -194,9 +223,15 @@ export default async function BillingPage({
             >
               {o.complimentary
                 ? 'Founder workspace: sending is free.'
-                : o.balances.allowance > 0
-                  ? `${o.balances.allowance} from this month's allowance, ${o.balances.purchased} purchased`
-                  : `${o.balances.purchased} purchased`}
+                : [
+                    o.balances.allowance > 0
+                      ? `${o.balances.allowance} from this month's allowance`
+                      : null,
+                    o.balances.referral > 0 ? `${o.balances.referral} referral` : null,
+                    `${o.balances.purchased} purchased`,
+                  ]
+                    .filter(Boolean)
+                    .join(', ')}
             </Stat>
             <Stat label="Requests sent this month" value={String(o.usage.sentThisMonth)}>
               Test requests are not counted.
@@ -366,6 +401,43 @@ export default async function BillingPage({
               Purchased credits never expire.
             </Stat>
           </div>
+          <Card className="p-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h2 className="font-display text-lg">Referral Credits</h2>
+                <p className="mt-1 text-sm">
+                  From Give 1, Get 2. Used before purchased credits on documents sent from the
+                  website (not the API). No cash value; they never expire.
+                </p>
+              </div>
+              <Link
+                href="/app/referrals"
+                className="inline-flex h-10 items-center rounded-lg border border-border bg-white px-4 text-sm font-semibold text-heading hover:bg-blush"
+              >
+                Earn More Credits
+              </Link>
+            </div>
+            <dl className="mt-4 grid grid-cols-3 gap-4 text-center sm:max-w-md">
+              <div>
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-text">
+                  Available
+                </dt>
+                <dd className="mt-1 font-display text-2xl text-heading">{o.balances.referral}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-text">
+                  Used
+                </dt>
+                <dd className="mt-1 font-display text-2xl text-heading">{o.referral.used}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-text">
+                  Earned
+                </dt>
+                <dd className="mt-1 font-display text-2xl text-heading">{o.referral.earned}</dd>
+              </div>
+            </dl>
+          </Card>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
             {o.prices.map((p) => {
               const savings =

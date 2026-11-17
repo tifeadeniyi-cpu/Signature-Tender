@@ -166,16 +166,16 @@ test('search, filter, archive and set retention in the library', async ({ page }
   await sendTestRequest(page, 'Booking.pdf', 'Max Booker', email);
 
   await page.goto('/app/documents');
-  await expect(page.getByRole('link', { name: /^All/ })).toContainText('1');
+  await expect(page.getByRole('main').getByRole('link', { name: /^All/ })).toContainText('1');
   const table = page.getByRole('table');
   await expect(table.getByRole('link', { name: 'Booking', exact: true })).toBeVisible();
 
   // Search by the signer's email, then for something that does not exist.
-  await page.getByRole('searchbox').fill(email);
+  await page.getByRole('main').getByRole('searchbox').fill(email);
   await page.getByRole('button', { name: 'Apply' }).click();
   await expect(page).toHaveURL(/q=/);
   await expect(table.getByRole('link', { name: 'Booking', exact: true })).toBeVisible();
-  await page.getByRole('searchbox').fill('no-such-document-xyz');
+  await page.getByRole('main').getByRole('searchbox').fill('no-such-document-xyz');
   await page.getByRole('button', { name: 'Apply' }).click();
   await expect(page.getByRole('heading', { name: 'No documents match' })).toBeVisible();
   await page.getByRole('link', { name: 'Clear filters' }).click();

@@ -40,6 +40,19 @@ test('an owner invites a teammate who signs up from the link and joins', async (
   await guest.getByRole('button', { name: 'Accept invitation' }).click();
   await expect(guest).toHaveURL(/\/app$/);
 
+  // The sidebar shows the viewer only what their role allows: no create button, no API settings.
+  const side = guest.getByRole('complementary', { name: 'Sidebar' });
+  await expect(side.getByRole('link', { name: 'Templates' })).toBeVisible();
+  await expect(side.getByRole('link', { name: 'Create Document' })).toHaveCount(0);
+  await side.getByRole('button', { name: 'Show Settings pages' }).click();
+  await expect(side.getByRole('link', { name: 'Profile' })).toBeVisible();
+  await expect(side.getByRole('link', { name: 'API Settings' })).toHaveCount(0);
+  // Hiding is not access control: the page itself still refuses.
+  await guest.goto('/app/settings/developers');
+  await expect(
+    guest.getByText('Only owners, admins and API developers can manage API keys'),
+  ).toBeVisible();
+
   // The viewer cannot manage the team; the owner now sees them as a member.
   await guest.goto('/app/team');
   await expect(guest.getByRole('button', { name: 'Invite Member' })).toHaveCount(0);
@@ -75,7 +88,7 @@ test('contacts can be added, searched, imported and exported', async ({ page }) 
     .click();
   await expect(page.getByText('Imported 1 contact; skipped 1.')).toBeVisible();
 
-  await page.getByRole('searchbox').fill('label');
+  await page.getByRole('main').getByRole('searchbox').fill('label');
   await page.getByRole('button', { name: 'Apply' }).click();
   await expect(page.getByRole('link', { name: 'Art Ist', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Vera Venue', exact: true })).toHaveCount(0);

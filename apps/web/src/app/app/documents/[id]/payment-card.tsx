@@ -20,7 +20,10 @@ export function PaymentCard({
   paymentsOn,
   liveOn,
   cancelled,
+  selfSign = false,
 }: {
+  /** "Sign it yourself": a flat price for this document; credits are not used. */
+  selfSign?: boolean;
   documentId: string;
   requestId: string;
   status: 'awaiting_payment' | 'payment_processing';
@@ -63,12 +66,18 @@ export function PaymentCard({
             <h2 className="font-display text-xl">
               {status === 'payment_processing'
                 ? 'Confirming your payment'
-                : 'Payment needed to send'}
+                : selfSign
+                  ? 'Pay to sign this document'
+                  : 'Payment needed to send'}
             </h2>
             <p className="mt-1 text-sm">
               {status === 'payment_processing'
-                ? 'Stripe is confirming your payment. As soon as it does, we send the request and email your recipients. This page checks again automatically.'
-                : `This request is ready but has not been sent. Nobody has been emailed yet. Sending costs 1 credit or ${price}.`}
+                ? selfSign
+                  ? 'Stripe is confirming your payment. As soon as it does, you can sign. This page checks again automatically.'
+                  : 'Stripe is confirming your payment. As soon as it does, we send the request and email your recipients. This page checks again automatically.'
+                : selfSign
+                  ? `Signing your own document costs ${price}. No credit is used. You sign straight after paying.`
+                  : `This request is ready but has not been sent. Nobody has been emailed yet. Sending costs 1 credit or ${price}.`}
             </p>
           </div>
           {cancelled ? (
@@ -81,35 +90,37 @@ export function PaymentCard({
             </Alert>
           ) : null}
           <div className="flex flex-wrap gap-2">
-            {available > 0 ? (
+            {available > 0 && !selfSign ? (
               <form action={sendCredit}>
                 <Button type="submit" loading={sendingCredit} disabled={!liveOn}>
                   Use a credit and send ({available} available)
                 </Button>
               </form>
             ) : null}
-            {canPay && paymentsOn && available === 0 ? (
+            {canPay && paymentsOn && (available === 0 || selfSign) ? (
               <form action={pay}>
                 <Button type="submit" loading={paying} disabled={!liveOn}>
                   {status === 'payment_processing'
                     ? `Pay again (${price})`
-                    : `Pay ${price} and send`}
+                    : selfSign
+                      ? `Pay ${price} and sign`
+                      : `Pay ${price} and send`}
                 </Button>
               </form>
             ) : null}
-            {canPay && paymentsOn ? (
+            {canPay && paymentsOn && !selfSign ? (
               <Link href="/app/billing?tab=credits" className={buttonClass('secondary')}>
                 Buy credits instead
               </Link>
             ) : null}
           </div>
-          {status === 'payment_processing' ? (
+          {status === 'payment_processing' && !selfSign ? (
             <p className="text-xs">
               Closed the checkout page without paying? You can pay again. If both payments go
               through, the extra one stays in your workspace as a credit.
             </p>
           ) : null}
-          {!canPay && available === 0 ? (
+          {!canPay && (available === 0 || selfSign) ? (
             <p className="text-sm">
               Ask a workspace owner or admin to add credits or pay for this request.
             </p>

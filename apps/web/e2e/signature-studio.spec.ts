@@ -165,6 +165,25 @@ test('design as a guest, sign up, pay $0.99 and download the files', async ({ pa
   const zip = await dl('Download All Formats');
   expect(zip.body.readUInt32LE(0)).toBe(0x04034b50);
 
+  // Signed out, nothing downloads; signing in brings the buyer straight back to their files.
+  const fresh = await browser.newContext();
+  const out = await fresh.newPage();
+  const noSession = await out.request.get(`/api/studio/download?d=${designId}&f=png&b=white&e=9999999999&s=${'0'.repeat(64)}`);
+  expect(noSession.status()).toBe(401);
+  await out.goto(`/signature-studio/design/${designId}`);
+  await expect(out).toHaveURL(/\/sign-in\?next=/);
+  // A new visitor's "Create an account" keeps the way back too.
+  await expect(out.getByRole('link', { name: 'Create an account' })).toHaveAttribute(
+    'href',
+    `/sign-up?next=${encodeURIComponent(`/signature-studio/design/${designId}`)}`,
+  );
+  await out.getByLabel('Email').fill(buyerEmail);
+  await out.getByLabel('Password').fill('correct-horse-battery-staple');
+  await out.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(out).toHaveURL(new RegExp(`/signature-studio/design/${designId}$`));
+  await expect(out.getByRole('button', { name: 'Download Transparent PNG' })).toBeVisible();
+  await fresh.close();
+
   // The library lists the purchase; editing it makes a new draft and never changes it.
   await page.goto('/signature-studio/library');
   await expect(page.getByRole('heading', { name: 'My Signatures' })).toBeVisible();

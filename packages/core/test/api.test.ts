@@ -430,12 +430,14 @@ describe('webhook delivery', () => {
 
     const received: { headers: Headers; body: string }[] = [];
     let status = 500;
-    const fakeFetch = (async (_url: string, init: RequestInit) => {
-      received.push({ headers: new Headers(init.headers), body: String(init.body) });
+    // Only this test's endpoint counts; other tests' endpoints may receive deliveries in the same run.
+    const fakeFetch = (async (url: string, init: RequestInit) => {
+      if (String(url) === 'https://hooks.example.com/st')
+        received.push({ headers: new Headers(init.headers), body: String(init.body) });
       return new Response('ok', { status });
     }) as unknown as typeof fetch;
 
-    const first = await dispatchWebhooks(db, { ...ctx, fetch: fakeFetch });
+    const first = await dispatchWebhooks(db, { ...ctx, fetch: fakeFetch, limit: 500 });
     const mine = received.filter((r) => JSON.parse(r.body).data.request_id === requestId);
     expect(mine).toHaveLength(1);
     const body = JSON.parse(mine[0]!.body);
@@ -464,7 +466,7 @@ describe('webhook delivery', () => {
 
     // Not due yet: nothing is sent.
     received.length = 0;
-    await dispatchWebhooks(db, { ...ctx, fetch: fakeFetch });
+    await dispatchWebhooks(db, { ...ctx, fetch: fakeFetch, limit: 500 });
     expect(received.filter((r) => JSON.parse(r.body).data.request_id === requestId)).toHaveLength(
       0,
     );
@@ -475,7 +477,7 @@ describe('webhook delivery', () => {
     });
     await retryWebhookDelivery(db, { userId: owner }, d!.id);
     status = 200;
-    await dispatchWebhooks(db, { ...ctx, fetch: fakeFetch });
+    await dispatchWebhooks(db, { ...ctx, fetch: fakeFetch, limit: 500 });
     const [done] = await listWebhookDeliveries(db, { userId: owner }, ws, { endpointId });
     expect(done).toMatchObject({ status: 'succeeded', lastStatusCode: 200 });
 
@@ -483,7 +485,7 @@ describe('webhook delivery', () => {
     const { secret: next } = await rotateWebhookSecret(db, { userId: owner }, endpointId, ctx);
     await sendTestWebhook(db, { userId: owner }, endpointId);
     received.length = 0;
-    await dispatchWebhooks(db, { ...ctx, fetch: fakeFetch });
+    await dispatchWebhooks(db, { ...ctx, fetch: fakeFetch, limit: 500 });
     const ping = received.find((r) => JSON.parse(r.body).type === 'webhook.test')!;
     const sig = ping.headers.get('Signature-Tender-Signature');
     expect(verifyWebhookSignature(next, sig, ping.body)).toBe(true);

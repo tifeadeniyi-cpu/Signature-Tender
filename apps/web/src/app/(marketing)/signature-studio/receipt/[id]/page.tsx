@@ -11,8 +11,9 @@ const STATUS: Record<string, string> = { paid: 'Paid', refunded: 'Refunded', dis
 
 export default async function ReceiptPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
-  if (!session?.user.emailVerified) redirect('/sign-in');
-  const r = await getReceipt(db(), session.user.id, (await params).id);
+  const { id } = await params;
+  if (!session?.user.emailVerified) redirect(`/sign-in?next=${encodeURIComponent(`/signature-studio/receipt/${id}`)}`);
+  const r = await getReceipt(db(), session.user.id, id);
   if (!r || !STATUS[r.purchase.paymentStatus]) notFound();
   const p = r.purchase;
   return (

@@ -414,3 +414,107 @@ export function renderPasswordReset(i: Common & { url: string }): RenderedEmail 
     ],
   });
 }
+
+// ---------------------------------------------------------------------------------------------
+// Give 1, Get 2 referral program
+
+const plural = (n: number) => `${n} free signing credit${n === 1 ? '' : 's'}`;
+
+/** To the referrer: someone joined with their link. Nothing about the new person is shared. */
+export function renderReferralJoined(
+  i: Common & { name: string; credits: number; url: string },
+): RenderedEmail {
+  return render({
+    ...i,
+    subject: 'Someone joined Signature Tender with your referral link',
+    preheader: `You'll receive ${plural(i.credits)} once they complete their first qualifying purchase.`,
+    headerTitle: 'Refer & Earn',
+    hero: 'hero-team',
+    heroAlt: 'People joining a shared document',
+    headline: 'Your Referral Joined',
+    greeting: i.name,
+    intro: [
+      ['Someone joined Signature Tender using your referral link.'],
+      [
+        `You'll receive `,
+        { b: plural(i.credits) },
+        ' once they complete their first qualifying purchase.',
+      ],
+    ],
+    button: { label: 'View Your Referrals', href: i.url, icon: 'users-white' },
+    fine: [
+      'Referral credits pay for standard signing envelopes. They have no cash value and cannot be transferred.',
+    ],
+  });
+}
+
+/** To the new customer: their welcome credit is ready. */
+export function renderWelcomeCredit(
+  i: Common & { name: string; credits: number; url: string },
+): RenderedEmail {
+  return render({
+    ...i,
+    subject: 'Your Free Signature Tender Credit Is Ready',
+    preheader: `Welcome to Signature Tender! Your ${plural(i.credits)} is ready to use.`,
+    headerTitle: 'Welcome',
+    hero: 'hero-sign',
+    heroAlt: 'A document ready to sign',
+    headline: 'Your Free Signing Credit Is Ready!',
+    greeting: i.name,
+    intro: [
+      [
+        'Welcome to Signature Tender! You joined through a referral, so you received ',
+        { b: plural(i.credits) },
+        '.',
+      ],
+      [
+        'One credit sends one standard document for signature, with as many signers as your plan allows, an audit trail and a Certificate of Completion.',
+      ],
+    ],
+    button: { label: 'Send Your First Document', href: i.url, icon: 'pen-white' },
+    fine: [
+      'Referral credits work for documents sent from the Signature Tender website. They have no cash value and cannot be used for Signature Studio designs.',
+    ],
+  });
+}
+
+/** To the referrer: their reward was paid. */
+export function renderReferralReward(
+  i: Common & { name: string; credits: number; url: string },
+): RenderedEmail {
+  return render({
+    ...i,
+    subject: `You've Earned ${plural(i.credits).replace('free signing credit', 'Free Signing Credit')}!`,
+    preheader: `Great news! You've earned ${plural(i.credits)} from a successful referral.`,
+    headerTitle: 'Refer & Earn',
+    hero: 'hero-sign',
+    heroAlt: 'A signed document',
+    headline: 'You Earned a Referral Reward',
+    greeting: i.name,
+    intro: [
+      ["Great news! You've earned ", { b: plural(i.credits) }, ' from a successful referral.'],
+      [
+        'They are in your workspace now and will be used before purchased credits on your next send.',
+      ],
+    ],
+    button: { label: 'View Your Rewards', href: i.url, icon: 'eye-white' },
+    fine: ['Referral credits have no cash value and cannot be transferred.'],
+  });
+}
+
+/** To the referrer: a reward was adjusted (for example after a refund). No transaction details. */
+export function renderReferralAdjusted(i: Common & { name: string; url: string }): RenderedEmail {
+  return render({
+    ...i,
+    subject: 'A Signature Tender referral reward was adjusted',
+    preheader: 'Review your credit activity for details.',
+    headerTitle: 'Refer & Earn',
+    hero: 'hero-reminder',
+    heroAlt: 'A notice about your account',
+    headline: 'Referral Reward Adjusted',
+    greeting: i.name,
+    intro: [['A referral reward was adjusted. Review your credit activity for details.']],
+    button: { label: 'Review Credit Activity', href: i.url, icon: 'eye-white' },
+    fine: ['Questions? Reply to this email and our team will help.'],
+  });
+}
