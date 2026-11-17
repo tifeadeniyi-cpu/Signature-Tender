@@ -11,12 +11,14 @@ import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { storage } from '@/lib/storage';
 import { apiError } from '@/lib/api';
+import { receiveUpload } from '@/lib/uploads';
 import { requestMeta, WORKSPACE_COOKIE } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * Multipart upload: file (PDF), title, documentType, and selfSign=1 for "Sign it yourself".
+ * Upload: file (PDF), title, documentType, and selfSign=1 for "Sign it yourself". Multipart for
+ * small files, or JSON naming an upload sent in pieces for files over the hosting body limit.
  * Creates a draft document in the current workspace.
  */
 export async function POST(req: Request) {
@@ -32,30 +34,24 @@ export async function POST(req: Request) {
 
     const maxMb = await getConfigValue(db(), 'limits.max_upload_mb', 25);
     const maxPages = await getConfigValue(db(), 'limits.max_pages', 200);
-    const len = Number(req.headers.get('content-length') ?? 0);
-    if (len > (maxMb + 1) * 1024 * 1024)
-      throw new AppError('invalid', `The file is larger than ${maxMb} MB.`);
-
-    const form = await req.formData();
-    const file = form.get('file');
-    if (!(file instanceof File)) throw new AppError('invalid', 'Choose a PDF to upload.');
-    const bytes = new Uint8Array(await file.arrayBuffer());
+    // Small files arrive in one request; larger ones in pieces (see lib/uploads).
+    const upload = await receiveUpload(req, session.user.id, maxMb);
     const { id } = await createDocumentFromUpload(
       db(),
       storage(),
       actor,
       {
         workspaceId: ws.id,
-        title: String(form.get('title') ?? ''),
-        documentType: String(form.get('documentType') ?? ''),
-        filename: file.name,
-        bytes,
+        title: upload.field('title') ?? '',
+        documentType: upload.field('documentType') ?? '',
+        filename: upload.filename,
+        bytes: upload.bytes,
       },
       { maxBytes: maxMb * 1024 * 1024, maxPages },
       await requestMeta(),
     );
     // Sign it yourself: you are the only signer, so the signers step is skipped.
-    if (form.get('selfSign') === '1')
+    if (upload.field('selfSign') === '1')
       await saveRecipients(
         db(),
         actor,

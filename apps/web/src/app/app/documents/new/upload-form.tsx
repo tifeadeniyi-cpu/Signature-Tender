@@ -1,4 +1,5 @@
 'use client';
+import { sendUpload } from '@/lib/upload-client';
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { UploadCloud, FileText, X } from 'lucide-react';
@@ -44,13 +45,12 @@ export function UploadForm({
     if (!documentType) return setError('Choose a document type.');
     setBusy(true);
     setError(null);
-    const fd = new FormData();
-    fd.set('file', file);
-    fd.set('title', title);
-    fd.set('documentType', documentType);
     try {
-      if (selfSign) fd.append('selfSign', '1');
-      const res = await fetch('/api/documents', { method: 'POST', body: fd });
+      const res = await sendUpload('/api/documents', file, {
+        title,
+        documentType,
+        ...(selfSign ? { selfSign: '1' } : {}),
+      });
       const body = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
       if (!res.ok || !body.id) throw new Error(body.error ?? 'Upload failed. Please try again.');
       router.push(`/app/documents/${body.id}/prepare/${selfSign ? 'fields' : 'signers'}`);
