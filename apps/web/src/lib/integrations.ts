@@ -10,6 +10,7 @@ import {
 } from '@st/core';
 import { db } from './db';
 import { env } from './env';
+import { storage } from './storage';
 
 let keys: IntegrationKeys | undefined;
 
@@ -53,7 +54,16 @@ export async function integrationContext(): Promise<IntegrationContext> {
     keys,
     oauthClient: (p) => (integrationSecretsReady() ? oauthClientFor(p) : null),
     featureEnabled: await isFeatureEnabled(db(), 'integrations', e.APP_ENV),
+    storage: storage(),
   };
+}
+
+/** The Google Picker's browser configuration, or null when it is not set up on this server. */
+export function pickerConfig(): { apiKey: string; appId: string } | null {
+  const e = env();
+  return e.GOOGLE_PICKER_API_KEY && e.GOOGLE_CLOUD_PROJECT_NUMBER
+    ? { apiKey: e.GOOGLE_PICKER_API_KEY, appId: e.GOOGLE_CLOUD_PROJECT_NUMBER }
+    : null;
 }
 
 /** The OAuth redirect URI registered with each provider. */

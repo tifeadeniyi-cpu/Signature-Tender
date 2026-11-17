@@ -19,6 +19,8 @@ import {
 import {
   formatMoney,
   getDashboardActivity,
+  getMyWelcomeCredit,
+  getReferralProgram,
   getProfile,
   hasPermission,
   searchLibrary,
@@ -43,11 +45,12 @@ import { db } from '@/lib/db';
 import { cn } from '@/lib/cn';
 import { designSvg, studioSettings } from '@/lib/studio';
 import { libraryItems } from '@/lib/studio-library';
+import { ReferralDashboardCard } from '@/components/referrals/dashboard-card';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Dashboard' };
 
-type Params = { range?: string; from?: string; to?: string; selected?: string };
+type Params = { range?: string; from?: string; to?: string; selected?: string; referral?: string };
 
 // One query per request, shared by the sections that need it.
 const activityFor = cache((userId: string, ws: string, from: string, to: string, tz: string) =>
@@ -64,9 +67,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const { user, membership } = await requireWorkspace();
   const ws = membership.workspace.id;
   const p = membership.permissions;
-  const [profile, studio] = await Promise.all([
+  const [profile, studio, referral, welcome] = await Promise.all([
     getProfile(db(), { userId: user.id }).catch(() => null),
     studioSettings().catch(() => null),
+    getReferralProgram(db()).catch(() => null),
+    sp.referral === 'welcome' ? getMyWelcomeCredit(db(), user.id).catch(() => null) : null,
   ]);
   const tz = profile?.timezone ?? 'UTC';
   const range = parseRange(sp, tz);
@@ -88,6 +93,38 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </div>
         {canDocs ? <RangePicker range={range} /> : null}
       </header>
+
+      {welcome && welcome.workspaceId === ws ? (
+        <section
+          role="status"
+          aria-labelledby="welcome-credit-heading"
+          className="rounded-2xl border border-success/40 bg-success-bg p-5 sm:p-6"
+        >
+          <h2 id="welcome-credit-heading" className="font-display text-2xl text-heading">
+            Your Free Signing Credit Is Ready!
+          </h2>
+          <p className="mt-1">
+            You received {welcome.credits} free document-signing credit
+            {welcome.credits === 1 ? '' : 's'} for joining Signature Tender through a referral.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Link
+              href="/app/documents/new"
+              className={cn('inline-flex h-11 items-center rounded-xl px-5 font-semibold', goldBtn)}
+            >
+              Send My First Document
+            </Link>
+            <Link
+              href="/app/billing"
+              className="inline-flex h-11 items-center rounded-xl border border-border bg-white px-5 font-semibold text-heading hover:bg-blush"
+            >
+              View My Credits
+            </Link>
+          </div>
+        </section>
+      ) : referral?.live ? (
+        <ReferralDashboardCard give={referral.referredCredits} get={referral.referrerCredits} />
+      ) : null}
 
       {/* Row 1: KPIs and the two document actions */}
       <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_220px]">

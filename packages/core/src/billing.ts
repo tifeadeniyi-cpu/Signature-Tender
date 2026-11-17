@@ -11,6 +11,7 @@ import {
 import { AppError } from './errors';
 import { recordAudit } from './audit';
 import { getConfigValue } from './config';
+import { reverseReferralForPayment, type ReferralNotice } from './referrals';
 
 /**
  * Billing and credits (spec Part 3). One signing request costs one credit. Credits come from
@@ -22,7 +23,9 @@ import { getConfigValue } from './config';
  */
 
 type Meta = { ipAddress?: string | null; userAgent?: string | null };
-export type CreditBucket = 'purchased' | 'allowance';
+export type CreditBucket = 'purchased' | 'allowance' | 'referral';
+/** Where a send comes from. Referral credits pay only for web sends, never the API. */
+export type SendChannel = 'web' | 'api';
 /** How a send was paid for. `complimentary` spends nothing (see isComplimentary). */
 export type SendCredit = CreditBucket | 'complimentary';
 
@@ -61,6 +64,9 @@ async function lockCredits(tx: Tx, workspaceId: string) {
 export interface Balances {
   allowance: number;
   purchased: number;
+  /** Give 1, Get 2 credits: web sends only, no cash value. */
+  referral: number;
+  /** Everything a web send can use (allowance + referral + purchased). */
   available: number;
   reserved: number;
   /** True for a complimentary workspace: sends never need a credit. */
@@ -97,23 +103,43 @@ export async function getBalances(tx: Tx, workspaceId: string): Promise<Balances
     );
   const allowance = Math.max(0, rows.find((r) => r.bucket === 'allowance')?.total ?? 0);
   const purchased = Math.max(0, rows.find((r) => r.bucket === 'purchased')?.total ?? 0);
+  const referral = Math.max(0, rows.find((r) => r.bucket === 'referral')?.total ?? 0);
   return {
     allowance,
     purchased,
-    available: allowance + purchased,
+    referral,
+    available: allowance + purchased + referral,
     reserved: held?.n ?? 0,
     unlimited: await isComplimentary(tx, workspaceId),
   };
 }
 
+/** app_config key: the order credit buckets are spent in. Unknown names are ignored. */
+export const REDEMPTION_ORDER_KEY = 'billing.redemption_order';
+const DEFAULT_ORDER: CreditBucket[] = ['allowance', 'referral', 'purchased'];
+
+async function redemptionOrder(tx: Tx, channel: SendChannel): Promise<CreditBucket[]> {
+  const raw = await getConfigValue<unknown>(
+    tx as unknown as Database,
+    REDEMPTION_ORDER_KEY,
+    DEFAULT_ORDER,
+  );
+  const list = (Array.isArray(raw) ? raw : DEFAULT_ORDER).filter((b): b is CreditBucket =>
+    ['allowance', 'referral', 'purchased'].includes(String(b)),
+  );
+  const order = [...new Set(list.length ? list : DEFAULT_ORDER)];
+  return channel === 'api' ? order.filter((b) => b !== 'referral') : order;
+}
+
 /**
- * Sets one credit aside for a request, spending the expiring allowance before purchased credits.
- * Returns the bucket used, `complimentary` for a workspace that signs for free (nothing is
- * spent or held), or null when the workspace has no credit available.
+ * Sets one credit aside for a request. By default the expiring monthly allowance goes first, then
+ * referral credits, then purchased credits (app_config billing.redemption_order). API sends never
+ * use referral credits. Returns the bucket used, `complimentary` for a workspace that signs for
+ * free (nothing is spent or held), or null when the workspace has no credit available.
  */
 export async function reserveCredit(
   tx: Tx,
-  input: { workspaceId: string; requestId: string; userId: string },
+  input: { workspaceId: string; requestId: string; userId: string; channel?: SendChannel },
 ): Promise<SendCredit | null> {
   await lockCredits(tx, input.workspaceId);
   const [existing] = await tx
@@ -123,8 +149,8 @@ export async function reserveCredit(
   if (existing && existing.status !== 'restored') return existing.bucket;
   const b = await getBalances(tx, input.workspaceId);
   if (b.unlimited) return 'complimentary';
-  const bucket: CreditBucket | null =
-    b.allowance > 0 ? 'allowance' : b.purchased > 0 ? 'purchased' : null;
+  const order = await redemptionOrder(tx, input.channel ?? 'web');
+  const bucket = order.find((k) => b[k] > 0) ?? null;
   if (!bucket) return null;
   const attempt = existing ? 2 : 1;
   await tx.insert(schema.creditLedger).values({
@@ -366,6 +392,16 @@ export async function getBillingOverview(db: Database, actor: ActorContext, work
       throw new AppError('forbidden', 'Your role does not include billing access.');
     const acct = await accountRow(tx, workspaceId);
     const balances = await getBalances(tx, workspaceId);
+    const [referralTotals] = (await tx.execute(sql`
+      select
+        coalesce(sum(delta) filter (where entry_type in ('referral_welcome','referral_reward','referral_adjustment') and delta > 0), 0)::int as earned,
+        coalesce(-sum(delta) filter (where entry_type in ('reserve','restore')), 0)::int as used,
+        coalesce(-sum(delta) filter (where entry_type in ('referral_reversal') or (entry_type = 'referral_adjustment' and delta < 0)), 0)::int as removed
+      from credit_ledger where workspace_id = ${workspaceId}::uuid and bucket = 'referral'`)) as unknown as {
+      earned: number;
+      used: number;
+      removed: number;
+    }[];
     const plans = await tx
       .select()
       .from(schema.subscriptionPlans)
@@ -465,6 +501,11 @@ export async function getBillingOverview(db: Database, actor: ActorContext, work
       prices,
       requestPrice,
       balances,
+      referral: {
+        earned: referralTotals?.earned ?? 0,
+        used: Math.max(0, referralTotals?.used ?? 0),
+        removed: referralTotals?.removed ?? 0,
+      },
       usage: {
         sentThisMonth: usage?.sent_this_month ?? 0,
         completed: usage?.completed ?? 0,
@@ -1258,7 +1299,7 @@ export async function applyReversal(
       .from(schema.payments)
       .where(eq(schema.payments.stripePaymentIntentId, f.paymentIntentId))
       .for('update');
-    if (!p) return { reversed: 0, found: false };
+    if (!p) return { reversed: 0, found: false, referralNotices: [] as ReferralNotice[] };
     let target = p.credits;
     let status: (typeof schema.payments.$inferSelect)['status'] = 'disputed';
     let refunded = p.amountRefundedCents;
@@ -1272,7 +1313,12 @@ export async function applyReversal(
       .update(schema.payments)
       .set({ status, amountRefundedCents: refunded, updatedAt: new Date() })
       .where(eq(schema.payments.id, p.id));
-    if (!p.credits) return { reversed: 0, found: true };
+    // A refunded or disputed first paid send no longer qualifies a referral (Give 1, Get 2).
+    const referralNotices: ReferralNotice[] =
+      status === 'refunded' || status === 'disputed'
+        ? await reverseReferralForPayment(tx, p.id, f.kind)
+        : [];
+    if (!p.credits) return { reversed: 0, found: true, referralNotices };
     await lockCredits(tx, p.workspaceId);
     const [{ done } = { done: 0 }] = await tx
       .select({ done: sql<number>`coalesce(-sum(${schema.creditLedger.delta}), 0)::int` })
@@ -1291,7 +1337,7 @@ export async function applyReversal(
       paymentId: p.id,
       note: f.kind === 'refund' ? 'Refunded purchase' : 'Disputed payment',
     });
-    return { reversed: n, found: true };
+    return { reversed: n, found: true, referralNotices };
   });
 }
 

@@ -8,6 +8,7 @@ import {
   Search,
   Building2,
   CreditCard,
+  Gift,
   LayoutDashboard,
 } from 'lucide-react';
 import { hasPermission } from '@st/core';
@@ -150,6 +151,14 @@ export function Topbar({
           >
             <ShieldCheck className="size-4" aria-hidden /> Security
           </Link>
+          {nav.some((n) => n.href === '/app/referrals') ? (
+            <Link
+              href="/app/referrals"
+              className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-heading hover:bg-blush"
+            >
+              <Gift className="size-4" aria-hidden /> Refer &amp; Earn
+            </Link>
+          ) : null}
           {staffLink ? (
             <Link
               href={staffLink.href}

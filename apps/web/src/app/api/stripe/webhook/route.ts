@@ -6,6 +6,8 @@ import {
   applyCheckoutCompleted,
   applyInvoice,
   applyReversal,
+  qualifyReferralPayment,
+  type ReferralNotice,
   applySubscription,
   claimStripeEvent,
   clearCardOnFile,
@@ -14,6 +16,7 @@ import {
   sendPaidRequest,
 } from '@st/core';
 import { db } from '@/lib/db';
+import { sendReferralNotices } from '@/lib/referrals';
 import { stripe, stripeLiveMode, webhookSecret } from '@/lib/stripe';
 import { liveSendingEnabled } from '@/lib/billing';
 import { checkoutFacts, invoiceFacts, subscriptionFacts } from '@/lib/stripe-events';
@@ -145,7 +148,10 @@ async function handle(event: Stripe.Event) {
         return;
       }
       const out = await applyCheckoutCompleted(db(), checkoutFacts(event.data.object));
-      if (out.action === 'dispatch') await dispatchPaid(out.requestId, out.dispatchAs);
+      if (out.action === 'dispatch') {
+        await dispatchPaid(out.requestId, out.dispatchAs);
+        await referralStep(() => qualifyReferralPayment(db(), out.paymentId));
+      }
       // Sessions without our metadata are matched by their id instead.
       if (out.action === 'none' && out.reason === 'unknown_session')
         await studioCompleted(event.data.object);
@@ -182,6 +188,7 @@ async function handle(event: Stripe.Event) {
           kind: 'refund',
           amountRefunded: event.data.object.amount_refunded,
         });
+        await referralStep(async () => r.referralNotices);
         if (!r.found)
           await applyStudioReversal(db(), {
             paymentIntentId: pi,
@@ -199,12 +206,25 @@ async function handle(event: Stripe.Event) {
           kind: 'dispute',
           disputeId: event.data.object.id,
         });
+        await referralStep(async () => r.referralNotices);
         if (!r.found) await applyStudioReversal(db(), { paymentIntentId: pi, kind: 'dispute' });
       }
       return;
     }
     default:
       return;
+  }
+}
+
+/**
+ * Give 1, Get 2: referral qualification and reversal run after the payment work and are
+ * idempotent on their own. A failure here is logged and never makes Stripe retry the payment.
+ */
+async function referralStep(fn: () => Promise<ReferralNotice[]>) {
+  try {
+    await sendReferralNotices(await fn());
+  } catch (err) {
+    console.error('Referral step failed', err);
   }
 }
 

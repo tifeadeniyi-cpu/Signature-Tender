@@ -4,6 +4,7 @@ import {
   updateWorkspace,
   updateProfile,
   createWorkspace,
+  grantWelcomeCredit,
   saveBranding,
   uploadLogo,
   removeLogo,
@@ -12,6 +13,7 @@ import { storage } from '@/lib/storage';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { db } from '@/lib/db';
+import { clearReferralCookie, sendReferralNotices } from '@/lib/referrals';
 import { requireUser, requireWorkspace, requestMeta, WORKSPACE_COOKIE } from '@/lib/session';
 import { toActionError, type ActionState } from '@/lib/action-result';
 
@@ -82,7 +84,17 @@ export async function createWorkspaceAction(
     secure: process.env.NODE_ENV === 'production',
     path: '/',
   });
-  redirect('/app');
+  // Give 1, Get 2: a referred person's welcome credit lands in the first workspace they create.
+  let welcome = false;
+  try {
+    const notices = await grantWelcomeCredit(db(), user.id);
+    welcome = notices.some((n) => n.kind === 'welcome_credit');
+    await sendReferralNotices(notices);
+    await clearReferralCookie();
+  } catch (err) {
+    console.error('Referral welcome credit failed', err);
+  }
+  redirect(welcome ? '/app?referral=welcome' : '/app');
 }
 
 export async function saveBrandingAction(_prev: ActionState, fd: FormData): Promise<ActionState> {

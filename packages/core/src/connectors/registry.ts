@@ -166,22 +166,21 @@ export const CONNECTORS: ConnectorDefinition[] = [
     description:
       'Send Drive files for signature and save signed agreements and certificates back to a Drive folder.',
     roadmapPhase: 1,
-    availability: 'coming_soon',
-    implemented: false,
-    capabilities: [
-      'import_documents',
-      'send_for_signature',
-      'track_status',
-      'save_signed',
-      'save_certificate',
-    ],
+    availability: 'beta',
+    implemented: true,
+    capabilities: ['import_documents', 'send_for_signature', 'save_signed', 'save_certificate'],
     auth: {
       type: 'oauth2',
       authorizeUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
       tokenUrl: 'https://oauth2.googleapis.com/token',
       revokeUrl: 'https://oauth2.googleapis.com/revoke',
       // drive.file: only files the user picks or the app creates. No access to the rest of Drive.
-      scopes: ['openid', 'email', 'https://www.googleapis.com/auth/drive.file'],
+      // Google reports 'email' back as the userinfo.email URL, so request it by that name.
+      scopes: [
+        'openid',
+        'https://www.googleapis.com/auth/userinfo.email',
+        'https://www.googleapis.com/auth/drive.file',
+      ],
       pkce: true,
       authorizeParams: {
         access_type: 'offline',
@@ -201,7 +200,12 @@ export const CONNECTORS: ConnectorDefinition[] = [
         runsOn: ['document.available'],
       },
     ],
-    setup: [],
+    setup: [
+      'Click Connect and choose the Google account to use.',
+      'To send a Drive file, choose Import from Google Drive on the New document page.',
+      'To keep signed copies in Drive, turn on automatic saving in Integration settings and choose a folder.',
+      'Disconnect here at any time, or remove access in your Google Account.',
+    ],
     logo: null,
     allowsPersonal: true,
   },
