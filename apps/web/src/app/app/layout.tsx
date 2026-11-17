@@ -16,8 +16,10 @@ import { requireWorkspace } from '@/lib/session';
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
 import { studioSettings } from '@/lib/studio';
+import { NO_INDEX } from '@/lib/seo';
 
 export const dynamic = 'force-dynamic';
+export const metadata = { robots: NO_INDEX };
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const ctx = await requireWorkspace();

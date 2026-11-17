@@ -27,24 +27,25 @@ import {
 import { StudioEditor, type SavedDesign } from '@/components/studio/editor';
 import { Eyebrow, Heading, Section } from '@/components/product/primitives';
 import { buttonClass } from '@/components/ui/button';
-import { appUrl } from '@/lib/billing';
+import { JsonLd } from '@/components/json-ld';
+import { OG_IMAGES, absoluteUrl, faqJsonLd, pageMetadata } from '@/lib/seo';
 import { db } from '@/lib/db';
 import { getSession } from '@/lib/session';
 import { designSvg, readGuestHash, studioSettings } from '@/lib/studio';
 
 export const dynamic = 'force-dynamic';
 
-const TITLE = 'Create Your Own Handwritten Signature | Signature Studio';
-const DESCRIPTION =
-  'Design a custom handwritten signature online. Personalize every letter, curve and flourish, preview it free, and download transparent PNG, SVG and JPEG files for $0.99.';
+const TITLE = 'Create Your Own Handwritten Signature Online | Signature Studio';
 
-export function generateMetadata(): Metadata {
-  return {
-    title: { absolute: TITLE },
-    description: DESCRIPTION,
-    alternates: { canonical: appUrl('/signature-studio') },
-    openGraph: { type: 'website', url: appUrl('/signature-studio'), title: TITLE, description: DESCRIPTION, siteName: 'Signature Tender' },
-  };
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await studioSettings();
+  const price = formatMoney(settings.priceCents, settings.currency);
+  return pageMetadata({
+    title: TITLE,
+    description: `Design a custom handwritten signature online. Personalize every letter, curve and flourish, preview it free, and download transparent PNG, SVG and JPEG files for ${price}.`,
+    path: '/signature-studio',
+    image: OG_IMAGES.studio,
+  });
 }
 
 function heroDesign(): Design {
@@ -99,8 +100,40 @@ export default async function SignatureStudioPage({ searchParams }: { searchPara
     Promise.all(STYLE_FAMILIES.map(async (f) => ({ id: f.id, label: f.label, description: f.description, svg: await designSvg(familySample(f.id), { width: 420 }) }))),
   ]);
 
+  const studioFaq: [string, string][] = [
+    ['Is designing free?', `Yes. Designing and previewing are free. You pay ${price} only when you download a finished design.`],
+    ['What do I get?', 'A high-resolution transparent PNG, an SVG (for designs made in the Studio), and a JPEG, plus repeat downloads from your library.'],
+    ['Why do I need an account?', 'Your purchase is tied to your account, so only you can download your files, and your signature is saved for later.'],
+    ['Can I change a purchased design?', 'Your purchased design never changes. You can edit a copy as a new draft at any time.'],
+    ['Is it a legal signature?', 'A design is artwork. It does not verify your identity, and having the file does not sign a document by itself. Signing on Signature Tender uses your own verified link or account.'],
+    ['Which fonts are used?', 'Fonts from Google Fonts under the SIL Open Font License or Apache License 2.0, which allow commercial use. Typed letters are converted to vector outlines in your files.'],
+  ];
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'Product',
+        name: 'Signature Studio custom handwritten signature',
+        description: 'A custom handwritten signature designed from your own name, delivered as transparent PNG, vector SVG and JPEG files.',
+        image: absoluteUrl(OG_IMAGES.studio.url),
+        brand: { '@type': 'Brand', name: 'Signature Tender' },
+        category: 'Digital signature design',
+        url: absoluteUrl('/signature-studio'),
+        offers: {
+          '@type': 'Offer',
+          price: (settings.priceCents / 100).toFixed(2),
+          priceCurrency: settings.currency,
+          availability: 'https://schema.org/InStock',
+          url: absoluteUrl('/signature-studio'),
+        },
+      },
+      faqJsonLd(studioFaq.map(([q, a]) => ({ q, a }))),
+    ],
+  };
+
   return (
     <>
+      <JsonLd data={jsonLd} />
       {/* Hero */}
       <section aria-labelledby="studio-hero" className="relative overflow-hidden bg-gradient-to-br from-primary-dark via-primary to-primary-hover text-white">
         <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 py-14 sm:px-6 lg:grid-cols-[1.05fr_1fr] lg:py-20">
@@ -253,14 +286,7 @@ export default async function SignatureStudioPage({ searchParams }: { searchPara
           Signature Studio questions
         </Heading>
         <dl className="mx-auto mt-8 grid max-w-4xl gap-6 sm:grid-cols-2">
-          {[
-            ['Is designing free?', `Yes. Designing and previewing are free. You pay ${price} only when you download a finished design.`],
-            ['What do I get?', 'A high-resolution transparent PNG, an SVG (for designs made in the Studio), and a JPEG, plus repeat downloads from your library.'],
-            ['Why do I need an account?', 'Your purchase is tied to your account, so only you can download your files, and your signature is saved for later.'],
-            ['Can I change a purchased design?', 'Your purchased design never changes. You can edit a copy as a new draft at any time.'],
-            ['Is it a legal signature?', 'A design is artwork. It does not verify your identity, and having the file does not sign a document by itself. Signing on Signature Tender uses your own verified link or account.'],
-            ['Which fonts are used?', 'Fonts from Google Fonts under the SIL Open Font License or Apache License 2.0, which allow commercial use. Typed letters are converted to vector outlines in your files.'],
-          ].map(([q, a]) => (
+          {studioFaq.map(([q, a]) => (
             <div key={q}>
               <dt className="font-semibold text-heading">{q}</dt>
               <dd className="mt-1 text-sm text-slate-text">{a}</dd>

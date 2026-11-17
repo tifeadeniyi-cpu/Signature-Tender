@@ -5,7 +5,7 @@ import { AdminMobileNav, AdminSidebar } from './admin-nav';
 export const dynamic = 'force-dynamic';
 export const metadata = {
   title: { template: '%s · Admin', default: 'Admin' },
-  robots: { index: false },
+  robots: { index: false, follow: false },
 };
 
 const ROLE_LABEL: Record<string, string> = {
