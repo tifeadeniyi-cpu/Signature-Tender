@@ -465,3 +465,27 @@ export function DocTypesPanel({ c }: { c: CommandCenter }) {
     </Panel>
   );
 }
+
+const dayFmt = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeZone: 'UTC' });
+
+/** When a privacy-first measure started counting, so short histories aren't misread as drops. */
+export function TrackedSince({ since, what }: { since: string | null; what: string }) {
+  return (
+    <p className="mb-3 text-xs text-slate-text">
+      {since
+        ? `${what} counted since ${dayFmt.format(new Date(since))}. Earlier periods show no data, not zero activity.`
+        : `${what} aren't counted yet. Counting starts once this update is live.`}
+    </p>
+  );
+}
+
+/** A small labelled number for panels (label, value, optional note). */
+export function Stat({ label, value, note }: { label: string; value: string; note?: string }) {
+  return (
+    <div className="rounded-lg border border-border px-3 py-2">
+      <dt className="text-xs">{label}</dt>
+      <dd className="text-lg font-semibold text-heading">{value}</dd>
+      {note ? <dd className="text-[11px] text-slate-text">{note}</dd> : null}
+    </div>
+  );
+}

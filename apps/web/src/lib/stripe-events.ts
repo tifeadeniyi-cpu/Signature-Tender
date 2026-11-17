@@ -60,5 +60,6 @@ export function invoiceFacts(inv: Stripe.Invoice): InvoiceFacts {
     planCode: details?.metadata?.st_plan_code ?? null,
     periodStart: startFrom.length ? date(Math.min(...startFrom.map((l) => l.period.start))) : null,
     periodEnd: lines.length ? date(Math.max(...lines.map((l) => l.period.end))) : null,
+    attempted: Boolean(inv.attempted),
   };
 }

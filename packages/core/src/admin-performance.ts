@@ -231,6 +231,113 @@ export const getPerfConversion = (db: Database, a: ActorContext, p: Period) =>
 export const getPerfDelivery = (db: Database, a: ActorContext, p: Period) =>
   callAdminReport<PerfDelivery>(db, a, 'st_admin_perf_delivery', p);
 
+/** Privacy-first measurement: website visits, sign-up sources, time in the app, renewals. */
+export interface PerfMeasurement {
+  visits: {
+    since: string | null;
+    total: N;
+    total_cmp: N | null;
+    series: { start: string; visits: N }[];
+    by_source: { source: string; visits: N }[];
+    by_page: { page: string; visits: N }[];
+    conv_visits: N;
+    conv_users: N;
+  };
+  signups: {
+    since: string | null;
+    users_new: N;
+    recorded: N;
+    by_source: { source: string; users: N }[];
+  };
+  time:
+    | { since: string | null; suppressed: true; users: null }
+    | {
+        since: string | null;
+        suppressed: false;
+        users: N;
+        seconds: N;
+        user_days: N;
+        median_seconds: N | null;
+        users_cmp: N | null;
+        seconds_cmp: N | null;
+        user_days_cmp: N | null;
+        bands: { under_5m: N; m5_30: N; m30_2h: N; over_2h: N };
+        series: { start: string; users: N | null; seconds: N | null; user_days: N | null }[];
+      };
+  renewals: {
+    since: string | null;
+    due: N;
+    renewed: N;
+    failed: N;
+    recovered: N;
+    due_cmp: N | null;
+    renewed_cmp: N | null;
+    started: N;
+    cancel_requested: N;
+    cancel_withdrawn: N;
+    ended: N;
+    series: { start: string; renewed: N; failed: N; started: N; ended: N }[];
+  };
+  generated_at: string;
+}
+
+export const getPerfMeasurement = (db: Database, a: ActorContext, p: Period) =>
+  callAdminReport<PerfMeasurement>(db, a, 'st_admin_perf_measurement', p);
+
+/** Average active minutes per active day (rounded to 0.1), or null without data. */
+export function minutesPerDay(seconds: number | null, userDays: number | null): number | null {
+  if (seconds == null || !userDays) return null;
+  return Math.round((seconds / userDays / 60) * 10) / 10;
+}
+
+/** The measurement rows that belong with a tab's CSV export. */
+export function measurementCsv(tab: PerfTab, m: PerfMeasurement): string[][] {
+  const out: string[][] = [[], ['Privacy-first measurement'], ['Generated', m.generated_at]];
+  const t = (rows: Record<string, unknown>[]) =>
+    rows.length ? [Object.keys(rows[0]!), ...rows.map((r) => Object.values(r).map(s))] : [];
+  if (tab === 'growth') {
+    out.push(['Visits tracked since', s(m.visits.since)], ['Visits', s(m.visits.total)]);
+    out.push([], ['Visits by source'], ...t(m.visits.by_source));
+    out.push([], ['Visits by first page'], ...t(m.visits.by_page));
+    out.push([], ['Sign-up sources tracked since', s(m.signups.since)]);
+    out.push(
+      ['New users', s(m.signups.users_new)],
+      ['With a recorded source', s(m.signups.recorded)],
+    );
+    out.push([], ['New users by source'], ...t(m.signups.by_source));
+  } else if (tab === 'engagement') {
+    const x = m.time;
+    out.push(['Time in app tracked since', s(x.since)]);
+    if (x.suppressed) out.push(['Time in app', 'Fewer than 5 people tracked; withheld']);
+    else {
+      out.push(['People with tracked time', s(x.users)], ['Active seconds', s(x.seconds)]);
+      out.push(
+        ['Active person-days', s(x.user_days)],
+        ['Median seconds per person', s(x.median_seconds)],
+      );
+      out.push([], ['Time bands (people)'], ...Object.entries(x.bands).map(([k, v]) => [k, s(v)]));
+      out.push([], ...t(x.series));
+    }
+  } else if (tab === 'conversion') {
+    out.push(['Visits since tracking began in this period', s(m.visits.conv_visits)]);
+    out.push(['Registrations in the same window', s(m.visits.conv_users)]);
+    const r = m.renewals;
+    out.push([], ['Subscription events tracked since', s(r.since)]);
+    out.push(
+      ['Renewals due', s(r.due)],
+      ['Renewed', s(r.renewed)],
+      ['Failed first attempt', s(r.failed)],
+      ['Recovered after a failure', s(r.recovered)],
+      ['Subscriptions started', s(r.started)],
+      ['Cancellations requested', s(r.cancel_requested)],
+      ['Cancellations withdrawn', s(r.cancel_withdrawn)],
+      ['Subscriptions ended', s(r.ended)],
+    );
+    out.push([], ...t(r.series));
+  }
+  return out;
+}
+
 /** Percentage-point change between two rates (both in %), or null when either is missing. */
 export const ppChange = (cur: number | null, prev: number | null) =>
   cur == null || prev == null ? null : Math.round((cur - prev) * 10) / 10;

@@ -8,19 +8,28 @@ import {
   Repeat,
   Sparkles,
 } from 'lucide-react';
-import { getPerfEngagement, pctChange, rate } from '@st/core';
+import { getPerfEngagement, getPerfMeasurement, minutesPerDay, pctChange, rate } from '@st/core';
 import { db } from '@/lib/db';
 import { Kpi } from '@/components/admin/kpi';
-import { ColumnChart, NotTracked, Panel, ProgressBars, SERIES } from '@/components/admin/charts';
+import { ColumnChart, Panel, ProgressBars, SERIES } from '@/components/admin/charts';
 import { DataTable } from '@/components/admin/data-table';
-import { Toggle, bucketLabel, fmtTime, nf, pct, typeLabel } from '../sections';
+import { Stat, Toggle, TrackedSince, bucketLabel, fmtTime, nf, pct, typeLabel } from '../sections';
 import type { TabProps } from './page';
 
 const ACTIVE =
   'Active = signed in, took a recorded action in a workspace, or created a Signature Studio design. An idle open tab is not activity.';
 
 export async function EngagementTab({ p, userId, params, cmp }: TabProps) {
-  const e = await getPerfEngagement(db(), { userId }, p);
+  const [e, m] = await Promise.all([
+    getPerfEngagement(db(), { userId }, p),
+    getPerfMeasurement(db(), { userId }, p),
+  ]);
+  const t = m.time;
+  const perDay = t.suppressed ? null : minutesPerDay(t.seconds, t.user_days);
+  const perDayCmp = t.suppressed ? null : minutesPerDay(t.seconds_cmp, t.user_days_cmp);
+  const perDayChange = perDay != null ? pctChange(perDay, perDayCmp) : null;
+  const mins = (sec: number | null) =>
+    sec == null ? '—' : sec < 3600 ? `${Math.round(sec / 60)} min` : `${(sec / 3600).toFixed(1)} h`;
   const k = e.kpi;
   const labels = e.series.map((s) => bucketLabel(s.start, p.bucket));
   const short = p.to.getTime() - p.from.getTime() <= 92 * 86_400_000;
@@ -71,7 +80,7 @@ export async function EngagementTab({ p, userId, params, cmp }: TabProps) {
           change={null}
           compareLabel={null}
           sub={`${nf(k.signins)} sign-ins`}
-          info="Sign-ins in the period ÷ active people. Usage sessions (time in the app) are not measured, so sign-ins stand in for sessions."
+          info="Sign-ins in the period ÷ active people. For time spent in the app, see Time in the App below."
         />
         <Kpi
           label="Active Organizations"
@@ -180,10 +189,77 @@ export async function EngagementTab({ p, userId, params, cmp }: TabProps) {
             }))}
           />
         </Panel>
-        <NotTracked
-          label="Session Duration"
-          reason="Time spent in the app isn't measured, and an idle open tab shouldn't count as engagement. This needs a privacy-reviewed activity heartbeat before it can be reported."
-        />
+        <Panel
+          title="Time in the App"
+          info="Active time counts only while a signed-in tab is visible and focused and the person has clicked, typed or scrolled in the last minute, so an idle or background tab adds nothing. Stored as a daily total per person (no page-by-page history), not counted when the browser sends Global Privacy Control or Do Not Track, and deleted after 13 months. Withheld when fewer than 5 people were tracked."
+        >
+          <TrackedSince since={t.since} what="Active time" />
+          {t.suppressed ? (
+            <p className="rounded-lg bg-ivory px-3 py-8 text-center text-sm">
+              Fewer than 5 people have tracked time in this period, so it&apos;s withheld to protect
+              their privacy.
+            </p>
+          ) : (
+            <>
+              <dl className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <Stat
+                  label="Active time per active day"
+                  value={perDay != null ? `${perDay} min` : '—'}
+                  note={
+                    perDayChange != null && cmp
+                      ? `${perDayChange > 0 ? '+' : ''}${perDayChange.toFixed(1)}% vs. ${cmp.toLowerCase()}`
+                      : 'Average for a person on a day they used the app'
+                  }
+                />
+                <Stat
+                  label="Median per person"
+                  value={mins(t.median_seconds)}
+                  note="Total over the period"
+                />
+                <Stat label="People tracked" value={nf(t.users)} note="With any active time" />
+              </dl>
+              <ProgressBars
+                rows={(
+                  [
+                    ['Under 5 minutes', t.bands.under_5m],
+                    ['5 to 30 minutes', t.bands.m5_30],
+                    ['30 minutes to 2 hours', t.bands.m30_2h],
+                    ['Over 2 hours', t.bands.over_2h],
+                  ] as const
+                ).map(([l, v]) => ({
+                  label: l,
+                  value: rate(v, t.users) ?? 0,
+                  detail: `${nf(v)} of ${nf(t.users)} people (total in the period)`,
+                }))}
+              />
+            </>
+          )}
+        </Panel>
+        <Panel
+          title="Active Time Over Time"
+          info="Average active minutes per person on the days they used the app, per interval. Intervals with fewer than 5 tracked people are left blank."
+        >
+          {t.suppressed ? (
+            <p className="rounded-lg bg-ivory px-3 py-8 text-center text-sm">
+              Not enough tracked people in this period to chart.
+            </p>
+          ) : (
+            <ColumnChart
+              caption="Average active minutes per active day, per interval"
+              labels={t.series.map((s) => bucketLabel(s.start, p.bucket))}
+              series={[
+                {
+                  name: 'Minutes per active day',
+                  color: SERIES.gold,
+                  values: t.series.map((s) => minutesPerDay(s.seconds, s.user_days) ?? 0),
+                },
+              ]}
+              precise
+              format={(n) => `${n.toFixed(1)} min`}
+              empty="No active time was recorded for the selected period."
+            />
+          )}
+        </Panel>
       </div>
 
       <Panel

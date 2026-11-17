@@ -14,3 +14,4 @@ export * from './claims';
 export * from './studio';
 export * from './integrations';
 export * from './referrals';
+export * from './analytics';

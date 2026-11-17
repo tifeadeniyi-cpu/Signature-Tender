@@ -32,6 +32,7 @@ export type PerfSearch = {
   rev?: string;
   measure?: string;
   cum?: string;
+  acq?: string;
 };
 
 export interface TabProps {

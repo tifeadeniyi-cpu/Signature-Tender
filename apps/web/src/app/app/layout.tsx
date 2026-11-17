@@ -17,6 +17,7 @@ import { db } from '@/lib/db';
 import { env } from '@/lib/env';
 import { studioSettings } from '@/lib/studio';
 import { NO_INDEX } from '@/lib/seo';
+import { ActiveTime } from '@/components/analytics/measure';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { robots: NO_INDEX };
@@ -78,6 +79,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           {children}
         </main>
       </div>
+      <ActiveTime />
     </div>
   );
 }

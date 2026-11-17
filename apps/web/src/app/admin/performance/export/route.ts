@@ -8,6 +8,8 @@ import {
   getPerfEngagement,
   getPerfFeatures,
   getPerfGrowth,
+  getPerfMeasurement,
+  measurementCsv,
   parsePerfTab,
   perfCsv,
   recordAdminExport,
@@ -47,6 +49,8 @@ export async function GET(req: Request) {
     for (const i of insights) rows.push([i.title, i.detail, i.definition]);
   } else {
     rows = perfCsv(tab, await LOADERS[tab](db(), actor, p), p);
+    if (tab === 'growth' || tab === 'engagement' || tab === 'conversion')
+      rows.push(...measurementCsv(tab, await getPerfMeasurement(db(), actor, p)));
   }
   await recordAdminExport(db(), actor, `performance_${tab}`, p);
   const csv = rows.map((r) => r.map((v) => csvCell(v)).join(',')).join('\r\n');

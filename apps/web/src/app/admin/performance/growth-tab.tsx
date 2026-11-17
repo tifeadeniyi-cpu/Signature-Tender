@@ -7,19 +7,32 @@ import {
   Activity,
   CreditCard,
 } from 'lucide-react';
-import { getPerfGrowth, pctChange, ppChange, rate } from '@st/core';
+import {
+  PAGE_LABEL,
+  SOURCE_LABEL,
+  getPerfGrowth,
+  getPerfMeasurement,
+  pctChange,
+  ppChange,
+  rate,
+} from '@st/core';
 import { db } from '@/lib/db';
 import { Kpi } from '@/components/admin/kpi';
-import { ColumnChart, Legend, NotTracked, Panel, SERIES } from '@/components/admin/charts';
+import { ColumnChart, Legend, Panel, ProgressBars, SERIES } from '@/components/admin/charts';
 import { DataTable } from '@/components/admin/data-table';
-import { Toggle, bucketLabel, fmtTime, nf, pct, typeLabel } from '../sections';
+import { Stat, Toggle, TrackedSince, bucketLabel, fmtTime, nf, pct, typeLabel } from '../sections';
 import type { TabProps } from './page';
 
 const PLAN_COLORS = [SERIES.navy, SERIES.gold, SERIES.blue, SERIES.burgundy, SERIES.gray];
 const planLabel = (p: string) => (p === 'payg' ? 'Pay as you go' : typeLabel(p));
 
 export async function GrowthTab({ p, sp, userId, params, cmp }: TabProps) {
-  const g = await getPerfGrowth(db(), { userId }, p);
+  const [g, m] = await Promise.all([
+    getPerfGrowth(db(), { userId }, p),
+    getPerfMeasurement(db(), { userId }, p),
+  ]);
+  const acq = sp.acq === 'visits' || sp.acq === 'pages' ? sp.acq : 'signups';
+  const visitChange = pctChange(m.visits.total, m.visits.total_cmp);
   const k = g.kpi;
   const labels = g.series.map((s) => bucketLabel(s.start, p.bucket));
   const userRate = rate(k.users_new, k.users_start);
@@ -200,10 +213,91 @@ export async function GrowthTab({ p, sp, userId, params, cmp }: TabProps) {
         </Panel>
       </div>
 
-      <NotTracked
-        label="Acquisition Sources"
-        reason="Sign-ups don't record where people came from (no campaign or referrer attribution), so sources can't be reported without adding new tracking."
-      />
+      <div className="grid gap-6 xl:grid-cols-2">
+        <Panel
+          title="Website Visits"
+          info="A visit is a page load on the public website that arrives from outside the site (a link, a search, a typed address). Reloads and moves between pages don't add visits. Counted without cookies or identifiers, and not counted when the browser sends Global Privacy Control or Do Not Track, so this is a floor rather than an exact total."
+        >
+          <TrackedSince since={m.visits.since} what="Visits" />
+          <dl className="mb-4 grid grid-cols-2 gap-2">
+            <Stat
+              label="Visits in the period"
+              value={nf(m.visits.total)}
+              note={
+                visitChange != null && cmp
+                  ? `${visitChange > 0 ? '+' : ''}${visitChange.toFixed(1)}% vs. ${cmp.toLowerCase()}`
+                  : 'No earlier data to compare'
+              }
+            />
+            <Stat
+              label="Visits per new user"
+              value={
+                m.visits.conv_users ? (m.visits.conv_visits / m.visits.conv_users).toFixed(1) : '—'
+              }
+              note="Since counting began"
+            />
+          </dl>
+          <ColumnChart
+            caption="Website visits per interval"
+            labels={m.visits.series.map((s) => bucketLabel(s.start, p.bucket))}
+            series={[
+              { name: 'Visits', color: SERIES.blue, values: m.visits.series.map((s) => s.visits) },
+            ]}
+            empty="No visits were counted in the selected period."
+          />
+        </Panel>
+        <Panel
+          title="Acquisition Sources"
+          info="Sources are coarse categories worked out in the visitor's browser from the referring site and campaign tags; the referrer address, campaign names and search terms are discarded. A new account's source is the visit it signed up in. Not recorded = signed up before counting began, with tracking turned off, or on another visit. Sources with fewer than 5 new users are merged into Other."
+          action={
+            <Toggle
+              label="Acquisition measure"
+              base="/admin/performance"
+              params={params}
+              name="acq"
+              value={acq}
+              options={[
+                ['signups', 'New users'],
+                ['visits', 'Visits'],
+                ['pages', 'Landing pages'],
+              ]}
+            />
+          }
+        >
+          <TrackedSince
+            since={acq === 'signups' ? m.signups.since : m.visits.since}
+            what={acq === 'signups' ? 'Sign-up sources' : 'Visits'}
+          />
+          {acq === 'signups' ? (
+            <ProgressBars
+              rows={m.signups.by_source.map((r) => ({
+                label: SOURCE_LABEL[r.source] ?? r.source,
+                value: rate(r.users, m.signups.users_new) ?? 0,
+                detail: `${nf(r.users)} of ${nf(m.signups.users_new)} new users`,
+              }))}
+              empty="No new users in the selected period."
+            />
+          ) : acq === 'visits' ? (
+            <ProgressBars
+              rows={m.visits.by_source.map((r) => ({
+                label: SOURCE_LABEL[r.source] ?? r.source,
+                value: rate(r.visits, m.visits.total) ?? 0,
+                detail: `${nf(r.visits)} of ${nf(m.visits.total)} visits`,
+              }))}
+              empty="No visits were counted in the selected period."
+            />
+          ) : (
+            <ProgressBars
+              rows={m.visits.by_page.map((r) => ({
+                label: PAGE_LABEL[r.page] ?? r.page,
+                value: rate(r.visits, m.visits.total) ?? 0,
+                detail: `${nf(r.visits)} visits started here`,
+              }))}
+              empty="No visits were counted in the selected period."
+            />
+          )}
+        </Panel>
+      </div>
 
       <Panel
         title="Growth by Period"

@@ -79,10 +79,13 @@ export function ColumnChart({
   empty = 'No activity was recorded for the selected period.',
   stacked = false,
   rowHref,
+  precise = false,
 }: {
   caption: string;
   labels: string[];
   series: { name: string; color: string; values: number[] }[];
+  /** Keep one decimal on the axis (for small non-count values such as minutes). */
+  precise?: boolean;
   format?: (n: number) => string;
   empty?: string;
   /** Stack the series in one bar per interval (parts of a whole) instead of side by side. */
@@ -105,7 +108,7 @@ export function ColumnChart({
           aria-hidden
         >
           {ticks.map((t, i) => (
-            <span key={i}>{format(Math.round(t))}</span>
+            <span key={i}>{format(precise ? Math.round(t * 10) / 10 : Math.round(t))}</span>
           ))}
         </div>
         <div className="min-w-0 flex-1">

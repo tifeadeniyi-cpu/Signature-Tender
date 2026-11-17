@@ -1,5 +1,9 @@
 import { timingSafeEqual } from 'node:crypto';
-import { releaseDueReferralRewards, type NotificationDispatchResult } from '@st/core';
+import {
+  pruneMeasurement,
+  releaseDueReferralRewards,
+  type NotificationDispatchResult,
+} from '@st/core';
 import { db } from '@/lib/db';
 import { sendReferralNotices } from '@/lib/referrals';
 import { env } from '@/lib/env';
@@ -30,6 +34,8 @@ export async function GET(req: Request) {
     results.push(...batch);
     if (batch.length < 25) break;
   }
+  // Daily housekeeping: per-person time-in-app older than 13 months is deleted.
+  const pruned = await pruneMeasurement(db()).catch(() => 0);
   const count = (s: string) => results.filter((r) => r.status === s).length;
   let referralRewards = 0;
   try {
@@ -45,5 +51,6 @@ export async function GET(req: Request) {
     sent: count('sent'),
     retrying: count('retrying'),
     failed: count('failed'),
+    activityPruned: pruned,
   });
 }

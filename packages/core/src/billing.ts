@@ -1146,6 +1146,21 @@ export async function applySubscription(db: Database, f: SubscriptionFacts) {
       })
       .where(eq(schema.billingAccounts.workspaceId, workspaceId));
     if (ended) await expireAllowance(tx, workspaceId, `expire:sub_end:${f.subscriptionId}`);
+
+    // Lifecycle for reporting: cancellations requested or withdrawn, and subscriptions ending.
+    const planCode = plan?.code ?? byCustomer?.planCode ?? null;
+    if (ended) {
+      await recordSubscriptionEvent(tx, workspaceId, 'ended', f.subscriptionId, planCode);
+    } else if (byCustomer && f.cancelAtPeriodEnd !== byCustomer.cancelAtPeriodEnd) {
+      const period = f.currentPeriodEnd?.getTime() ?? 0;
+      await recordSubscriptionEvent(
+        tx,
+        workspaceId,
+        f.cancelAtPeriodEnd ? 'cancel_requested' : 'cancel_withdrawn',
+        `${f.subscriptionId}:${period}`,
+        planCode,
+      );
+    }
   });
 }
 
@@ -1167,6 +1182,35 @@ export interface InvoiceFacts {
   /** The subscription period this invoice pays for, when it is a subscription invoice. */
   periodStart: Date | null;
   periodEnd: Date | null;
+  /** Stripe has tried to collect payment (a renewal still open after a try has failed). */
+  attempted?: boolean;
+}
+
+type SubscriptionEventKind =
+  'started' | 'renewed' | 'renewal_failed' | 'cancel_requested' | 'cancel_withdrawn' | 'ended';
+
+/** Records a subscription lifecycle event once per Stripe reference (retries are ignored). */
+async function recordSubscriptionEvent(
+  tx: Tx,
+  workspaceId: string,
+  kind: SubscriptionEventKind,
+  ref: string,
+  planCode: string | null,
+) {
+  await tx
+    .insert(schema.subscriptionEvents)
+    .values({ workspaceId, kind, ref, planCode })
+    .onConflictDoNothing();
+}
+
+/** The lifecycle event a subscription invoice represents, if any. */
+export function invoiceLifecycleKind(f: InvoiceFacts): SubscriptionEventKind | null {
+  if (!f.subscriptionId) return null;
+  if (f.status === 'paid' && f.billingReason === 'subscription_create') return 'started';
+  if (f.billingReason !== 'subscription_cycle') return null;
+  if (f.status === 'paid') return 'renewed';
+  if (f.status === 'open' && f.attempted) return 'renewal_failed';
+  return null;
 }
 
 /**
@@ -1204,6 +1248,9 @@ export async function applyInvoice(db: Database, f: InvoiceFacts) {
         target: schema.invoices.stripeInvoiceId,
         set: { ...row, updatedAt: new Date() },
       });
+
+    const kind = invoiceLifecycleKind(f);
+    if (kind) await recordSubscriptionEvent(tx, workspaceId, kind, f.invoiceId, f.planCode);
 
     if (!f.subscriptionId || f.status !== 'paid') return;
     const plan = f.planCode

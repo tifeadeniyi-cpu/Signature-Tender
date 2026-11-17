@@ -44,6 +44,19 @@ import {
   perfCsv,
   ppChange,
   parsePerfTab,
+  getPerfMeasurement,
+  measurementCsv,
+  minutesPerDay,
+  classifySource,
+  pageGroup,
+  recordVisit,
+  recordSignupSource,
+  recordActiveTime,
+  pruneMeasurement,
+  linkStripeCustomer,
+  applySubscription,
+  applyInvoice,
+  invoiceLifecycleKind,
   type CommandCenter,
 } from '../src';
 import { APP_URL, OWNER_URL } from './env';
@@ -637,5 +650,237 @@ describe('platform performance', () => {
     );
     expect(rows[0]![0]).toContain('Engagement');
     expect(rows[1]).toEqual(['Period (UTC)', p.from.toISOString(), p.to.toISOString()]);
+  });
+});
+
+describe('privacy-first measurement', () => {
+  it('classifies sources into coarse categories and keeps nothing else', () => {
+    const c = (referrer: string | null, url = 'https://signaturetender.com/') =>
+      classifySource({ referrer, url, ownHost: 'signaturetender.com' });
+    expect(c(null)).toBe('direct');
+    expect(c('https://signaturetender.com/pricing')).toBe('direct');
+    expect(c('https://www.google.co.uk/search?q=secret+terms')).toBe('search');
+    expect(c('https://duckduckgo.com/')).toBe('search');
+    expect(c('https://chatgpt.com/')).toBe('ai_assistant');
+    expect(c('https://www.linkedin.com/feed/')).toBe('social');
+    expect(c('https://t.co/abc')).toBe('social');
+    expect(c('https://mail.google.com/')).toBe('email');
+    expect(c('https://someblog.example/post')).toBe('referral');
+    expect(c(null, 'https://signaturetender.com/?utm_medium=cpc&utm_source=x')).toBe('campaign');
+    expect(c(null, 'https://signaturetender.com/?gclid=abc')).toBe('campaign');
+    expect(c(null, 'https://signaturetender.com/?utm_medium=email')).toBe('email');
+    expect(c(null, 'https://signaturetender.com/?utm_source=partner')).toBe('campaign');
+    expect(c('not a url')).toBe('direct');
+    expect(pageGroup('/')).toBe('home');
+    expect(pageGroup('/pricing')).toBe('pricing');
+    expect(pageGroup('/sign-up')).toBe('sign_up');
+    expect(pageGroup('/verify/abc123')).toBe('verify');
+    expect(pageGroup('/something/else')).toBe('other');
+    expect(minutesPerDay(600, 2)).toBe(5);
+    expect(minutesPerDay(null, 2)).toBeNull();
+    expect(minutesPerDay(100, 0)).toBeNull();
+  });
+
+  it('records visits, sources, active time and renewals, and reports them only to staff', async () => {
+    const founder = await makeUser('ms_founder');
+    const analyst = await makeUser('ms_analyst');
+    await owner_.db.execute(
+      sql`insert into platform_admins (user_id, role) values (${founder}, 'founder'), (${analyst}, 'analyst')`,
+    );
+    const p = resolvePeriod({ range: 'this_year' });
+    const before = await getPerfMeasurement(db, { userId: founder }, p);
+
+    // The app role can't read the raw tables back.
+    for (const t of [
+      'site_visits_daily',
+      'user_acquisition',
+      'app_activity_daily',
+      'subscription_events',
+    ])
+      await expect(db.execute(sql.raw(`select * from ${t} limit 1`))).rejects.toThrow();
+
+    // Visits: unknown values fold into safe defaults.
+    await recordVisit(db, 'pricing', 'search');
+    await recordVisit(db, 'pricing', 'search');
+    await recordVisit(db, '/app/documents/secret', 'direct');
+    await expect(
+      db.execute(sql`select st_track_visit('home', 'https://evil.example/?email=a@b.c')`),
+    ).resolves.toBeDefined();
+
+    // Sign-up source: once per account, only for recent accounts.
+    const fresh = await makeUser('ms_fresh');
+    await recordSignupSource(db, { userId: fresh }, 'social');
+    await recordSignupSource(db, { userId: fresh }, 'search');
+    const old = await makeUser('ms_old');
+    await owner_.db.execute(
+      sql`update "user" set created_at = now() - interval '30 days' where id = ${old}`,
+    );
+    await recordSignupSource(db, { userId: old }, 'search');
+    const acq = (await owner_.db.execute(
+      sql`select user_id, source from user_acquisition where user_id in (${fresh}, ${old})`,
+    )) as unknown as { user_id: string; source: string }[];
+    expect(acq).toEqual([{ user_id: fresh, source: 'social' }]);
+
+    // Active time: capped per report and by the time that has actually passed.
+    await recordActiveTime(db, { userId: fresh }, 600);
+    await recordActiveTime(db, { userId: fresh }, 60);
+    const [act] = (await owner_.db.execute(
+      sql`select active_seconds from app_activity_daily where user_id = ${fresh}`,
+    )) as unknown as { active_seconds: number }[];
+    expect(act!.active_seconds).toBeGreaterThanOrEqual(90);
+    expect(act!.active_seconds).toBeLessThanOrEqual(90 + 6);
+
+    // Time in app is withheld until at least 5 people are tracked.
+    const m1 = await getPerfMeasurement(db, { userId: founder }, p);
+    expect(m1.visits.total - before.visits.total).toBe(4);
+    const pricing = m1.visits.by_page.find((r) => r.page === 'pricing');
+    expect(pricing?.visits).toBeGreaterThanOrEqual(2);
+    expect(m1.visits.by_page.some((r) => r.page.includes('/'))).toBe(false);
+    expect(m1.visits.series.reduce((n, s) => n + s.visits, 0)).toBe(m1.visits.total);
+    expect(m1.signups.recorded).toBeGreaterThanOrEqual(1);
+    // One social sign-up is below the group minimum, so it shows as Other.
+    if (m1.signups.by_source.find((r) => r.source === 'social'))
+      expect(m1.signups.by_source.find((r) => r.source === 'social')!.users).toBeGreaterThanOrEqual(
+        5,
+      );
+    const t0 = m1.time;
+    if (t0.suppressed) {
+      const more = await Promise.all([1, 2, 3, 4, 5].map((i) => makeUser(`ms_t${i}`)));
+      for (const u of more) await recordActiveTime(db, { userId: u }, 45);
+    }
+    const m2 = await getPerfMeasurement(db, { userId: analyst }, p);
+    expect(m2.time.suppressed).toBe(false);
+    if (!m2.time.suppressed) {
+      const b = m2.time.bands;
+      expect(b.under_5m + b.m5_30 + b.m30_2h + b.over_2h).toBe(m2.time.users);
+      expect(m2.time.user_days).toBeGreaterThanOrEqual(m2.time.users);
+    }
+
+    // Renewals and lifecycle from Stripe facts, each recorded once.
+    const ws7 = (await createWorkspace(db, { userId: owner }, { name: 'Renewals WS' })).id;
+    const cus = `cus_ms${Date.now()}`;
+    await linkStripeCustomer(db, { userId: owner }, ws7, cus);
+    const sub = `sub_ms${Date.now()}`;
+    const end = new Date(Date.now() + 30 * 86_400_000);
+    const subFacts = {
+      subscriptionId: sub,
+      customerId: cus,
+      status: 'active',
+      planCode: 'starter',
+      workspaceId: ws7,
+      currentPeriodStart: new Date(),
+      currentPeriodEnd: end,
+      cancelAtPeriodEnd: false,
+      deleted: false,
+    };
+    await applySubscription(db, subFacts);
+    const inv = {
+      customerId: cus,
+      number: null,
+      description: null,
+      amountDue: 999,
+      amountPaid: 0,
+      currency: 'usd',
+      hostedUrl: null,
+      pdfUrl: null,
+      createdAt: new Date(),
+      subscriptionId: sub,
+      planCode: 'starter',
+      periodStart: new Date(),
+      periodEnd: end,
+    };
+    await applyInvoice(db, {
+      ...inv,
+      invoiceId: `in_c_${sub}`,
+      status: 'paid',
+      amountPaid: 999,
+      billingReason: 'subscription_create',
+    });
+    // A renewal that fails first and is paid on retry; a second that is still unpaid.
+    await applyInvoice(db, {
+      ...inv,
+      invoiceId: `in_r1_${sub}`,
+      status: 'open',
+      attempted: true,
+      billingReason: 'subscription_cycle',
+    });
+    await applyInvoice(db, {
+      ...inv,
+      invoiceId: `in_r1_${sub}`,
+      status: 'paid',
+      amountPaid: 999,
+      billingReason: 'subscription_cycle',
+    });
+    await applyInvoice(db, {
+      ...inv,
+      invoiceId: `in_r1_${sub}`,
+      status: 'paid',
+      amountPaid: 999,
+      billingReason: 'subscription_cycle',
+    });
+    await applyInvoice(db, {
+      ...inv,
+      invoiceId: `in_r2_${sub}`,
+      status: 'open',
+      billingReason: 'subscription_cycle',
+    });
+    await applyInvoice(db, {
+      ...inv,
+      invoiceId: `in_r2_${sub}`,
+      status: 'open',
+      attempted: true,
+      billingReason: 'subscription_cycle',
+    });
+    await applySubscription(db, { ...subFacts, cancelAtPeriodEnd: true });
+    await applySubscription(db, { ...subFacts, cancelAtPeriodEnd: true });
+    await applySubscription(db, { ...subFacts, cancelAtPeriodEnd: false });
+    await applySubscription(db, { ...subFacts, status: 'canceled', deleted: true });
+    await applySubscription(db, { ...subFacts, status: 'canceled', deleted: true });
+    const ev = (await owner_.db.execute(
+      sql`select kind, count(*)::int as n from subscription_events where workspace_id = ${ws7} group by kind order by kind`,
+    )) as unknown as { kind: string; n: number }[];
+    expect(Object.fromEntries(ev.map((e) => [e.kind, e.n]))).toEqual({
+      cancel_requested: 1,
+      cancel_withdrawn: 1,
+      ended: 1,
+      renewal_failed: 2,
+      renewed: 1,
+      started: 1,
+    });
+    expect(
+      invoiceLifecycleKind({
+        ...inv,
+        invoiceId: 'x',
+        status: 'open',
+        billingReason: 'subscription_cycle',
+      }),
+    ).toBeNull();
+    expect(
+      invoiceLifecycleKind({
+        ...inv,
+        invoiceId: 'x',
+        status: 'paid',
+        billingReason: 'manual',
+        subscriptionId: null,
+      }),
+    ).toBeNull();
+
+    const m3 = await getPerfMeasurement(db, { userId: founder }, p);
+    const r = m3.renewals;
+    expect(r.due - m1.renewals.due).toBe(2);
+    expect(r.renewed - m1.renewals.renewed).toBe(1);
+    expect(r.failed - m1.renewals.failed).toBe(2);
+    expect(r.recovered - m1.renewals.recovered).toBe(1);
+    expect(r.ended - m1.renewals.ended).toBe(1);
+    expect(r.series.reduce((n, s) => n + s.started, 0)).toBe(r.started);
+
+    // Customers get nothing; exports carry the measurement sections.
+    await expect(getPerfMeasurement(db, { userId: owner }, p)).rejects.toMatchObject({
+      code: 'forbidden',
+    });
+    expect(measurementCsv('growth', m3).flat()).toContain('Visits by source');
+    expect(measurementCsv('conversion', m3).flat()).toContain('Renewals due');
+    expect(measurementCsv('engagement', m3).flat().join(' ')).toContain('Active seconds');
+    expect(await pruneMeasurement(db)).toBeGreaterThanOrEqual(0);
   });
 });
