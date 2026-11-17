@@ -1,4 +1,5 @@
 import type { Database, ActorContext } from '@st/db';
+import type { ObjectStorage } from '../storage';
 
 /**
  * Connector framework types. A connector is described once (its definition) and, when it is built,
@@ -210,6 +211,8 @@ export interface ActionContext {
   documentId: string | null;
   requestId: string | null;
   correlationId: string | null;
+  /** Document file storage, for actions that read signed files. */
+  storage?: ObjectStorage;
 }
 
 export interface ActionResult {

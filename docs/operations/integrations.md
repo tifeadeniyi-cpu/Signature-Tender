@@ -51,11 +51,11 @@ provider apps that only the account owner can create.
 
 ## Permissions
 
-| Permission | Who has it by default | Allows |
-|---|---|---|
-| `integrations.manage` | Owner, Admin, API Developer | Connect workspace-wide accounts, manage any connection, create automations, retry jobs |
-| `integrations.use` | Owner, Admin, Manager, Editor, API Developer | Use workspace connections, connect a personal account |
-| `integrations.view_logs` | Owner, Admin, API Developer | Read all of the workspace's integration activity and jobs |
+| Permission               | Who has it by default                        | Allows                                                                                 |
+| ------------------------ | -------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `integrations.manage`    | Owner, Admin, API Developer                  | Connect workspace-wide accounts, manage any connection, create automations, retry jobs |
+| `integrations.use`       | Owner, Admin, Manager, Editor, API Developer | Use workspace connections, connect a personal account                                  |
+| `integrations.view_logs` | Owner, Admin, API Developer                  | Read all of the workspace's integration activity and jobs                              |
 
 Members without `view_logs` still see their own activity. Partner (Beam Artist, Jectstack) and
 Slack connections still need both `integrations.manage` and `api.manage`, as before. Everything is
@@ -63,12 +63,13 @@ enforced in the database (row-level security), not only in the UI.
 
 ## Environment
 
-| Variable | Needed for |
-|---|---|
-| `WEBHOOK_SECRETS_KEY` | Required in production before any OAuth connection (token encryption). Same value webhooks already need. |
-| `GOOGLE_DRIVE_CLIENT_ID` / `GOOGLE_DRIVE_CLIENT_SECRET` | Google Drive. Optional: falls back to `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (Sign in with Google) if that client has the Drive API and redirect added. |
-| `HUBSPOT_CLIENT_ID` / `HUBSPOT_CLIENT_SECRET` | HubSpot. |
-| `CRON_SECRET` | The cron route that runs due jobs. |
+| Variable                                                | Needed for                                                                                                                                                                                                                                                                                           |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WEBHOOK_SECRETS_KEY`                                   | Required in production before any OAuth connection (token encryption). Same value webhooks already need.                                                                                                                                                                                             |
+| `GOOGLE_DRIVE_CLIENT_ID` / `GOOGLE_DRIVE_CLIENT_SECRET` | Google Drive. Optional: falls back to `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (Sign in with Google) if that client has the Drive API and redirect added.                                                                                                                                         |
+| `GOOGLE_PICKER_API_KEY` / `GOOGLE_CLOUD_PROJECT_NUMBER` | The Google Drive file and folder picker (import, choosing the save folder). A browser API key restricted to the site and the Picker API, plus the Cloud project number. Without them Drive still connects and auto-saves to the default folder, but the import button and folder chooser are hidden. |
+| `HUBSPOT_CLIENT_ID` / `HUBSPOT_CLIENT_SECRET`           | HubSpot.                                                                                                                                                                                                                                                                                             |
+| `CRON_SECRET`                                           | The cron route that runs due jobs.                                                                                                                                                                                                                                                                   |
 
 Feature flag `integrations` (on in every environment by default) can switch OAuth connectors off
 without a deploy. Connectors still need to be built and configured to connect.
@@ -82,6 +83,13 @@ Redirect URIs use the site URL (`BETTER_AUTH_URL`), for example
 
 ### Google Drive
 
+Built (Beta). Members import a PDF or a Google Doc, Sheet or Slides file (exported to PDF) from the
+Picker into an ordinary draft, linked to the Drive file. Automatic saving is an automation
+("Signed document ready" → "Save signed copy to Drive") switched on from Integration settings; it
+saves the signed PDF, the Certificate of Completion or one combined PDF to the chosen folder, or
+to a "Signature Tender" folder the app creates. Uploads are de-duplicated per request, so a retry
+never adds a second copy. Code: `packages/core/src/connectors/google-drive.ts`.
+
 1. In Google Cloud Console, open the project used for Sign in with Google (or create one).
 2. APIs & Services → Library → enable **Google Drive API** (and **Google Picker API** for the file
    picker).
@@ -92,7 +100,11 @@ Redirect URIs use the site URL (`BETTER_AUTH_URL`), for example
 4. Credentials → the Web OAuth client → add the authorized redirect URI
    `https://signaturetender.com/api/integrations/oauth/google_drive/callback`.
 5. Either reuse that client (nothing else to add) or create a separate one and set
-   `GOOGLE_DRIVE_CLIENT_ID` and `GOOGLE_DRIVE_CLIENT_SECRET` in Vercel. Redeploy.
+   `GOOGLE_DRIVE_CLIENT_ID` and `GOOGLE_DRIVE_CLIENT_SECRET` in Vercel.
+6. Credentials → Create credentials → API key. Restrict it to HTTP referrer
+   `https://signaturetender.com/*` and to the Google Picker API. Set it as `GOOGLE_PICKER_API_KEY`,
+   and the project number (the digits before the dash in the client ID) as
+   `GOOGLE_CLOUD_PROJECT_NUMBER`. Redeploy.
 
 ### HubSpot
 

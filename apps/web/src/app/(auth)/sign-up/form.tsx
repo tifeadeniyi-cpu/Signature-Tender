@@ -9,12 +9,15 @@ import { TextField } from '@/components/ui/field';
 import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/feedback';
 import { SocialButtons, type SocialProviderId } from '@/components/auth/social-buttons';
+import { applyReferralCodeAction } from './actions';
 
 export function SignUpForm({
   defaultEmail,
   claim,
   studio = false,
   providers = [],
+  referralCode = null,
+  referredCredits = 1,
 }: {
   defaultEmail?: string | null;
   /** Arrived from a completed document's Create Free Account. */
@@ -23,6 +26,9 @@ export function SignUpForm({
   studio?: boolean;
   /** Configured Google / Apple sign-in. */
   providers?: SocialProviderId[];
+  /** Give 1, Get 2: the code from a referral link (empty when none), or null when the program is off. */
+  referralCode?: string | null;
+  referredCredits?: number;
 }) {
   const router = useRouter();
   const [error, setError] = useState('');
@@ -59,6 +65,13 @@ export function SignUpForm({
           setBusy(true);
           setError('');
           if (claim) track('registration_started');
+          if (referralCode !== null) {
+            const ref = await applyReferralCodeAction(String(fd.get('referralCode') ?? ''), email);
+            if (!ref.ok) {
+              setBusy(false);
+              return setError(ref.message);
+            }
+          }
           const { error: err } = await authClient.signUp.email({
             name: String(fd.get('name')).trim(),
             email,
@@ -97,6 +110,22 @@ export function SignUpForm({
           maxLength={128}
           hint="At least 12 characters"
         />
+        {referralCode !== null ? (
+          <TextField
+            label="Referral Code (Optional)"
+            name="referralCode"
+            autoComplete="off"
+            autoCapitalize="characters"
+            spellCheck={false}
+            maxLength={16}
+            defaultValue={referralCode}
+            hint={
+              referralCode
+                ? `From your invite link. You'll get ${referredCredits} free signing credit${referredCredits === 1 ? '' : 's'} after verifying your email.`
+                : 'Have a code from a friend? Enter it for a free signing credit.'
+            }
+          />
+        ) : null}
         {error ? <Alert tone="error">{error}</Alert> : null}
         <Button type="submit" size="lg" loading={busy}>
           Create account

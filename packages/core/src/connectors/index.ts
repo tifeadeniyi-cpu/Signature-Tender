@@ -7,3 +7,4 @@ export * from './jobs';
 export * from './mappings';
 export * from './automations';
 export * from './admin';
+export * from './google-drive';

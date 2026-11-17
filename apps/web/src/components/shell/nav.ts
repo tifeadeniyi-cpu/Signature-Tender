@@ -6,6 +6,7 @@ import {
   Contact,
   UsersRound,
   CreditCard,
+  Gift,
   ChartColumn,
   Puzzle,
   BookOpen,
@@ -33,6 +34,7 @@ export const NAV_ICONS = {
   contacts: Contact,
   team: UsersRound,
   billing: CreditCard,
+  referrals: Gift,
   reports: ChartColumn,
   integrations: Puzzle,
   apiDocs: BookOpen,
@@ -48,6 +50,8 @@ export interface NavItem {
   anyOf?: string[];
   /** Shown only while Signature Studio is switched on. */
   studio?: boolean;
+  /** Shown only while the referral program is running. */
+  referrals?: boolean;
   children?: NavChild[];
 }
 
@@ -98,6 +102,7 @@ export const NAV_ITEMS: NavItem[] = [
       { label: 'Usage', href: '/app/billing?tab=usage' },
     ],
   },
+  { href: '/app/referrals', label: 'Refer & Earn', icon: 'referrals', referrals: true },
   { href: '/app/reports', label: 'Reports', icon: 'reports', anyOf: VIEW_DOCS },
   { href: '/app/integrations', label: 'Integrations', icon: 'integrations' },
   { href: '/app/api-docs', label: 'API Docs', icon: 'apiDocs' },
@@ -120,11 +125,14 @@ export const NAV_ITEMS: NavItem[] = [
 export function visibleNav(
   permissions: readonly string[],
   studioEnabled = false,
+  referralsEnabled = false,
   items = NAV_ITEMS,
 ): NavItem[] {
   const can = (anyOf?: string[]) => !anyOf || anyOf.some((p) => permissions.includes(p));
   return items
-    .filter((i) => (!i.studio || studioEnabled) && can(i.anyOf))
+    .filter(
+      (i) => (!i.studio || studioEnabled) && (!i.referrals || referralsEnabled) && can(i.anyOf),
+    )
     .map((i) => (i.children ? { ...i, children: i.children.filter((c) => can(c.anyOf)) } : i));
 }
 

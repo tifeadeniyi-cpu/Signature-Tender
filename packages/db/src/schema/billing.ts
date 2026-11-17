@@ -115,9 +115,16 @@ export const creditEntryType = pgEnum('credit_entry_type', [
   'restore',
   'expire',
   'reversal',
+  'referral_welcome',
+  'referral_reward',
+  'referral_reversal',
+  'referral_adjustment',
 ]);
-/** Purchased credits never expire; a subscription allowance lasts one billing period. */
-export const creditBucket = pgEnum('credit_bucket', ['purchased', 'allowance']);
+/**
+ * Purchased credits never expire; a subscription allowance lasts one billing period. Referral
+ * credits (Give 1, Get 2) never expire, have no cash value and pay only for web sends.
+ */
+export const creditBucket = pgEnum('credit_bucket', ['purchased', 'allowance', 'referral']);
 
 /**
  * Append-only credit ledger. The balance is always the sum of `delta`; nothing is ever edited. The

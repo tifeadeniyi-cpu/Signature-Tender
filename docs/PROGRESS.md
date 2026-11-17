@@ -384,6 +384,28 @@ A native app in `apps/mobile` (Expo SDK 58, React Native, Expo Router), for send
 | Workspace creation in the app           | Today new accounts finish setup on the website.                                                                                     |
 | Store listings                          | Screenshots, privacy labels, review account; needs the Apple and Google developer accounts.                                         |
 
+## Give 1, Get 2 referral program: Done
+
+Existing customers refer new ones. The new customer gets **1** free signing credit once their email is verified and they create a workspace. The referrer gets **2** once the friend's first paid send settles.
+
+- **Credits are ledger entries.** A new `referral` credit bucket. Rewards, reversals and staff adjustments are `credit_ledger` rows with unique idempotency keys (`referral_welcome:{id}`, `referral_reward:{id}`), so a repeated webhook or two jobs at once never pay twice. There is no second balance.
+- **Spending order.** Allowance, then referral, then purchased (`app_config billing.redemption_order`). API sends never use referral credits (`channel: 'api'`), and the API's `available` excludes them. Signature Studio never uses credits. A cancelled send returns the credit to its own bucket.
+- **Whose wallet.** A referral link belongs to a person *in a workspace* (`referral_identities`); rewards go to that workspace. The welcome credit goes to the first workspace the new person created (`st_referral_first_workspace`).
+- **Attribution.** `/r/CODE` counts a visit (daily totals only, no visitor data), sets a signed httpOnly cookie for the attribution window (30 days) and shows `/invited`. The sign-up form has *Referral Code (Optional)*, prefilled from the cookie and checked server-side. A better-auth `user.create.after` hook records the attribution, so only brand-new accounts can be referred. One referral per account, final at sign-up.
+- **Qualification.** A settled `request` payment (including Sign it yourself) by the referred person, from the Stripe webhook. An optional settlement hold is paid by the daily cron.
+- **Refunds and disputes.** A full refund or dispute of the qualifying payment takes back the unused part of the reward (never below zero), marks the referral reversed, and flags any credits already spent for staff.
+- **Risk.** Self-referral by the same mailbox (Gmail dots and `+tags`) is rejected. Disposable domains and bursts (velocity) hold the referral for review. A shared network is recorded but never holds on its own.
+- **Pages.**
+  - Refer & Earn (`/app/referrals`): hero, copy and share (Email, WhatsApp, Facebook, LinkedIn, native share), four summary cards, masked history with a four-step progress, and reward activity.
+  - Elsewhere: a dismissible dashboard card, the welcome banner, a Referral Credits panel on Billing, and links in the sidebar and account menu.
+  - Public: the invite page and `/referral-terms`.
+- **Staff.** `/admin/referrals` has metrics and a funnel by date range, records (under review first) with approve and reject, link revoke and restore, audited credit adjustments, program settings and CSV export. Every action is a `referral_events` row.
+- **Emails.** Someone joined (to the referrer), welcome credit, reward earned, reward adjusted.
+- **JSON.** `GET /api/referrals/me`, `POST /api/referrals/validate-code`.
+- **Launch.** The program ships **paused**. Switch it on in Admin > Referrals.
+- **Not yet.** Campaigns beyond the standard one (the table supports them), credit-pack purchases as qualifying events, a referral code typed before a Google or Apple sign-up (the link cookie works for those), and an entry point on the signer's completion screen.
+- **Tests.** `packages/core/test/referrals.test.ts` (14) and `apps/web/e2e/referrals.spec.ts` (the full acceptance scenario, bad codes, phone layout).
+
 ## Phase 10: Document management actions: Planned
 
 Adds the actions left out of the documents drawer. Each one appears in the drawer only when the server allows it, and every change is recorded in the evidence or audit log.

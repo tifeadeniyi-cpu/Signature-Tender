@@ -39,30 +39,35 @@ test('marketplace: search, categories, details and honest availability', async (
   await page.getByRole('button', { name: 'All Integrations' }).click();
 
   // Unbuilt apps are Coming Soon and cannot connect.
-  for (const name of ['Google Drive', 'HubSpot', 'Zapier', 'Make', 'Salesforce']) {
+  // Google Drive is built (Beta) but this test server has no Google OAuth app, so it cannot connect.
+  const drive = page.getByRole('article', { name: 'Google Drive' });
+  await expect(drive.getByText('Beta')).toBeVisible();
+  await expect(drive.getByRole('button', { name: 'View details: Google Drive' })).toBeVisible();
+  await expect(drive.getByRole('button', { name: /^Connect/ })).toHaveCount(0);
+  for (const name of ['HubSpot', 'Zapier', 'Make', 'Salesforce']) {
     const card = page.getByRole('article', { name });
     await expect(card.getByText('Coming Soon').first()).toBeVisible();
     await expect(card.getByRole('button', { name: `Coming Soon: ${name}` })).toBeVisible();
   }
-  await page.getByRole('button', { name: 'Coming Soon: Google Drive' }).click();
-  const drawer = page.getByRole('dialog', { name: 'Google Drive' });
+  await page.getByRole('button', { name: 'Coming Soon: HubSpot' }).click();
+  const drawer = page.getByRole('dialog', { name: 'HubSpot' });
   await expect(drawer).toBeVisible();
   await expect(drawer.getByText('Planned features')).toBeVisible();
   await expect(drawer.getByText('Access and data sharing')).toBeVisible();
   await expect(drawer.getByRole('button', { name: 'Coming Soon' })).toBeDisabled();
-  await expect(page).toHaveURL(/app=google_drive/);
+  await expect(page).toHaveURL(/app=hubspot/);
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/02-details-drawer.png` });
   await page.keyboard.press('Escape');
   await expect(drawer).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Coming Soon: Google Drive' })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Coming Soon: HubSpot' })).toBeFocused();
 
-  // The OAuth start route refuses an unbuilt connector.
-  await page.goto('/api/integrations/oauth/google_drive/start');
+  // The OAuth start route refuses a connector that cannot connect here.
+  await page.goto('/api/integrations/oauth/hubspot/start');
   await expect(page).toHaveURL(/error=unavailable/);
   await expect(page.getByText('This app cannot be connected right now.')).toBeVisible();
 
   // A forged callback is rejected before anything else happens.
-  await page.goto('/api/integrations/oauth/google_drive/callback?state=forged&code=x');
+  await page.goto('/api/integrations/oauth/hubspot/callback?state=forged&code=x');
   await expect(page).toHaveURL(/error=unavailable|error=state/);
 });
 

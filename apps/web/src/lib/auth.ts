@@ -6,12 +6,14 @@ import { twoFactor, haveIBeenPwned } from 'better-auth/plugins';
 import { passkey } from '@better-auth/passkey';
 import { expo } from '@better-auth/expo';
 import { schema } from '@st/db';
+import { attributeNewAccount, markReferralVerified } from '@st/core';
 import { db } from './db';
 import { env } from './env';
 import { socialProvidersConfig } from './social-providers';
 import { sendEmail } from './email';
 import { emailConfig } from './email/config';
 import { renderPasswordReset, renderVerifyEmail } from './email/templates/transactional';
+import { referralFromCookieHeader, sendReferralNotices } from './referrals';
 
 /** The iOS and Android app's URL scheme (apps/mobile app.json). */
 export const MOBILE_APP_ORIGIN = 'signaturetender://';
@@ -70,6 +72,45 @@ function build() {
           attachments: r.attachments,
           tags: [{ name: 'template', value: 'verify_email' }],
         });
+      },
+      // Give 1, Get 2: a referred person's welcome credit waits for a verified email.
+      afterEmailVerification: async (user) => {
+        try {
+          await sendReferralNotices(await markReferralVerified(db(), user.id));
+        } catch (err) {
+          console.error('Referral verification step failed', err);
+        }
+      },
+    },
+    databaseHooks: {
+      user: {
+        create: {
+          // Records who referred a brand-new account (from the signed referral cookie). Existing
+          // accounts never reach this hook, so they can never claim a new-customer reward.
+          after: async (user, ctx) => {
+            try {
+              const c = ctx as { headers?: Headers; request?: Request } | null | undefined;
+              const headers = c?.headers ?? c?.request?.headers;
+              const ref = referralFromCookieHeader(headers?.get('cookie'));
+              if (!ref) return;
+              const ip =
+                headers?.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+                headers?.get('x-real-ip') ||
+                null;
+              const out = await attributeNewAccount(db(), {
+                userId: user.id,
+                email: user.email,
+                emailVerified: Boolean(user.emailVerified),
+                code: ref.code,
+                source: ref.source,
+                ipAddress: ip,
+              });
+              await sendReferralNotices(out.notices);
+            } catch (err) {
+              console.error('Referral attribution failed', err);
+            }
+          },
+        },
       },
     },
     socialProviders,

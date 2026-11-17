@@ -14,6 +14,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleDashed,
+  Gift,
   type LucideIcon,
 } from 'lucide-react';
 import { BRAND_ASSETS } from '@/lib/brand-assets';
@@ -34,6 +35,7 @@ const SECTIONS: { href: string; label: string; icon: LucideIcon; permission: str
     icon: PenLine,
     permission: 'settings.manage',
   },
+  { href: '/admin/referrals', label: 'Referrals', icon: Gift, permission: 'revenue.view' },
   { href: '/admin/audit', label: 'Audit Trail', icon: ScrollText, permission: 'audit.view' },
   { href: '/admin/operations', label: 'System Health', icon: Activity, permission: 'system.view' },
   { href: '/admin/integrations', label: 'Integrations', icon: Plug, permission: 'settings.manage' },
