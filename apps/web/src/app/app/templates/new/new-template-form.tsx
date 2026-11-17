@@ -1,4 +1,5 @@
 'use client';
+import { sendUpload } from '@/lib/upload-client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/card';
@@ -41,15 +42,14 @@ export function NewTemplateForm({
     if (!form.get('documentType')) return setError('Choose a document type.');
     setBusy(true);
     setError(null);
-    const fd = new FormData();
-    fd.set('file', file);
-    fd.set('title', title);
-    fd.set('description', String(form.get('description') ?? ''));
-    fd.set('category', String(form.get('category')));
-    fd.set('documentType', String(form.get('documentType')));
-    fd.set('shared', form.get('shared') === 'on' ? 'true' : 'false');
     try {
-      const res = await fetch('/api/templates', { method: 'POST', body: fd });
+      const res = await sendUpload('/api/templates', file, {
+        title,
+        description: String(form.get('description') ?? ''),
+        category: String(form.get('category')),
+        documentType: String(form.get('documentType')),
+        shared: form.get('shared') === 'on' ? 'true' : 'false',
+      });
       const body = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
       if (!res.ok || !body.id) throw new Error(body.error ?? 'Upload failed. Please try again.');
       router.push(`/app/templates/${body.id}/roles`);
